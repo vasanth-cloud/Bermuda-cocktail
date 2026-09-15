@@ -1,0 +1,451 @@
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import List, Optional
+import uuid
+
+from app.database import engine, Base, get_db
+from app import models, schemas
+from app.seed_data import seed_initial_data
+from app.services.order_router import manager
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# Seed database on startup
+db_session = Depends(get_db)
+
+app = FastAPI(title="Bermuda Cocktail Pub POS & Order System", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from sqlalchemy import text
+
+@app.on_event("startup")
+def startup_event():
+    db = next(get_db())
+    # Auto-add missing columns to SQLite orders table if needed
+    with engine.connect() as conn:
+        for col_cmd in [
+            "ALTER TABLE orders ADD COLUMN payment_status VARCHAR DEFAULT 'PENDING'",
+            "ALTER TABLE orders ADD COLUMN payment_mode VARCHAR",
+            "ALTER TABLE orders ADD COLUMN amount_collected FLOAT DEFAULT 0.0",
+            "ALTER TABLE orders ADD COLUMN collected_by VARCHAR"
+        ]:
+            try:
+                conn.execute(text(col_cmd))
+                conn.commit()
+            except Exception:
+                pass
+    seed_initial_data(db)
+
+# --- WebSocket Endpoint ---
+@app.websocket("/ws-api/{channel}")
+async def websocket_endpoint(websocket: WebSocket, channel: str):
+    await manager.connect(websocket, channel)
+    try:
+        while True:
+            # Keep connection alive
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, channel)
+
+# --- System Local IP Endpoint ---
+import socket
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+@app.get("/api/system/ip")
+def get_system_ip():
+    ip = get_local_ip()
+    return {
+        "local_ip": ip,
+        "default_port": 3000,
+        "qr_base_url": f"http://{ip}:3000"
+    }
+
+# --- Table & Zone Endpoints ---
+@app.get("/api/zones", response_model=List[schemas.TableZoneSchema])
+def get_zones(db: Session = Depends(get_db)):
+    return db.query(models.TableZone).all()
+
+@app.get("/api/tables", response_model=List[schemas.PubTableSchema])
+def get_tables(zone_id: Optional[int] = None, db: Session = Depends(get_db)):
+    query = db.query(models.PubTable)
+    if zone_id:
+        query = query.filter(models.PubTable.zone_id == zone_id)
+    return query.all()
+
+@app.get("/api/tables/{table_id}", response_model=schemas.PubTableSchema)
+def get_table_by_id(table_id: int, db: Session = Depends(get_db)):
+    table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    return table
+
+# --- Menu Endpoints ---
+@app.get("/api/categories", response_model=List[schemas.CategorySchema])
+def get_categories(db: Session = Depends(get_db)):
+    return db.query(models.Category).all()
+
+@app.get("/api/products", response_model=List[schemas.ProductSchema])
+def get_products(category_id: Optional[int] = None, target_dept: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(models.Product)
+    if category_id:
+        query = query.filter(models.Product.category_id == category_id)
+    if target_dept:
+        query = query.filter(models.Product.target_dept == target_dept)
+    return query.all()
+
+@app.post("/api/products", response_model=schemas.ProductSchema)
+async def create_product(prod_data: schemas.ProductCreate, db: Session = Depends(get_db)):
+    category = db.query(models.Category).filter(models.Category.id == prod_data.category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    new_prod = models.Product(
+        name=prod_data.name,
+        category_id=prod_data.category_id,
+        price=prod_data.price,
+        description=prod_data.description,
+        target_dept=prod_data.target_dept or category.target_dept,
+        is_available=True,
+        image_url=prod_data.image_url
+    )
+    db.add(new_prod)
+    db.commit()
+    db.refresh(new_prod)
+
+    await manager.broadcast_all({"event": "MENU_UPDATED"})
+    return new_prod
+
+@app.patch("/api/products/{product_id}", response_model=schemas.ProductSchema)
+async def update_product(product_id: int, prod_update: schemas.ProductUpdate, db: Session = Depends(get_db)):
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if prod_update.name is not None:
+        product.name = prod_update.name
+    if prod_update.price is not None:
+        product.price = prod_update.price
+    if prod_update.description is not None:
+        product.description = prod_update.description
+    if prod_update.is_available is not None:
+        product.is_available = prod_update.is_available
+    if prod_update.target_dept is not None:
+        product.target_dept = prod_update.target_dept
+
+    db.commit()
+    db.refresh(product)
+
+    await manager.broadcast_all({"event": "MENU_UPDATED"})
+    return product
+
+# --- Order & Split Routing Endpoints ---
+@app.post("/api/orders", response_model=schemas.OrderSchema)
+async def create_order(order_data: schemas.OrderCreate, db: Session = Depends(get_db)):
+    table = db.query(models.PubTable).filter(models.PubTable.id == order_data.table_id).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    order_num = f"ORD-{uuid.uuid4().hex[:6].upper()}"
+    total = 0.0
+
+    new_order = models.Order(
+        table_id=table.id,
+        order_number=order_num,
+        customer_name=order_data.customer_name or "Guest",
+        status="PENDING",
+        total_amount=0.0,
+        sync_status="PENDING_SYNC"
+    )
+    db.add(new_order)
+    db.flush()
+
+    bar_items_added = 0
+    kitchen_items_added = 0
+
+    for item in order_data.items:
+        prod = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        if not prod:
+            continue
+        
+        item_price = prod.price * item.quantity
+        total += item_price
+
+        order_item = models.OrderItem(
+            order_id=new_order.id,
+            product_id=prod.id,
+            quantity=item.quantity,
+            unit_price=prod.price,
+            target_dept=prod.target_dept,
+            status="PENDING",
+            notes=item.notes
+        )
+        db.add(order_item)
+
+        if prod.target_dept == "BAR":
+            bar_items_added += 1
+        elif prod.target_dept == "KITCHEN":
+            kitchen_items_added += 1
+
+    new_order.total_amount = total
+    table.current_status = "OCCUPIED"
+
+    # Add to Sync Log for offline queue
+    sync_entry = models.SyncLog(
+        entity_type="ORDER",
+        entity_id=order_num,
+        action="CREATE",
+        sync_status="PENDING"
+    )
+    db.add(sync_entry)
+    db.commit()
+    db.refresh(new_order)
+
+    # Convert order to JSON serializable dict for WebSockets
+    order_payload = {
+        "event": "NEW_ORDER",
+        "order_id": new_order.id,
+        "order_number": new_order.order_number,
+        "table_number": table.table_number,
+        "zone_name": table.zone.display_name if table.zone else "Main",
+        "customer_name": new_order.customer_name,
+        "total_amount": new_order.total_amount,
+        "status": new_order.status,
+        "created_at": new_order.created_at.isoformat(),
+        "bar_items_count": bar_items_added,
+        "kitchen_items_count": kitchen_items_added,
+        "items": [
+            {
+                "id": it.id,
+                "product_id": it.product_id,
+                "product_name": it.product.name,
+                "quantity": it.quantity,
+                "unit_price": it.unit_price,
+                "target_dept": it.target_dept,
+                "status": it.status,
+                "notes": it.notes
+            }
+            for it in new_order.items
+        ]
+    }
+
+    # Broadcast to specific departments via WebSockets
+    if bar_items_added > 0:
+        await manager.broadcast_to_channel("bar", {**order_payload, "dept_filter": "BAR"})
+    if kitchen_items_added > 0:
+        await manager.broadcast_to_channel("kitchen", {**order_payload, "dept_filter": "KITCHEN"})
+    
+    await manager.broadcast_to_channel("staff", order_payload)
+    await manager.broadcast_to_channel("admin", order_payload)
+
+    return new_order
+
+@app.get("/api/orders", response_model=List[schemas.OrderSchema])
+def get_orders(
+    target_dept: Optional[str] = None,
+    status: Optional[str] = None,
+    table_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(models.Order)
+    if table_id:
+        query = query.filter(models.Order.table_id == table_id)
+    if status:
+        query = query.filter(models.Order.status == status)
+
+    orders = query.order_by(models.Order.created_at.desc()).all()
+
+    # Filter items if target_dept specified
+    if target_dept:
+        filtered_orders = []
+        for ord in orders:
+            dept_items = [it for it in ord.items if it.target_dept == target_dept]
+            if dept_items:
+                # Clone order object with filtered items for response
+                ord.items = dept_items
+                filtered_orders.append(ord)
+        return filtered_orders
+
+    return orders
+
+@app.patch("/api/orders/{order_id}/status")
+async def update_order_status(order_id: int, status_update: schemas.OrderStatusUpdate, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order.status = status_update.status
+    db.commit()
+
+    event_payload = {
+        "event": "ORDER_STATUS_UPDATED",
+        "order_id": order.id,
+        "status": order.status,
+        "table_number": order.table.table_number
+    }
+    await manager.broadcast_all(event_payload)
+    return {"message": "Order status updated", "status": order.status}
+
+@app.patch("/api/order-items/{item_id}/status")
+async def update_item_status(item_id: int, status_update: schemas.ItemStatusUpdate, db: Session = Depends(get_db)):
+    item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Order item not found")
+    
+    item.status = status_update.status
+    db.commit()
+
+    event_payload = {
+        "event": "ITEM_STATUS_UPDATED",
+        "item_id": item.id,
+        "order_id": item.order_id,
+        "product_name": item.product.name if item.product else f"Item #{item.product_id}",
+        "table_number": item.order.table.table_number if item.order and item.order.table else "Main Table",
+        "target_dept": item.target_dept,
+        "status": item.status
+    }
+
+    # If item marked READY, broadcast pickup alert to waiters
+    if item.status == "READY":
+        event_payload["event"] = "ITEM_READY_FOR_WAITER"
+        await manager.broadcast_to_channel("staff", event_payload)
+    
+    await manager.broadcast_all(event_payload)
+    return {"message": "Item status updated", "status": item.status}
+
+@app.post("/api/orders/{order_id}/collect-payment")
+async def collect_order_payment(order_id: int, req: schemas.PaymentCollectRequest, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.payment_status = "COLLECTED"
+    order.payment_mode = req.payment_mode
+    order.amount_collected = req.amount_collected
+    order.collected_by = req.collected_by or "Waiter"
+    order.status = "BILLED"
+
+    if order.table:
+        order.table.current_status = "VACANT"
+
+    db.commit()
+
+    event_payload = {
+        "event": "PAYMENT_COLLECTED",
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "table_number": order.table.table_number if order.table else "ST-01",
+        "payment_mode": order.payment_mode,
+        "amount_collected": order.amount_collected,
+        "collected_by": order.collected_by
+    }
+    await manager.broadcast_all(event_payload)
+    return {"message": f"Payment of ₹{order.amount_collected} collected via {order.payment_mode}", "order_id": order.id}
+
+@app.get("/api/payments/log")
+def get_payment_logs(db: Session = Depends(get_db)):
+    collected_orders = db.query(models.Order).filter(
+        models.Order.payment_status == "COLLECTED"
+    ).order_by(models.Order.updated_at.desc()).all()
+
+    logs = []
+    total_cash = 0.0
+    total_upi = 0.0
+    total_card = 0.0
+
+    for ord in collected_orders:
+        amt = ord.amount_collected or ord.total_amount
+        mode = ord.payment_mode or "CASH"
+        if mode == "CASH":
+            total_cash += amt
+        elif mode == "UPI":
+            total_upi += amt
+        elif mode == "CARD":
+            total_card += amt
+
+        logs.append({
+            "order_id": ord.id,
+            "order_number": ord.order_number,
+            "table_number": ord.table.table_number if ord.table else "ST-01",
+            "zone_name": ord.table.zone.display_name if ord.table and ord.table.zone else "Main Zone",
+            "amount_collected": amt,
+            "payment_mode": mode,
+            "collected_by": ord.collected_by or "Staff",
+            "timestamp": ord.updated_at.strftime("%d-%m-%Y %H:%M:%S") if ord.updated_at else ord.created_at.strftime("%d-%m-%Y %H:%M:%S")
+        })
+
+    return {
+        "summary": {
+            "total_cash": total_cash,
+            "total_upi": total_upi,
+            "total_card": total_card,
+            "grand_total": total_cash + total_upi + total_card,
+            "total_transactions": len(logs)
+        },
+        "logs": logs
+    }
+
+@app.post("/api/tables/{table_id}/settle")
+async def settle_table_bill(table_id: int, db: Session = Depends(get_db)):
+    table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    # Mark active orders as BILLED
+    active_orders = db.query(models.Order).filter(
+        models.Order.table_id == table_id,
+        models.Order.status != "BILLED"
+    ).all()
+
+    for ord in active_orders:
+        ord.status = "BILLED"
+        ord.payment_status = "COLLECTED"
+
+    table.current_status = "VACANT"
+    db.commit()
+
+    await manager.broadcast_all({
+        "event": "TABLE_SETTLED",
+        "table_id": table.id,
+        "table_number": table.table_number
+    })
+    return {"message": f"Table {table.table_number} settled successfully"}
+
+# --- Sync Simulation Endpoints ---
+@app.get("/api/sync/status")
+def get_sync_status(db: Session = Depends(get_db)):
+    pending_count = db.query(models.SyncLog).filter(models.SyncLog.sync_status == "PENDING").count()
+    synced_count = db.query(models.SyncLog).filter(models.SyncLog.sync_status == "SYNCED").count()
+    return {
+        "pending_sync_count": pending_count,
+        "synced_count": synced_count,
+        "connection_mode": "OFFLINE_LOCAL_SERVER",
+        "cloud_status": "READY_FOR_SYNC"
+    }
+
+@app.post("/api/sync/trigger")
+def trigger_cloud_sync(db: Session = Depends(get_db)):
+    pending_logs = db.query(models.SyncLog).filter(models.SyncLog.sync_status == "PENDING").all()
+    count = len(pending_logs)
+    for log in pending_logs:
+        log.sync_status = "SYNCED"
+        log.synced_at = models.datetime.utcnow()
+    db.commit()
+    return {"message": f"Successfully synced {count} transactions to Cloud Admin Panel"}
