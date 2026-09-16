@@ -73,7 +73,8 @@ export default function AdminPanel() {
     category_id: 1,
     price: '',
     target_dept: 'KITCHEN',
-    description: ''
+    description: '',
+    is_available: true
   });
 
   useEffect(() => {
@@ -143,7 +144,8 @@ export default function AdminPanel() {
       category_id: item.category_id,
       price: item.price,
       target_dept: item.target_dept || 'KITCHEN',
-      description: item.description || ''
+      description: item.description || '',
+      is_available: item.is_available ?? true
     });
   };
 
@@ -157,7 +159,8 @@ export default function AdminPanel() {
     const success = await updateProduct(editingProduct.id, {
       ...editingProductData,
       category_id: Number(editingProductData.category_id),
-      price: parseFloat(editingProductData.price)
+      price: parseFloat(editingProductData.price),
+      is_available: Boolean(editingProductData.is_available)
     });
 
     if (success) {
@@ -914,6 +917,35 @@ export default function AdminPanel() {
                     }`}
                   >
                     <Utensils className="w-4 h-4" /> Kitchen (Food)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Item Stock Status (Availability)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProductData({ ...editingProductData, is_available: true })}
+                    className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition ${
+                      editingProductData.is_available
+                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-500/10'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 opacity-60'
+                    }`}
+                  >
+                    <CheckCircle className="w-4 h-4 text-emerald-400" /> In Stock (Available)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditingProductData({ ...editingProductData, is_available: false })}
+                    className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition ${
+                      !editingProductData.is_available
+                        ? 'bg-rose-950 border-rose-500 text-rose-300 shadow-md shadow-rose-500/10'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 opacity-60'
+                    }`}
+                  >
+                    <X className="w-4 h-4 text-rose-400" /> Out of Stock (Disabled)
                   </button>
                 </div>
               </div>
