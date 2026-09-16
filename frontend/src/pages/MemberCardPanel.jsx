@@ -19,7 +19,9 @@ import {
   User, 
   RefreshCw, 
   X, 
-  Shield 
+  Shield,
+  Crown,
+  Save
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
