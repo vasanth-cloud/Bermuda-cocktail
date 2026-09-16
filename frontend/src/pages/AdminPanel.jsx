@@ -213,11 +213,11 @@ export default function AdminPanel() {
             </div>
           </div>
 
-        {/* Top-Right Controls: Audit Log Button & Offline Sync Status Widget */}
+        {/* Top-Right Controls: Audit Log Button */}
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={() => setIsLogModalOpen(true)}
-            className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-extrabold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+            className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
           >
             <Receipt className="w-4 h-4 text-emerald-400" />
             <span>Audit Logs (₹{paymentSummary.grand_total || 0})</span>
@@ -225,25 +225,6 @@ export default function AdminPanel() {
               {paymentLogs.length}
             </span>
           </button>
-
-          <div className="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Database className="w-5 h-5 text-amber-400" />
-              <div>
-                <div className="text-xs text-slate-400 font-medium">Pending Cloud Sync</div>
-                <div className="text-base font-extrabold text-amber-400">
-                  {syncStatus.pending_sync_count} Transactions
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={triggerSync}
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20"
-            >
-              <UploadCloud className="w-4 h-4" /> Sync Now
-            </button>
-          </div>
         </div>
       </div>
     </div>
