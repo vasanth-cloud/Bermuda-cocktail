@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { OrderProvider, useOrder } from './context/OrderContext';
 import Navbar from './components/Navbar';
 import TopHeader from './components/TopHeader';
+import CustomerTopHeader from './components/CustomerTopHeader';
 import CustomerMenu from './pages/CustomerMenu';
 import BarReception from './pages/BarReception';
 import StaffPanel from './pages/StaffPanel';
@@ -86,8 +87,22 @@ function AppContent() {
   const { currentUser, isCustomerQrMode, setActiveTab } = useOrder();
   const [guestBypass, setGuestBypass] = useState(false);
 
+  // Pure Customer QR Scan Mode (e.g. ?table=DN-01) - Dedicated mobile view
+  if (isCustomerQrMode && !currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative overflow-x-hidden pub-ambient-bg">
+        <div className="pub-spotlight spotlight-left pointer-events-none" />
+        <div className="pub-spotlight spotlight-right pointer-events-none" />
+        <CustomerTopHeader />
+        <main className="flex-1 w-full max-w-7xl mx-auto z-10">
+          <CustomerMenu />
+        </main>
+      </div>
+    );
+  }
+
   // Render Login Page FIRST if not logged in and not customer QR scan
-  if (!currentUser && !isCustomerQrMode && !guestBypass) {
+  if (!currentUser && !guestBypass) {
     return (
       <LoginPage
         onBypassGuest={() => {
