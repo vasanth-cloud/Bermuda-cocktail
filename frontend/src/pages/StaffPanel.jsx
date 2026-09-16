@@ -3,7 +3,7 @@ import { useOrder } from '../context/OrderContext';
 import { Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check } from 'lucide-react';
 
 export default function StaffPanel() {
-  const { tables, zones, setSelectedTable, setActiveTab, allOrders, collectPayment, updateOrderStatus, updateItemStatus } = useOrder();
+  const { tables, zones, setSelectedTable, setActiveTab, allOrders, collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter } = useOrder();
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('ALL');
 
   // Payment Collection Modal State
@@ -12,6 +12,7 @@ export default function StaffPanel() {
   const [amountCollected, setAmountCollected] = useState('');
   const [waiterName, setWaiterName] = useState('Waiter');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [confirmingOrderId, setConfirmingOrderId] = useState(null);
 
   const filteredTables = tables.filter((t) => {
     return selectedZoneFilter === 'ALL' || t.zone_id === Number(selectedZoneFilter);
@@ -20,6 +21,11 @@ export default function StaffPanel() {
   const getTableActiveOrder = (tableId) => {
     return allOrders.find((o) => o.table_id === tableId && o.status !== 'BILLED');
   };
+
+  // Customer order requests awaiting Waiter confirmation at table
+  const pendingCustomerOrderRequests = allOrders.filter(
+    (ord) => ord.status === 'PENDING' || ord.status === 'PENDING_WAITER'
+  );
 
   // Find all items that are READY for pickup across all active orders
   const readyItemsForPickup = [];
@@ -36,6 +42,12 @@ export default function StaffPanel() {
       });
     }
   });
+
+  const handleConfirmOrder = async (orderId) => {
+    setConfirmingOrderId(orderId);
+    await confirmOrderAsWaiter(orderId, waiterName || 'Waiter');
+    setConfirmingOrderId(null);
+  };
 
   const handleConfirmPayment = async (e) => {
     e.preventDefault();
@@ -72,7 +84,7 @@ export default function StaffPanel() {
               </span>
             </h2>
             <p className="text-xs text-slate-400">
-              Receive live pickup alerts from Bar & Kitchen, serve items, and collect Cash / UPI payments at tables.
+              Confirm table orders with customers, route drinks to Bar & food to Kitchen KOT, serve items, and collect Cash / UPI payments.
             </p>
           </div>
         </div>
@@ -100,6 +112,66 @@ export default function StaffPanel() {
           ))}
         </div>
       </div>
+
+      {/* Customer QR Order Requests Awaiting Waiter Confirmation */}
+      {pendingCustomerOrderRequests.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950/80 via-slate-900 to-amber-950/80 border-2 border-amber-500/80 p-5 rounded-2xl shadow-2xl space-y-4">
+          <div className="flex items-center justify-between border-b border-amber-500/30 pb-3">
+            <div className="flex items-center gap-2 font-black text-amber-300 text-sm uppercase tracking-wider">
+              <Check className="w-5 h-5 text-amber-400" />
+              <span>📩 {pendingCustomerOrderRequests.length} Customer QR Order Requests Awaiting Waiter Confirmation</span>
+            </div>
+            <span className="text-xs bg-amber-500/20 text-amber-300 font-mono px-3 py-1 rounded-full border border-amber-500/40">
+              Review & Confirm at Table
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingCustomerOrderRequests.map((ord) => (
+              <div key={ord.id} className="bg-slate-950 border border-amber-500/40 p-4 rounded-xl space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-amber-400 font-mono font-bold uppercase">{ord.order_number}</span>
+                    <h4 className="text-lg font-black text-slate-100">Table {ord.table?.table_number || 'ST-01'}</h4>
+                    <p className="text-xs text-slate-400">Customer: <span className="text-slate-200 font-bold">{ord.customer_name}</span></p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-base font-black text-amber-400">₹{ord.total_amount}</div>
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                      Awaiting Waiter
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 p-2.5 rounded-lg space-y-1 text-xs">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Requested Items:</div>
+                  {ord.items.map((it) => (
+                    <div key={it.id} className="flex items-center justify-between text-slate-200">
+                      <span>{it.quantity}x {it.product?.name || `Item #${it.product_id}`}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                        it.target_dept === 'BAR' ? 'bg-purple-950 text-purple-300' : 'bg-emerald-950 text-emerald-300'
+                      }`}>
+                        {it.target_dept === 'BAR' ? '🍸 Bar' : '🍳 Kitchen'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    disabled={confirmingOrderId === ord.id}
+                    onClick={() => handleConfirmOrder(ord.id)}
+                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20"
+                  >
+                    <Check className="w-4 h-4" />
+                    {confirmingOrderId === ord.id ? 'Routing to Bar & Kitchen...' : 'Confirm & Route Order to Bar/Kitchen'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Live Pickup Alert Banner for Waiters */}
       {readyItemsForPickup.length > 0 && (

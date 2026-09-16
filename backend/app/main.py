@@ -312,6 +312,97 @@ async def update_order_status(order_id: int, status_update: schemas.OrderStatusU
     await manager.broadcast_all(event_payload)
     return {"message": "Order status updated", "status": order.status}
 
+@app.post("/api/orders/{order_id}/waiter-confirm")
+async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Waiter", db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.status = "CONFIRMED"
+    for item in order.items:
+        if item.status == "PENDING":
+            item.status = "CONFIRMED"
+
+    db.commit()
+    db.refresh(order)
+
+    bar_items_count = sum(1 for it in order.items if it.target_dept == "BAR")
+    kitchen_items_count = sum(1 for it in order.items if it.target_dept == "KITCHEN")
+
+    order_payload = {
+        "event": "WAITER_CONFIRMED_ORDER",
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "table_number": order.table.table_number if order.table else "ST-01",
+        "zone_name": order.table.zone.display_name if order.table and order.table.zone else "Main Zone",
+        "customer_name": order.customer_name,
+        "total_amount": order.total_amount,
+        "status": order.status,
+        "confirmed_by": waiter_name,
+        "bar_items_count": bar_items_count,
+        "kitchen_items_count": kitchen_items_count,
+        "items": [
+            {
+                "id": it.id,
+                "product_id": it.product_id,
+                "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "unit_price": it.unit_price,
+                "target_dept": it.target_dept,
+                "status": it.status,
+                "notes": it.notes
+            }
+            for it in order.items
+        ]
+    }
+
+    # Route split orders to Bar Reception & Kitchen KDS / KOT machine
+    if bar_items_count > 0:
+        await manager.broadcast_to_channel("bar", {**order_payload, "dept_filter": "BAR"})
+    if kitchen_items_count > 0:
+        await manager.broadcast_to_channel("kitchen", {**order_payload, "dept_filter": "KITCHEN", "trigger_kot_print": True})
+    
+    await manager.broadcast_all(order_payload)
+    return {"message": "Order confirmed by Waiter and routed to Reception Bar & Kitchen KOT", "order": order_payload}
+
+@app.post("/api/orders/{order_id}/add-items")
+async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    added_total = 0.0
+    for item in req.items:
+        prod = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        if not prod:
+            continue
+
+        item_price = prod.price * item.quantity
+        added_total += item_price
+
+        order_item = models.OrderItem(
+            order_id=order.id,
+            product_id=prod.id,
+            quantity=item.quantity,
+            unit_price=prod.price,
+            target_dept=prod.target_dept,
+            status="PENDING",
+            notes=item.notes
+        )
+        db.add(order_item)
+
+    order.total_amount += added_total
+    db.commit()
+    db.refresh(order)
+
+    await manager.broadcast_all({
+        "event": "ORDER_ITEMS_ADDED",
+        "order_id": order.id,
+        "table_number": order.table.table_number if order.table else "ST-01",
+        "added_by": req.waiter_name or "Waiter"
+    })
+    return {"message": f"Added {len(req.items)} item(s) to order", "new_total": order.total_amount}
+
 @app.patch("/api/order-items/{item_id}/status")
 async def update_item_status(item_id: int, status_update: schemas.ItemStatusUpdate, db: Session = Depends(get_db)):
     item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()

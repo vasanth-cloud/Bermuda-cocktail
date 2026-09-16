@@ -115,3 +115,7 @@ class PaymentCollectRequest(BaseModel):
     payment_mode: str  # CASH, UPI, CARD
     amount_collected: float
     collected_by: Optional[str] = "Waiter / Cashier"
+
+class AddItemsToOrderRequest(BaseModel):
+    items: List[CartItemCreate]
+    waiter_name: Optional[str] = "Waiter"

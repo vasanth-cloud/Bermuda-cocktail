@@ -342,6 +342,40 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
+  const confirmOrderAsWaiter = async (orderId, waiterName = 'Waiter') => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/waiter-confirm?waiter_name=${encodeURIComponent(waiterName)}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        await fetchOrders();
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error confirming order as waiter:", err);
+    }
+    return false;
+  };
+
+  const addItemsToOrder = async (orderId, items, waiterName = 'Waiter') => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/add-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, waiter_name: waiterName })
+      });
+      if (res.ok) {
+        await fetchOrders();
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error adding items to order:", err);
+    }
+    return false;
+  };
+
   return (
     <OrderContext.Provider
       value={{
@@ -377,7 +411,9 @@ export const OrderProvider = ({ children }) => {
         isCustomerQrMode,
         setIsCustomerQrMode,
         paymentLogs,
-        paymentSummary
+        paymentSummary,
+        confirmOrderAsWaiter,
+        addItemsToOrder
       }}
     >
       {children}
