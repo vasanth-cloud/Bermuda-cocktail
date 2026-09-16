@@ -402,12 +402,12 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
-  const toggleProductAvailability = async (productId, currentStatus) => {
+  const toggleProductAvailability = async (productId, targetAvailability) => {
     try {
       await fetch(`/api/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_available: !currentStatus })
+        body: JSON.stringify({ is_available: Boolean(targetAvailability) })
       });
       await fetchData();
     } catch (err) {

@@ -223,6 +223,7 @@ export default function CustomerMenu() {
         {filteredProducts.map((product) => {
           const inCart = cart.find((item) => item.product_id === product.id);
           const isBar = product.target_dept === 'BAR';
+          const isAvailable = product.is_available ?? true;
           const thumbUrl = productThumbnails[product.id] || (isBar 
             ? 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80'
             : 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=300&q=80');
@@ -230,21 +231,27 @@ export default function CustomerMenu() {
           return (
             <div
               key={product.id}
-              className="bg-slate-900/90 border border-amber-800/40 hover:border-amber-500/60 rounded-2xl p-4 flex flex-col justify-between transition-all shadow-xl hover:shadow-2xl group relative overflow-hidden backdrop-blur-md"
+              className={`bg-slate-900/90 border ${!isAvailable ? 'border-rose-900/50 opacity-80' : 'border-amber-800/40 hover:border-amber-500/60'} rounded-2xl p-4 flex flex-col justify-between transition-all shadow-xl group relative overflow-hidden backdrop-blur-md`}
             >
               <div className="flex items-start justify-between gap-3 mb-3">
                 {/* Left Info Column */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                       isBar ? 'bg-purple-950/80 text-purple-300 border border-purple-500/30' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
                     }`}>
                       {isBar ? <Wine className="w-3 h-3" /> : <Utensils className="w-3 h-3" />}
                       {isBar ? 'Bar Drink' : 'Kitchen Food'}
                     </span>
+
+                    {!isAvailable && (
+                      <span className="bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                        🚫 SOLD OUT
+                      </span>
+                    )}
                   </div>
 
-                  <h3 className="font-extrabold text-slate-100 text-base group-hover:text-amber-400 transition mb-1 leading-snug">
+                  <h3 className={`font-extrabold text-base transition mb-1 leading-snug ${!isAvailable ? 'text-slate-400 line-through' : 'text-slate-100 group-hover:text-amber-400'}`}>
                     {product.name}
                   </h3>
 
@@ -255,16 +262,23 @@ export default function CustomerMenu() {
 
                 {/* Right Image Thumbnail Column */}
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="font-black text-amber-400 text-lg sm:text-xl font-mono">
+                  <span className={`font-black text-lg sm:text-xl font-mono ${!isAvailable ? 'text-slate-500 line-through' : 'text-amber-400'}`}>
                     ₹{product.price}
                   </span>
-                  <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-slate-800 shadow-md bg-slate-950 group-hover:scale-105 transition-transform duration-300">
+                  <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-slate-800 shadow-md bg-slate-950 relative group-hover:scale-105 transition-transform duration-300">
                     <img
                       src={thumbUrl}
                       alt={product.name}
-                      className="w-full h-full object-cover"
+                      className={`w-full h-full object-cover ${!isAvailable ? 'grayscale opacity-50' : ''}`}
                       loading="lazy"
                     />
+                    {!isAvailable && (
+                      <div className="absolute inset-0 bg-slate-950/70 flex items-center justify-center p-1 text-center">
+                        <span className="text-[9px] font-black text-rose-400 uppercase tracking-wider bg-rose-950/90 px-1 py-0.5 rounded border border-rose-800">
+                          OUT OF STOCK
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -273,7 +287,14 @@ export default function CustomerMenu() {
               <div className="flex items-center justify-between pt-2.5 border-t border-slate-800/80 mt-1">
                 <span className="text-[10px] text-slate-500 font-mono">ID #{product.id}</span>
 
-                {inCart ? (
+                {!isAvailable ? (
+                  <button
+                    disabled
+                    className="bg-slate-950 text-rose-400/80 border border-rose-900/50 text-xs font-bold px-3 py-1.5 rounded-xl cursor-not-allowed flex items-center gap-1 opacity-70"
+                  >
+                    🚫 Out of Stock
+                  </button>
+                ) : inCart ? (
                   <div className="flex items-center gap-2 bg-slate-950 rounded-xl p-1 border border-amber-500/40 shadow-inner">
                     <button
                       onClick={() => updateCartQuantity(product.id, -1)}

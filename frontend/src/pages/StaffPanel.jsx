@@ -544,28 +544,39 @@ export default function StaffPanel() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                 {products
                   .filter(p => modalCategoryFilter === 'ALL' || p.category_id === Number(modalCategoryFilter))
-                  .map(p => (
-                    <div key={p.id} className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-bold text-slate-200">{p.name}</div>
-                        <div className="text-amber-400 font-extrabold">₹{p.price}</div>
+                  .map(p => {
+                    const isAvail = p.is_available ?? true;
+                    return (
+                      <div key={p.id} className={`bg-slate-950 border ${!isAvail ? 'border-rose-950/60 opacity-60' : 'border-slate-800'} p-2.5 rounded-xl flex items-center justify-between text-xs`}>
+                        <div>
+                          <div className={`font-bold ${!isAvail ? 'text-slate-400 line-through' : 'text-slate-200'}`}>
+                            {p.name} {!isAvail && <span className="text-[10px] text-rose-400 font-normal italic">(Sold Out)</span>}
+                          </div>
+                          <div className="text-amber-400 font-extrabold">₹{p.price}</div>
+                        </div>
+                        {isAvail ? (
+                          <button
+                            onClick={() => {
+                              setItemsToAdd(prev => {
+                                const existing = prev.find(item => item.product_id === p.id);
+                                if (existing) {
+                                  return prev.map(item => item.product_id === p.id ? { ...item, quantity: item.quantity + 1 } : item);
+                                }
+                                return [...prev, { product_id: p.id, quantity: 1 }];
+                              });
+                            }}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Add
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-bold text-rose-400 bg-rose-950/60 border border-rose-800 px-2 py-0.5 rounded">
+                            Sold Out
+                          </span>
+                        )}
                       </div>
-                      <button
-                        onClick={() => {
-                          setItemsToAdd(prev => {
-                            const existing = prev.find(item => item.product_id === p.id);
-                            if (existing) {
-                              return prev.map(item => item.product_id === p.id ? { ...item, quantity: item.quantity + 1 } : item);
-                            }
-                            return [...prev, { product_id: p.id, quantity: 1 }];
-                          });
-                        }}
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             </div>
 
