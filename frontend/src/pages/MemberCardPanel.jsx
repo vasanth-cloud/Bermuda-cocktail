@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useOrder } from '../context/OrderContext';
 import { 
   CreditCard, 
@@ -21,7 +21,11 @@ import {
   X, 
   Shield,
   Crown,
-  Save
+  Save,
+  Printer,
+  Camera,
+  Scan,
+  Volume2
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -65,9 +69,52 @@ export default function MemberCardPanel() {
   // QR Modal State
   const [selectedMemberForQr, setSelectedMemberForQr] = useState(null);
 
+  // Print Card Modal State
+  const [printableMember, setPrintableMember] = useState(null);
+
+  // Machine / Camera Scanner Modal State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scanInputCode, setScanInputCode] = useState('');
+  const [scannedMemberResult, setScannedMemberResult] = useState(null);
+  const [scanErrorMsg, setScanErrorMsg] = useState('');
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const scannerInputRef = useRef(null);
+  const videoRef = useRef(null);
+
   useEffect(() => {
     fetchMembers();
   }, []);
+
+  // Focus scanner input automatically when scanner modal opens
+  useEffect(() => {
+    if (isScannerOpen && scannerInputRef.current) {
+      scannerInputRef.current.focus();
+    }
+  }, [isScannerOpen]);
+
+  // Handle WebCam Stream Start/Stop
+  useEffect(() => {
+    let stream = null;
+    if (isScannerOpen && isCameraActive) {
+      navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'environment' } })
+        .then((s) => {
+          stream = s;
+          if (videoRef.current) {
+            videoRef.current.srcObject = s;
+          }
+        })
+        .catch((err) => {
+          console.warn("Camera access failed:", err);
+          setScanErrorMsg("Camera access not allowed or unavailable. Use hardware USB scanner input below.");
+        });
+    }
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [isScannerOpen, isCameraActive]);
 
   const handleSearch = (e) => {
     const q = e.target.value;
@@ -100,6 +147,8 @@ export default function MemberCardPanel() {
         status: 'ACTIVE'
       });
       setIsCreateOpen(false);
+      // Automatically prompt to print card
+      setPrintableMember(res.member);
       setTimeout(() => setSuccessMessage(''), 4000);
     } else {
       setErrorMessage(res.error || 'Failed to create member card');
@@ -154,6 +203,39 @@ export default function MemberCardPanel() {
     }
   };
 
+  // MACHINE QR CODE ENTRY SCANNER SUBMIT (Hardware USB Reader / Manual Input)
+  const handleScannerSubmit = async (e) => {
+    e?.preventDefault();
+    const queryCode = scanInputCode.trim();
+    if (!queryCode) return;
+
+    setScanErrorMsg('');
+    setScannedMemberResult(null);
+
+    // Look up member by code, phone, or id
+    const found = members.find(
+      (m) => m.member_code.toLowerCase() === queryCode.toLowerCase() || m.phone === queryCode
+    );
+
+    if (found) {
+      const success = await recordMemberVisit(found.id);
+      if (success) {
+        const updatedVisitCount = found.visit_count + 1;
+        setScannedMemberResult({ ...found, visit_count: updatedVisitCount });
+        setScanInputCode('');
+      } else {
+        setScanErrorMsg("Failed to record entry visit. Please try again.");
+      }
+    } else {
+      setScanErrorMsg(`Invalid Member QR Code: "${queryCode}". Customer not found in records.`);
+      setScanInputCode('');
+    }
+
+    if (scannerInputRef.current) {
+      scannerInputRef.current.focus();
+    }
+  };
+
   const totalMembers = members.length;
   const vipCount = members.filter(m => m.status === 'VIP').length;
   const totalVisits = members.reduce((acc, m) => acc + (m.visit_count || 0), 0);
@@ -163,7 +245,7 @@ export default function MemberCardPanel() {
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-amber-950/40 to-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400 text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
@@ -175,16 +257,29 @@ export default function MemberCardPanel() {
               VIP Member Card System
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Issue member cards, track customer entry visits, scan QR passes & manage profile details
+              Issue physical cards with QR passes, scan customer cards upon entry & print VIP cards
             </p>
           </div>
 
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black px-5 py-3 rounded-xl shadow-lg shadow-amber-500/20 hover:scale-[1.02] transition flex items-center justify-center gap-2 text-sm shrink-0"
-          >
-            <Plus className="w-5 h-5 stroke-[3]" /> Issue New Member Card
-          </button>
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            <button
+              onClick={() => {
+                setIsScannerOpen(true);
+                setScannedMemberResult(null);
+                setScanErrorMsg('');
+              }}
+              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-3 rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-[1.02] transition flex items-center justify-center gap-2 text-xs sm:text-sm"
+            >
+              <Scan className="w-5 h-5 stroke-[2.5]" /> 📷 Scan Member QR Entry
+            </button>
+
+            <button
+              onClick={() => setIsCreateOpen(true)}
+              className="bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black px-4 py-3 rounded-xl shadow-lg shadow-amber-500/20 hover:scale-[1.02] transition flex items-center justify-center gap-2 text-xs sm:text-sm"
+            >
+              <Plus className="w-5 h-5 stroke-[3]" /> Issue New Member Card
+            </button>
+          </div>
         </div>
       </div>
 
@@ -278,7 +373,7 @@ export default function MemberCardPanel() {
                 <th className="py-3.5 px-4">Aadhar No</th>
                 <th className="py-3.5 px-4">Card Status</th>
                 <th className="py-3.5 px-4 text-center">Visits</th>
-                <th className="py-3.5 px-4 text-center">QR Pass</th>
+                <th className="py-3.5 px-4 text-center">QR Pass & Print</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -334,13 +429,22 @@ export default function MemberCardPanel() {
                     </td>
 
                     <td className="py-3.5 px-4 text-center">
-                      <button
-                        onClick={() => setSelectedMemberForQr(m)}
-                        className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold transition inline-flex items-center gap-1"
-                        title="View Digital QR Card"
-                      >
-                        <QrCode className="w-4 h-4" /> Pass
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => setSelectedMemberForQr(m)}
+                          className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold transition inline-flex items-center gap-1"
+                          title="View Digital QR Card"
+                        >
+                          <QrCode className="w-3.5 h-3.5" /> Pass
+                        </button>
+                        <button
+                          onClick={() => setPrintableMember(m)}
+                          className="p-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold transition inline-flex items-center gap-1"
+                          title="Print Physical VIP Card"
+                        >
+                          <Printer className="w-3.5 h-3.5" /> Print
+                        </button>
+                      </div>
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
@@ -375,6 +479,202 @@ export default function MemberCardPanel() {
           </table>
         </div>
       </div>
+
+      {/* MODAL: Machine / WebCam Entry QR Scanner */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-emerald-500/40 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 relative overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Scan className="w-6 h-6 text-emerald-400" />
+                <div>
+                  <h3 className="text-lg font-black text-slate-100">Pub Entry QR Reader Machine</h3>
+                  <p className="text-[11px] text-slate-400">Scan physical card QR or input barcode code</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsScannerOpen(false);
+                  setIsCameraActive(false);
+                }}
+                className="text-slate-400 hover:text-slate-100 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Hardware Reader / Input Box */}
+            <form onSubmit={handleScannerSubmit} className="space-y-3">
+              <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider">
+                Scanner Hardware Input / USB QR Code:
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <QrCode className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    ref={scannerInputRef}
+                    type="text"
+                    value={scanInputCode}
+                    onChange={(e) => setScanInputCode(e.target.value)}
+                    placeholder="Point scanner here (e.g. BMC-2896)..."
+                    className="w-full bg-slate-950 border-2 border-emerald-500/40 rounded-xl pl-10 pr-3 py-2.5 text-slate-100 text-sm font-mono font-bold focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition shrink-0"
+                >
+                  Verify Entry
+                </button>
+              </div>
+            </form>
+
+            {/* WebCam Video Option */}
+            <div className="pt-2 border-t border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-amber-400" /> Camera WebScan Feed:
+                </span>
+                <button
+                  onClick={() => setIsCameraActive(!isCameraActive)}
+                  className="text-xs font-bold px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700"
+                >
+                  {isCameraActive ? 'Stop Camera' : 'Turn On WebCam'}
+                </button>
+              </div>
+
+              {isCameraActive && (
+                <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center">
+                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 border-2 border-dashed border-emerald-400/60 rounded-2xl pointer-events-none flex items-center justify-center">
+                    <span className="text-xs font-bold text-emerald-400 bg-slate-950/80 px-3 py-1 rounded-full border border-emerald-400/40">
+                      Align QR Code Inside Box
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Success Entry Confirmation Alert */}
+            {scannedMemberResult && (
+              <div className="bg-emerald-950/90 border-2 border-emerald-400 p-4 rounded-2xl space-y-2 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-emerald-300 uppercase tracking-widest flex items-center gap-1.5">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" /> 🟢 ENTRY CONFIRMED & RECORDED
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-900/60 border border-emerald-500/40">
+                    {scannedMemberResult.member_code}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <div className="text-lg font-black text-slate-100">{scannedMemberResult.name}</div>
+                    <div className="text-xs text-slate-300 font-mono">Ph: {scannedMemberResult.phone}</div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-2xl font-black text-amber-400">{scannedMemberResult.visit_count}</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-bold">Total Visits</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {scanErrorMsg && (
+              <div className="bg-rose-950/90 border border-rose-500/50 p-3.5 rounded-2xl text-xs text-rose-300 font-bold flex items-center gap-2">
+                <Shield className="w-5 h-5 text-rose-400 shrink-0" />
+                <span>{scanErrorMsg}</span>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setIsScannerOpen(false);
+                setIsCameraActive(false);
+              }}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+            >
+              Close Machine Scanner
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Printable Physical VIP Card */}
+      {printableMember && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <span className="text-xs font-black tracking-widest text-amber-400 uppercase flex items-center gap-1.5">
+                <Printer className="w-4 h-4" /> Print Physical VIP Card
+              </span>
+              <button onClick={() => setPrintableMember(null)} className="text-slate-400 hover:text-slate-100 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* PRINTABLE CARD DESIGN PREVIEW CONTAINER */}
+            <div
+              id="printable-vip-card"
+              className="bg-gradient-to-br from-amber-950 via-slate-950 to-amber-900 border-2 border-amber-500/60 rounded-2xl p-5 shadow-2xl text-slate-100 space-y-4 relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between border-b border-amber-500/30 pb-2.5">
+                <div>
+                  <div className="text-xs font-black tracking-wider text-amber-400">THE BERMUDA COCKTAIL PUB</div>
+                  <div className="text-[9px] text-amber-300/80 tracking-widest uppercase">VIP Membership Pass</div>
+                </div>
+                <span className="px-2.5 py-0.5 bg-amber-500 text-slate-950 font-black text-[10px] rounded-full uppercase">
+                  {printableMember.status}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-1.5 min-w-0 flex-1">
+                  <div>
+                    <div className="text-[9px] text-slate-400 uppercase font-bold">Customer Name</div>
+                    <div className="text-base font-black text-amber-300 truncate">{printableMember.name}</div>
+                  </div>
+
+                  <div>
+                    <div className="text-[9px] text-slate-400 uppercase font-bold">Member Code</div>
+                    <div className="text-xs font-mono font-black text-slate-100">{printableMember.member_code}</div>
+                  </div>
+
+                  <div>
+                    <div className="text-[9px] text-slate-400 uppercase font-bold">Phone Number</div>
+                    <div className="text-xs font-mono text-slate-300">{printableMember.phone}</div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2 rounded-xl shrink-0 border-2 border-amber-500/40">
+                  <QRCodeSVG value={printableMember.member_code} size={105} level="H" includeMargin={true} />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between text-[9px] text-amber-400/80 font-mono">
+                <span>Official VIP Card</span>
+                <span>Scan for Pub Entry</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => setPrintableMember(null)}
+                className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="w-1/2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Printer className="w-4 h-4" /> Print Card Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: Issue New Member Card */}
       {isCreateOpen && (
@@ -655,12 +955,24 @@ export default function MemberCardPanel() {
               </div>
             </div>
 
-            <button
-              onClick={() => setSelectedMemberForQr(null)}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition"
-            >
-              Close Pass
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedMemberForQr(null)}
+                className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition"
+              >
+                Close Pass
+              </button>
+              <button
+                onClick={() => {
+                  const m = selectedMemberForQr;
+                  setSelectedMemberForQr(null);
+                  setPrintableMember(m);
+                }}
+                className="w-1/2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5"
+              >
+                <Printer className="w-4 h-4" /> Print Card
+              </button>
+            </div>
           </div>
         </div>
       )}

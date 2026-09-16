@@ -287,3 +287,32 @@ html.light .spotlight-right {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* ==========================================================================
+   PRINT MEDIA STYLING FOR PHYSICAL VIP MEMBER CARDS
+   ========================================================================== */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #printable-vip-card, #printable-vip-card * {
+    visibility: visible !important;
+  }
+  #printable-vip-card {
+    position: fixed !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 3.5in !important;
+    height: 2.2in !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    border: 2px solid #f59e0b !important;
+    background: #030712 !important;
+    color: #ffffff !important;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
