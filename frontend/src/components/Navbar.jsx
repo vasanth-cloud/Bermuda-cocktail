@@ -57,19 +57,11 @@ export default function Navbar() {
     },
     { 
       id: 'bar', 
-      label: 'Reception / Bar', 
-      desc: 'Drink Orders & Collect Cash', 
+      label: 'Bar & Kitchen KDS', 
+      desc: 'Drinks, Food & Reception Billing', 
       icon: Wine, 
       color: 'text-purple-400', 
       bg: 'bg-purple-500/10 border-purple-500/20' 
-    },
-    { 
-      id: 'kitchen', 
-      label: 'Kitchen KDS', 
-      desc: 'Chef Preparation Display', 
-      icon: UtensilsCrossed, 
-      color: 'text-emerald-400', 
-      bg: 'bg-emerald-500/10 border-emerald-500/20' 
     },
     { 
       id: 'staff', 
@@ -82,7 +74,7 @@ export default function Navbar() {
     { 
       id: 'admin', 
       label: 'Cloud Admin', 
-      desc: 'Master Menu & Audit Logs', 
+      desc: 'Master Menu & Staff Accounts', 
       icon: LayoutDashboard, 
       color: 'text-rose-400', 
       bg: 'bg-rose-500/10 border-rose-500/20' 
@@ -99,16 +91,13 @@ export default function Navbar() {
     }
 
     if (currentUser.role === 'ADMIN') {
-      return navItems; // Master Admin gets all 5 terminals
+      return navItems; // Master Admin gets all terminals
     }
     if (currentUser.role === 'WAITER') {
       return navItems.filter(item => item.id === 'customer' || item.id === 'staff');
     }
-    if (currentUser.role === 'BAR_RECEPTION') {
+    if (currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
       return navItems.filter(item => item.id === 'customer' || item.id === 'bar');
-    }
-    if (currentUser.role === 'KITCHEN_CHEF') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'kitchen');
     }
 
     return navItems;

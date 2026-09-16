@@ -70,8 +70,7 @@ function MainContent() {
   return (
     <main className="w-full">
       {activeTab === 'customer' && <CustomerMenu />}
-      {activeTab === 'bar' && <BarReception />}
-      {activeTab === 'kitchen' && <KitchenKDS />}
+      {(activeTab === 'bar' || activeTab === 'kitchen') && <BarReception />}
       {activeTab === 'staff' && <StaffPanel />}
       {activeTab === 'admin' && <AdminPanel />}
     </main>
