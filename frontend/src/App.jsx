@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { OrderProvider, useOrder } from './context/OrderContext';
 import Navbar from './components/Navbar';
+import TopHeader from './components/TopHeader';
 import CustomerMenu from './pages/CustomerMenu';
 import BarReception from './pages/BarReception';
 import StaffPanel from './pages/StaffPanel';
@@ -105,7 +106,8 @@ function AppContent() {
       <Navbar />
 
       {/* Main Content Area - Shifted right of left vertical navbar */}
-      <div className="flex-1 md:ml-64 lg:ml-72 min-w-0 z-10">
+      <div className="flex-1 md:ml-64 lg:ml-72 min-w-0 z-10 flex flex-col min-h-screen">
+        <TopHeader />
         <MainContent />
       </div>
     </div>
