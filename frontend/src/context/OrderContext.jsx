@@ -24,6 +24,7 @@ export const OrderProvider = ({ children }) => {
   const [syncStatus, setSyncStatus] = useState({ pending_sync_count: 0, connection_mode: 'OFFLINE_LOCAL_SERVER' });
   const [wsConnected, setWsConnected] = useState(false);
   const [isCustomerQrMode, setIsCustomerQrMode] = useState(false);
+  const [theme, setTheme] = useState('dark');
 
   // User Auth State
   const [currentUser, setCurrentUser] = useState(() => {
