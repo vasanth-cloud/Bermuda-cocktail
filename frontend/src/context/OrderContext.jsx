@@ -376,6 +376,20 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  const deleteOrderItem = async (itemId) => {
+    try {
+      const res = await fetch(`/api/order-items/${itemId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchOrders();
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error deleting order item:", err);
+    }
+    return false;
+  };
+
   return (
     <OrderContext.Provider
       value={{
@@ -413,7 +427,8 @@ export const OrderProvider = ({ children }) => {
         paymentLogs,
         paymentSummary,
         confirmOrderAsWaiter,
-        addItemsToOrder
+        addItemsToOrder,
+        deleteOrderItem
       }}
     >
       {children}

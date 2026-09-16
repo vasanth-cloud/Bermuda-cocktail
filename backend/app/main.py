@@ -403,6 +403,28 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
     })
     return {"message": f"Added {len(req.items)} item(s) to order", "new_total": order.total_amount}
 
+@app.delete("/api/order-items/{item_id}")
+async def delete_order_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    order = item.order
+    item_cost = item.unit_price * item.quantity
+    db.delete(item)
+
+    if order:
+        order.total_amount = max(0.0, order.total_amount - item_cost)
+
+    db.commit()
+
+    await manager.broadcast_all({
+        "event": "ORDER_ITEM_DELETED",
+        "item_id": item_id,
+        "order_id": order.id if order else None
+    })
+    return {"message": "Order item deleted successfully"}
+
 @app.patch("/api/order-items/{item_id}/status")
 async def update_item_status(item_id: int, status_update: schemas.ItemStatusUpdate, db: Session = Depends(get_db)):
     item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()

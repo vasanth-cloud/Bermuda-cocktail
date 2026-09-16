@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
-import { Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check } from 'lucide-react';
+import { Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check, Edit2, Trash2, Search, X } from 'lucide-react';
 
 export default function StaffPanel() {
-  const { tables, zones, setSelectedTable, setActiveTab, allOrders, collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter } = useOrder();
+  const { tables, zones, setSelectedTable, setActiveTab, allOrders, collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter, addItemsToOrder, deleteOrderItem, products, categories } = useOrder();
   const [selectedZoneFilter, setSelectedZoneFilter] = useState('ALL');
 
   // Payment Collection Modal State
@@ -13,6 +13,13 @@ export default function StaffPanel() {
   const [waiterName, setWaiterName] = useState('Waiter');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
+
+  // Waiter Order Edit Modal State
+  const [editingOrderForWaiter, setEditingOrderForWaiter] = useState(null);
+  const [modalCategoryFilter, setModalCategoryFilter] = useState('ALL');
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [itemsToAdd, setItemsToAdd] = useState([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const filteredTables = tables.filter((t) => {
     return selectedZoneFilter === 'ALL' || t.zone_id === Number(selectedZoneFilter);
@@ -158,6 +165,17 @@ export default function StaffPanel() {
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      setEditingOrderForWaiter(ord);
+                      setItemsToAdd([]);
+                    }}
+                    className="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow"
+                    title="Add extra drinks/food or remove items"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit / Add Items
+                  </button>
+
                   <button
                     disabled={confirmingOrderId === ord.id}
                     onClick={() => handleConfirmOrder(ord.id)}
@@ -423,6 +441,158 @@ export default function StaffPanel() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Waiter Edit & Add Items Modal */}
+      {editingOrderForWaiter && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setEditingOrderForWaiter(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                <Edit2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-100 flex items-center gap-2">
+                  Edit & Add Items — Table {editingOrderForWaiter.table?.table_number || 'DN-01'}
+                </h3>
+                <p className="text-xs text-slate-400">Add extra drinks/dishes requested by customer at table before confirming.</p>
+              </div>
+            </div>
+
+            {/* Current Items in Order */}
+            <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Requested Items:</div>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {editingOrderForWaiter.items.map((it) => (
+                  <div key={it.id} className="flex items-center justify-between bg-slate-900 p-2.5 rounded-lg text-xs border border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-amber-400 font-bold">{it.quantity}x</span>
+                      <span className="font-bold text-slate-200">{it.product?.name || `Product #${it.product_id}`}</span>
+                      <span className="text-slate-400">₹{it.unit_price * it.quantity}</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await deleteOrderItem(it.id);
+                        const updated = allOrders.find(o => o.id === editingOrderForWaiter.id);
+                        if (updated) setEditingOrderForWaiter(updated);
+                      }}
+                      className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/10"
+                      title="Remove item from order"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Items Waiter Added in Modal */}
+            {itemsToAdd.length > 0 && (
+              <div className="bg-amber-950/30 border border-amber-500/40 p-3 rounded-xl space-y-2">
+                <div className="text-xs font-bold text-amber-300 uppercase tracking-wider">New Items Being Added:</div>
+                <div className="space-y-1 text-xs">
+                  {itemsToAdd.map((newItem, idx) => {
+                    const p = products.find(prod => prod.id === newItem.product_id);
+                    return (
+                      <div key={idx} className="flex items-center justify-between text-amber-200">
+                        <span>{newItem.quantity}x {p?.name}</span>
+                        <span>₹{(p?.price || 0) * newItem.quantity}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Add Items Menu Selector */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <div className="text-xs font-bold text-slate-300">Add Extra Drinks / Dishes from Menu:</div>
+              
+              {/* Category Scrollbar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setModalCategoryFilter('ALL')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
+                    modalCategoryFilter === 'ALL' ? 'bg-amber-500 text-slate-950' : 'bg-slate-950 text-slate-400 border border-slate-800'
+                  }`}
+                >
+                  All Items
+                </button>
+                {categories.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setModalCategoryFilter(cat.id.toString())}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
+                      modalCategoryFilter === cat.id.toString() ? 'bg-amber-500 text-slate-950' : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Product Grid inside Modal */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                {products
+                  .filter(p => modalCategoryFilter === 'ALL' || p.category_id === Number(modalCategoryFilter))
+                  .map(p => (
+                    <div key={p.id} className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-200">{p.name}</div>
+                        <div className="text-amber-400 font-extrabold">₹{p.price}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setItemsToAdd(prev => {
+                            const existing = prev.find(item => item.product_id === p.id);
+                            if (existing) {
+                              return prev.map(item => item.product_id === p.id ? { ...item, quantity: item.quantity + 1 } : item);
+                            }
+                            return [...prev, { product_id: p.id, quantity: 1 }];
+                          });
+                        }}
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setEditingOrderForWaiter(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-slate-100 text-xs font-bold"
+              >
+                Close
+              </button>
+              <button
+                disabled={isSavingEdit}
+                onClick={async () => {
+                  setIsSavingEdit(true);
+                  if (itemsToAdd.length > 0) {
+                    await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, waiterName);
+                  }
+                  await confirmOrderAsWaiter(editingOrderForWaiter.id, waiterName);
+                  setIsSavingEdit(false);
+                  setEditingOrderForWaiter(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
+              >
+                <Check className="w-4 h-4" /> Save & Confirm to Bar/Kitchen
+              </button>
+            </div>
           </div>
         </div>
       )}
