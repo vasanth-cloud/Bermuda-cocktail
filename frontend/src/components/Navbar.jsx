@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
 import BermudaLogo from './BermudaLogo';
+import LoginModal from './LoginModal';
 import { 
   Wine, 
   UtensilsCrossed, 
@@ -14,7 +15,11 @@ import {
   Menu,
   X,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  LogIn,
+  LogOut,
+  UserCheck,
+  Crown
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -27,14 +32,14 @@ export default function Navbar() {
     wsConnected,
     theme,
     setTheme,
-    isCustomerQrMode
+    isCustomerQrMode,
+    currentUser,
+    logoutUser
   } = useOrder();
 
   const [showStaffNav, setShowStaffNav] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // If customer scanned table QR code, hide staff tabs unless staff mode is toggled
-  const isCustomerOnlyView = isCustomerQrMode && !showStaffNav;
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const handleTabClick = (tab) => {
     setActiveTab(tab);
@@ -84,6 +89,48 @@ export default function Navbar() {
     },
   ];
 
+  // Filter terminal navigation items based on currentUser role
+  const getVisibleNavItems = () => {
+    if (!currentUser) {
+      if (isCustomerQrMode && !showStaffNav) {
+        return navItems.filter(item => item.id === 'customer');
+      }
+      return navItems;
+    }
+
+    if (currentUser.role === 'ADMIN') {
+      return navItems; // Master Admin gets all 5 terminals
+    }
+    if (currentUser.role === 'WAITER') {
+      return navItems.filter(item => item.id === 'customer' || item.id === 'staff');
+    }
+    if (currentUser.role === 'BAR_RECEPTION') {
+      return navItems.filter(item => item.id === 'customer' || item.id === 'bar');
+    }
+    if (currentUser.role === 'KITCHEN_CHEF') {
+      return navItems.filter(item => item.id === 'customer' || item.id === 'kitchen');
+    }
+
+    return navItems;
+  };
+
+  const visibleNavItems = getVisibleNavItems();
+
+  const getRoleBadge = (role) => {
+    switch (role) {
+      case 'ADMIN':
+        return { label: 'Master Admin', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30', icon: Crown };
+      case 'WAITER':
+        return { label: 'Waiter Staff', color: 'text-blue-400 bg-blue-500/10 border-blue-500/30', icon: Users };
+      case 'BAR_RECEPTION':
+        return { label: 'Bar Reception', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30', icon: Wine };
+      case 'KITCHEN_CHEF':
+        return { label: 'Kitchen Chef', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30', icon: UtensilsCrossed };
+      default:
+        return { label: 'Staff User', color: 'text-slate-400 bg-slate-800 border-slate-700', icon: UserCheck };
+    }
+  };
+
   return (
     <>
       {/* ---------------------------------------------------- */}
@@ -102,14 +149,18 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
-          {wsConnected ? (
-            <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30">
-              <Wifi className="w-3 h-3 animate-pulse" /> Wi-Fi Active
-            </span>
+          {currentUser ? (
+            <div className="flex items-center gap-1.5 bg-slate-900 border border-amber-500/30 px-2.5 py-1 rounded-full text-xs font-bold text-amber-300">
+              <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span className="max-w-[90px] truncate">{currentUser.name}</span>
+            </div>
           ) : (
-            <span className="flex items-center gap-1 text-[10px] text-rose-400 font-bold bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/30">
-              <WifiOff className="w-3 h-3" /> Offline
-            </span>
+            <button
+              onClick={() => setIsLoginModalOpen(true)}
+              className="bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 text-xs font-extrabold px-2.5 py-1 rounded-full transition flex items-center gap-1"
+            >
+              <LogIn className="w-3.5 h-3.5" /> Staff Login
+            </button>
           )}
         </div>
       </div>
@@ -153,13 +204,64 @@ export default function Navbar() {
             </div>
           </div>
 
+          {/* User Profile / Portal Login Status Card */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
+            {currentUser ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Active Session
+                  </span>
+                  {(() => {
+                    const badge = getRoleBadge(currentUser.role);
+                    const RoleIcon = badge.icon;
+                    return (
+                      <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge.color}`}>
+                        <RoleIcon className="w-3 h-3" /> {badge.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-slate-100 truncate">{currentUser.name}</div>
+                    <div className="text-[10px] text-slate-400 font-mono truncate">{currentUser.email}</div>
+                  </div>
+
+                  <button
+                    onClick={logoutUser}
+                    className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 hover:text-rose-100 transition shrink-0"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-extrabold text-slate-200">Guest Customer</div>
+                  <div className="text-[10px] text-slate-400">Staff login for order control</div>
+                </div>
+
+                <button
+                  onClick={() => setIsLoginModalOpen(true)}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 shadow-md transition shrink-0"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Staff Login
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Navigation Section */}
           <div>
             <div className="flex items-center justify-between px-1 mb-2.5">
               <p className="text-[10px] font-extrabold tracking-wider text-slate-400 uppercase">
                 Navigation Terminals
               </p>
-              {isCustomerQrMode && (
+              {isCustomerQrMode && !currentUser && (
                 <button
                   onClick={() => setShowStaffNav(!showStaffNav)}
                   className="p-1 rounded bg-slate-900 border border-slate-800 text-slate-400 hover:text-amber-400 text-[10px] flex items-center gap-1 font-semibold"
@@ -173,9 +275,7 @@ export default function Navbar() {
 
             {/* Menu Button Cards */}
             <nav className="space-y-2">
-              {navItems.map((item) => {
-                if (isCustomerOnlyView && item.id !== 'customer') return null;
-
+              {visibleNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
 
@@ -216,7 +316,7 @@ export default function Navbar() {
         {/* Bottom Utility Controls */}
         <div className="space-y-3 pt-4 border-t border-slate-800/80">
           {/* Table Preview Selector Card */}
-          {!isCustomerOnlyView && activeTab === 'customer' && (
+          {activeTab === 'customer' && (
             <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 space-y-1 shadow-md">
               <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block px-0.5">
                 Scanned Table Preview
@@ -275,6 +375,13 @@ export default function Navbar() {
           </div>
         </div>
       </aside>
+
+      {/* Staff & Admin Login Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+      />
     </>
   );
 }
+

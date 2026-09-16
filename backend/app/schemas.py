@@ -119,3 +119,24 @@ class PaymentCollectRequest(BaseModel):
 class AddItemsToOrderRequest(BaseModel):
     items: List[CartItemCreate]
     waiter_name: Optional[str] = "Waiter"
+
+class UserSchema(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "WAITER"  # ADMIN, WAITER, BAR_RECEPTION, KITCHEN_CHEF
+
+class UserLogin(BaseModel):
+    email: str
+    password: str

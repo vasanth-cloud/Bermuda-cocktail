@@ -25,20 +25,86 @@ export const OrderProvider = ({ children }) => {
   const [wsConnected, setWsConnected] = useState(false);
   const [isCustomerQrMode, setIsCustomerQrMode] = useState(false);
 
-  // Theme state: 'dark', 'light', 'neon'
-  const [theme, setTheme] = useState(() => localStorage.getItem('bermuda_theme') || 'dark');
-
-  // Theme side effect
-  useEffect(() => {
+  // User Auth State
+  const [currentUser, setCurrentUser] = useState(() => {
     try {
-      localStorage.setItem('bermuda_theme', theme);
-      if (document && document.documentElement) {
-        document.documentElement.className = theme;
+      const saved = localStorage.getItem('bermuda_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const [staffUsers, setStaffUsers] = useState([]);
+
+  const fetchStaffUsers = async () => {
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) setStaffUsers(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const loginUser = async (email, password) => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (res.ok && data.user) {
+        setCurrentUser(data.user);
+        localStorage.setItem('bermuda_user', JSON.stringify(data.user));
+        if (data.user.role === 'WAITER') setActiveTab('staff');
+        else if (data.user.role === 'BAR_RECEPTION') setActiveTab('bar');
+        else if (data.user.role === 'KITCHEN_CHEF') setActiveTab('kitchen');
+        else if (data.user.role === 'ADMIN') setActiveTab('admin');
+        return { success: true };
+      }
+      return { success: false, error: data.detail || 'Login failed' };
+    } catch (err) {
+      return { success: false, error: 'Server connection failed' };
+    }
+  };
+
+  const logoutUser = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('bermuda_user');
+    setActiveTab('customer');
+  };
+
+  const createStaffAccount = async (userData) => {
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchStaffUsers();
+        return { success: true };
+      }
+      return { success: false, error: data.detail || 'Failed to create user' };
+    } catch (err) {
+      return { success: false, error: 'Server error' };
+    }
+  };
+
+  const deleteStaffAccount = async (userId) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchStaffUsers();
+        return true;
       }
     } catch (e) {
-      console.warn("Theme storage error:", e);
+      console.error(e);
     }
-  }, [theme]);
+    return false;
+  };
 
   // Fetch initial metadata
   const fetchData = async () => {
@@ -428,7 +494,14 @@ export const OrderProvider = ({ children }) => {
         paymentSummary,
         confirmOrderAsWaiter,
         addItemsToOrder,
-        deleteOrderItem
+        deleteOrderItem,
+        currentUser,
+        loginUser,
+        logoutUser,
+        staffUsers,
+        fetchStaffUsers,
+        createStaffAccount,
+        deleteStaffAccount
       }}
     >
       {children}

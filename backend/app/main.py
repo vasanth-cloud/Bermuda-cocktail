@@ -85,7 +85,68 @@ def get_system_ip():
         "custom_domain": custom_domain,
         "mode": "ONLINE_CLOUD_HOSTED" if custom_domain else "LOCAL_SERVER",
         "qr_base_url": custom_domain if custom_domain else f"http://{ip}:3000"
+import hashlib
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+# --- Auth & User Management Endpoints ---
+@app.post("/api/auth/login")
+def login_user(creds: schemas.UserLogin, db: Session = Depends(get_db)):
+    hashed = hash_password(creds.password)
+    user = db.query(models.User).filter(
+        models.User.email == creds.email,
+        models.User.password_hash == hashed
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled")
+
+    return {
+        "message": "Login successful",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role
+        }
     }
+
+@app.get("/api/users", response_model=List[schemas.UserSchema])
+def get_users(db: Session = Depends(get_db)):
+    return db.query(models.User).order_by(models.User.created_at.desc()).all()
+
+@app.post("/api/users", response_model=schemas.UserSchema)
+def create_staff_user(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.User).filter(models.User.email == user_data.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+
+    new_user = models.User(
+        name=user_data.name,
+        email=user_data.email,
+        password_hash=hash_password(user_data.password),
+        role=user_data.role.upper(),
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.email == "avasanth081@gmail.com":
+        raise HTTPException(status_code=400, detail="Cannot delete master admin account")
+
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
 
 # --- Table & Zone Endpoints ---
 @app.get("/api/zones", response_model=List[schemas.TableZoneSchema])

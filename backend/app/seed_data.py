@@ -1,7 +1,44 @@
+import hashlib
 from sqlalchemy.orm import Session
-from app.models import TableZone, PubTable, Category, Product
+from app.models import TableZone, PubTable, Category, Product, User
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 def seed_initial_data(db: Session):
+    # 0. Seed Users (Admin & Staff Accounts)
+    if db.query(User).count() == 0:
+        admin_user = User(
+            name="Vasanth Admin",
+            email="avasanth081@gmail.com",
+            password_hash=hash_password("Vasanth@123"),
+            role="ADMIN",
+            is_active=True
+        )
+        waiter_user = User(
+            name="John Waiter",
+            email="waiter@bermuda.pub",
+            password_hash=hash_password("Waiter@123"),
+            role="WAITER",
+            is_active=True
+        )
+        bar_user = User(
+            name="Bar Receptionist",
+            email="bar@bermuda.pub",
+            password_hash=hash_password("Bar@123"),
+            role="BAR_RECEPTION",
+            is_active=True
+        )
+        kitchen_user = User(
+            name="Chef Mario",
+            email="kitchen@bermuda.pub",
+            password_hash=hash_password("Kitchen@123"),
+            role="KITCHEN_CHEF",
+            is_active=True
+        )
+        db.add_all([admin_user, waiter_user, bar_user, kitchen_user])
+        db.commit()
+
     # 1. Seed Table Zones
     if db.query(TableZone).count() == 0:
         zones = [
