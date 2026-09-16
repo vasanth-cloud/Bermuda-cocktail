@@ -119,12 +119,6 @@ html.light .pub-ambient-bg {
   color: #0f172a !important;
 }
 
-html.light header {
-  background-color: #ffffff !important;
-  border-color: #d97706 !important;
-  color: #0f172a !important;
-}
-
 html.light .bg-slate-900,
 html.light .bg-slate-900\/90,
 html.light .bg-slate-900\/50,

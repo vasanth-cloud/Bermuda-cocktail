@@ -13,9 +13,7 @@ import {
   ChevronDown, 
   Moon, 
   Sun, 
-  Sparkles,
-  Shield,
-  User
+  Sparkles
 } from 'lucide-react';
 
 export default function TopHeader() {
@@ -67,7 +65,7 @@ export default function TopHeader() {
       case 'neon':
         return { name: 'Velvet Neon', icon: Sparkles, color: 'text-purple-400' };
       case 'light':
-        return { name: 'Bright Day', icon: Sun, color: 'text-amber-300' };
+        return { name: 'Bright Day', icon: Sun, color: 'text-amber-500' };
       case 'dark':
       default:
         return { name: 'Dark Amber', icon: Moon, color: 'text-amber-400' };
@@ -79,35 +77,30 @@ export default function TopHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5 shadow-lg flex items-center justify-between md:justify-end gap-3">
-        {/* Left Side spacer on desktop / Brand indicator */}
-        <div className="md:hidden flex items-center gap-2">
-          <span className="text-xs font-black text-amber-400 tracking-wider">BERMUDA PUB</span>
-        </div>
-
-        {/* TOP RIGHT CONTROLS GROUP */}
-        <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-          {/* 1. THEME SELECTION BUTTON & DROPDOWN */}
+      {/* Seamless Floating Top Right Controls Container */}
+      <div className="sticky top-0 z-30 w-full px-4 sm:px-6 pt-3 pb-1 flex items-center justify-end pointer-events-none">
+        <div className="pointer-events-auto flex items-center gap-2 sm:gap-3 bg-slate-900/80 light:bg-white/90 backdrop-blur-xl border border-amber-500/30 p-1.5 rounded-2xl shadow-xl">
+          {/* 1. THEME SELECTION BUTTON */}
           <div className="relative" ref={themeRef}>
             <button
               onClick={() => {
                 setIsThemeOpen(!isThemeOpen);
                 setIsProfileOpen(false);
               }}
-              className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-md group"
+              className="flex items-center gap-2 bg-slate-950/80 light:bg-amber-50/90 border border-slate-800 light:border-amber-200 text-slate-100 light:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold hover:scale-[1.02] active:scale-95 transition shadow-sm group"
               title="Change Visual Theme"
             >
-              <div className={`p-1 rounded-lg bg-slate-950 border border-slate-800 ${currentThemeInfo.color}`}>
+              <div className={`p-1 rounded-lg bg-amber-500/10 border border-amber-500/20 ${currentThemeInfo.color}`}>
                 <ThemeIcon className="w-3.5 h-3.5" />
               </div>
-              <span className="hidden sm:inline">{currentThemeInfo.name}</span>
-              <Palette className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-400 transition-colors" />
+              <span className="hidden sm:inline font-extrabold">{currentThemeInfo.name}</span>
+              <Palette className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
             </button>
 
             {/* Theme Dropdown Menu */}
             {isThemeOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-slate-900 border border-amber-500/30 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95">
-                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800 mb-1">
+              <div className="absolute right-0 mt-2 w-48 bg-slate-900 light:bg-white border border-amber-500/30 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95">
+                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800/50 light:border-slate-200 mb-1">
                   Select Visual Style
                 </div>
 
@@ -117,7 +110,7 @@ export default function TopHeader() {
                     setIsThemeOpen(false);
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition ${
-                    theme === 'dark' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-300 hover:bg-slate-800'
+                    theme === 'dark' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-300 light:text-slate-800 hover:bg-slate-800/50 light:hover:bg-amber-50'
                   }`}
                 >
                   <Moon className="w-4 h-4 text-amber-400" />
@@ -130,7 +123,7 @@ export default function TopHeader() {
                     setIsThemeOpen(false);
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition mt-1 ${
-                    theme === 'neon' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'text-slate-300 hover:bg-slate-800'
+                    theme === 'neon' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'text-slate-300 light:text-slate-800 hover:bg-slate-800/50 light:hover:bg-amber-50'
                   }`}
                 >
                   <Sparkles className="w-4 h-4 text-purple-400" />
@@ -143,17 +136,17 @@ export default function TopHeader() {
                     setIsThemeOpen(false);
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition mt-1 ${
-                    theme === 'light' ? 'bg-slate-700 text-slate-100 border border-slate-600' : 'text-slate-300 hover:bg-slate-800'
+                    theme === 'light' ? 'bg-amber-500/20 text-amber-900 border border-amber-500/40' : 'text-slate-300 light:text-slate-800 hover:bg-slate-800/50 light:hover:bg-amber-50'
                   }`}
                 >
-                  <Sun className="w-4 h-4 text-amber-300" />
+                  <Sun className="w-4 h-4 text-amber-500" />
                   <span>☀️ Bright Day</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* 2. USER PROFILE BUTTON & DROPDOWN */}
+          {/* 2. USER PROFILE BUTTON */}
           <div className="relative" ref={profileRef}>
             {currentUser ? (
               <button
@@ -161,23 +154,22 @@ export default function TopHeader() {
                   setIsProfileOpen(!isProfileOpen);
                   setIsThemeOpen(false);
                 }}
-                className="flex items-center gap-2.5 bg-slate-900/90 hover:bg-slate-800 border border-amber-500/30 px-3 py-1.5 rounded-xl transition shadow-md group"
+                className="flex items-center gap-2 bg-slate-950/80 light:bg-amber-50/90 border border-amber-500/30 px-3 py-1.5 rounded-xl hover:scale-[1.02] active:scale-95 transition shadow-sm group"
               >
-                {/* User Avatar Circle */}
-                <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 text-xs font-black">
+                <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 light:text-amber-700 text-xs font-black">
                   {currentUser.name.charAt(0).toUpperCase()}
                 </div>
 
                 <div className="text-left hidden sm:block">
-                  <div className="text-xs font-black text-slate-100 truncate max-w-[120px]">
+                  <div className="text-xs font-black text-slate-100 light:text-slate-900 truncate max-w-[120px]">
                     {currentUser.name}
                   </div>
-                  <div className="text-[9px] font-mono text-amber-400 font-bold uppercase tracking-wider">
+                  <div className="text-[9px] font-mono text-amber-400 light:text-amber-700 font-bold uppercase tracking-wider">
                     {currentUser.role}
                   </div>
                 </div>
 
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform" />
+                <ChevronDown className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
               </button>
             ) : (
               <button
@@ -191,19 +183,19 @@ export default function TopHeader() {
 
             {/* Profile Dropdown Menu */}
             {isProfileOpen && currentUser && (
-              <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-amber-500/30 rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3">
-                <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 text-base font-black">
+              <div className="absolute right-0 mt-2 w-64 bg-slate-900 light:bg-white border border-amber-500/30 rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-800/50 light:border-slate-200">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 light:text-amber-700 text-base font-black">
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-black text-slate-100 truncate">{currentUser.name}</div>
-                    <div className="text-xs text-slate-400 font-mono truncate">{currentUser.email}</div>
+                    <div className="text-sm font-black text-slate-100 light:text-slate-900 truncate">{currentUser.name}</div>
+                    <div className="text-xs text-slate-400 light:text-slate-600 font-mono truncate">{currentUser.email}</div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400 font-bold">Role:</span>
+                  <span className="text-slate-400 light:text-slate-600 font-bold">Role:</span>
                   {(() => {
                     const badge = getRoleBadge(currentUser.role);
                     const RoleIcon = badge.icon;
@@ -215,22 +207,22 @@ export default function TopHeader() {
                   })()}
                 </div>
 
-                <div className="pt-2 border-t border-slate-800">
+                <div className="pt-2 border-t border-slate-800/50 light:border-slate-200">
                   <button
                     onClick={() => {
                       logoutUser();
                       setIsProfileOpen(false);
                     }}
-                    className="w-full bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-2"
+                    className="w-full bg-rose-950/60 light:bg-rose-100 hover:bg-rose-900 light:hover:bg-rose-200 border border-rose-500/40 text-rose-300 light:text-rose-800 font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-2"
                   >
-                    <LogOut className="w-4 h-4 text-rose-400" /> Sign Out Session
+                    <LogOut className="w-4 h-4 text-rose-400 light:text-rose-700" /> Sign Out Session
                   </button>
                 </div>
               </div>
             )}
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Login Modal */}
       <LoginModal
