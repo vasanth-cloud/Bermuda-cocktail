@@ -159,7 +159,7 @@ export default function AdminPanel() {
 
     setIsSubmittingMember(false);
     if (res.success) {
-      setMemberSuccess(`Created Gymkhana Member Card for ${res.member.name} (${res.member.member_code})!`);
+      setMemberSuccess(`Created Bermuda VIP Member Card for ${res.member.name} (${res.member.member_code})!`);
       setNewMemberData({
         name: '',
         phone: '',
@@ -720,12 +720,12 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {/* Gymkhana VIP Customer Member Card Management Section */}
+      {/* Bermuda VIP Customer Member Card Management Section */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
           <div>
             <h3 className="font-black text-xl text-slate-100 flex items-center gap-2">
-              <CreditCard className="w-6 h-6 text-amber-400" /> Gymkhana Club Member Card Management
+              <CreditCard className="w-6 h-6 text-amber-400" /> Bermuda VIP Member Card Management
             </h3>
             <p className="text-xs text-slate-400">
               Issue digital VIP member cards, record entry visits, store Name, Phone & Aadhaar details, and generate QR member passes.
@@ -779,7 +779,7 @@ export default function AdminPanel() {
               {members.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="p-4 text-center text-slate-500 italic">
-                    {memberSearchQuery ? `No member cards found matching "${memberSearchQuery}"` : 'No Gymkhana member cards issued yet. Click "Issue New Member Card" to add customers.'}
+                    {memberSearchQuery ? `No member cards found matching "${memberSearchQuery}"` : 'No Bermuda member cards issued yet. Click "Issue New Member Card" to add customers.'}
                   </td>
                 </tr>
               ) : (
@@ -1258,13 +1258,13 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {/* Create Gymkhana Member Card Modal */}
+      {/* Create Bermuda Member Card Modal */}
       {isCreateMemberOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-amber-400" /> Issue New Gymkhana Member Card
+                <CreditCard className="w-5 h-5 text-amber-400" /> Issue New Bermuda Member Card
               </h3>
               <button
                 onClick={() => setIsCreateMemberOpen(false)}
@@ -1334,7 +1334,7 @@ export default function AdminPanel() {
                     <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                     <input
                       type="email"
-                      placeholder="rajesh@gymkhana.pub"
+                      placeholder="rajesh@bermuda.pub"
                       value={newMemberData.email}
                       onChange={(e) => setNewMemberData({ ...newMemberData, email: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
@@ -1412,7 +1412,7 @@ export default function AdminPanel() {
           <div className="bg-slate-900 border-2 border-blue-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
-                <Edit2 className="w-5 h-5 text-blue-400" /> Edit Gymkhana Member Details
+                <Edit2 className="w-5 h-5 text-blue-400" /> Edit Bermuda Member Details
               </h3>
               <button
                 onClick={() => setEditingMember(null)}
@@ -1526,13 +1526,13 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {/* Digital Gymkhana Member Card & QR Preview Modal */}
+      {/* Digital Bermuda Member Card & QR Preview Modal */}
       {cardPreviewMember && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 text-center relative overflow-hidden">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-base text-amber-400 flex items-center gap-2">
-                <Crown className="w-5 h-5 text-amber-400" /> Bermuda Gymkhana VIP Card
+                <Crown className="w-5 h-5 text-amber-400" /> Bermuda VIP Member Card
               </h3>
               <button
                 onClick={() => setCardPreviewMember(null)}
@@ -1542,11 +1542,11 @@ export default function AdminPanel() {
               </button>
             </div>
 
-            {/* Gymkhana Card Badge Mockup */}
+            {/* Member Card Badge Mockup */}
             <div className="bg-gradient-to-br from-amber-950 via-slate-950 to-amber-950 border-2 border-amber-500/60 p-6 rounded-2xl space-y-4 shadow-2xl relative overflow-hidden text-left">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] font-black text-amber-400 tracking-widest uppercase">BERMUDA GYMKHANA PUB & CLUB</div>
+                  <div className="text-[10px] font-black text-amber-400 tracking-widest uppercase">BERMUDA COCKTAIL PUB & CLUB</div>
                   <div className="text-xl font-black text-slate-100">{cardPreviewMember.name}</div>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center font-bold text-xs shadow">
