@@ -179,7 +179,7 @@ export default function Navbar() {
         className={`
           fixed top-0 left-0 h-full z-50 bg-slate-950 border-r border-slate-800/80 text-slate-100
           flex flex-col justify-between p-4 sm:p-5 shadow-2xl transition-transform duration-300 ease-in-out
-          w-64 lg:w-72
+          w-64 lg:w-72 overflow-y-auto custom-scrollbar
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
@@ -201,57 +201,6 @@ export default function Navbar() {
                 <Sparkles className="w-3 h-3 text-amber-400" /> POS SYSTEM
               </span>
             </div>
-          </div>
-
-          {/* User Profile / Portal Login Status Card */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-md">
-            {currentUser ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Active Session
-                  </span>
-                  {(() => {
-                    const badge = getRoleBadge(currentUser?.role);
-                    const RoleIcon = badge?.icon || UserCheck;
-                    return (
-                      <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge?.color || 'text-slate-400 bg-slate-800'}`}>
-                        {RoleIcon && <RoleIcon className="w-3 h-3" />} {badge?.label || 'Staff'}
-                      </span>
-                    );
-                  })()}
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-xs font-black text-slate-100 truncate">{currentUser.name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono truncate">{currentUser.email}</div>
-                  </div>
-
-                  <button
-                    onClick={logoutUser}
-                    className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 hover:text-rose-100 transition shrink-0"
-                    title="Sign Out"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-extrabold text-slate-200">Guest Customer</div>
-                  <div className="text-[10px] text-slate-400">Staff login for order control</div>
-                </div>
-
-                <button
-                  onClick={() => setIsLoginModalOpen(true)}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 shadow-md transition shrink-0"
-                >
-                  <LogIn className="w-3.5 h-3.5" /> Staff Login
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Navigation Section */}
@@ -339,25 +288,6 @@ export default function Navbar() {
               </div>
             </div>
           )}
-
-          {/* Visual Theme Switcher Card */}
-          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 space-y-1 shadow-md">
-            <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block px-0.5">
-              Visual Style Mode
-            </label>
-            <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
-              <Palette className="w-4 h-4 text-amber-400 shrink-0" />
-              <select
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-200 focus:outline-none cursor-pointer w-full"
-              >
-                <option value="dark" className="bg-slate-900 text-amber-300">🌙 Dark Amber</option>
-                <option value="neon" className="bg-slate-900 text-purple-300">🍷 Velvet Neon</option>
-                <option value="light" className="bg-slate-900 text-slate-100">☀️ Bright Day</option>
-              </select>
-            </div>
-          </div>
 
           {/* Wi-Fi & System Status Card */}
           <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
