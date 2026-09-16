@@ -87,20 +87,21 @@ export default function Navbar() {
       if (isCustomerQrMode && !showStaffNav) {
         return navItems.filter(item => item.id === 'customer');
       }
-      return navItems;
+      return navItems.filter(item => item.id !== 'admin');
     }
 
     if (currentUser.role === 'ADMIN') {
-      return navItems; // Master Admin gets all terminals
+      return navItems; // ONLY Master Admin gets Cloud Admin terminal
     }
     if (currentUser.role === 'WAITER') {
       return navItems.filter(item => item.id === 'customer' || item.id === 'staff');
     }
-    if (currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
+    if (currentUser.role === 'BAR_KITCHEN' || currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
       return navItems.filter(item => item.id === 'customer' || item.id === 'bar');
     }
 
-    return navItems;
+    // Default: Hide Cloud Admin from all staff users
+    return navItems.filter(item => item.id !== 'admin');
   };
 
   const visibleNavItems = getVisibleNavItems();

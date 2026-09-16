@@ -180,10 +180,23 @@ export default function AdminPanel() {
       case 'BAR_RECEPTION':
       case 'KITCHEN_CHEF':
         return <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><Wine className="w-3 h-3 text-purple-400" /> Bar & Kitchen</span>;
-      default:
-        return <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full">{role}</span>;
     }
   };
+
+  // Access Control Guard: Only Master Admin (ADMIN role) can view Admin Panel
+  if (currentUser?.role !== 'ADMIN') {
+    return (
+      <div className="w-full px-4 py-20 text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto text-2xl font-black shadow-xl">
+          🔒
+        </div>
+        <h2 className="text-xl font-black text-slate-100">Cloud Admin Access Restricted</h2>
+        <p className="text-xs text-slate-400 max-w-md mx-auto">
+          You are signed in as <span className="text-amber-400 font-bold">{currentUser?.name || 'Staff User'}</span> ({currentUser?.email}). Only the Master Admin (<span className="text-amber-300 font-mono">avasanth081@gmail.com</span>) can access menu configuration, QR sticker generation, and staff account management.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
