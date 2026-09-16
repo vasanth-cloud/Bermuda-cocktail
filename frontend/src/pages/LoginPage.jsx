@@ -125,16 +125,16 @@ export default function LoginPage({ onBypassGuest }) {
               <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Quick Account Fill Selector:
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-3 gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => handleQuickFill('avasanth081@gmail.com', 'Vasanth@123')}
                 className="bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-amber-300 p-2.5 rounded-2xl text-left transition group"
               >
                 <div className="font-extrabold flex items-center gap-1 group-hover:text-amber-200">
-                  <Crown className="w-3.5 h-3.5 text-amber-400" /> Master Admin
+                  <Crown className="w-3.5 h-3.5 text-amber-400" /> Admin
                 </div>
-                <span className="block text-[10px] text-amber-400/70 font-mono">Full System Access</span>
+                <span className="block text-[10px] text-amber-400/70 font-mono">Master System</span>
               </button>
 
               <button
@@ -143,9 +143,9 @@ export default function LoginPage({ onBypassGuest }) {
                 className="bg-blue-950/40 hover:bg-blue-900/60 border border-blue-500/40 text-blue-300 p-2.5 rounded-2xl text-left transition group"
               >
                 <div className="font-extrabold flex items-center gap-1 group-hover:text-blue-200">
-                  <Users className="w-3.5 h-3.5 text-blue-400" /> Waiter Staff
+                  <Users className="w-3.5 h-3.5 text-blue-400" /> Waiter
                 </div>
-                <span className="block text-[10px] text-blue-400/70 font-mono">Table QR Orders</span>
+                <span className="block text-[10px] text-blue-400/70 font-mono">Floor Tables</span>
               </button>
 
               <button
@@ -154,20 +154,9 @@ export default function LoginPage({ onBypassGuest }) {
                 className="bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/40 text-purple-300 p-2.5 rounded-2xl text-left transition group"
               >
                 <div className="font-extrabold flex items-center gap-1 group-hover:text-purple-200">
-                  <Wine className="w-3.5 h-3.5 text-purple-400" /> Bar Reception
+                  <Wine className="w-3.5 h-3.5 text-purple-400" /> Bar & Kitchen
                 </div>
-                <span className="block text-[10px] text-purple-400/70 font-mono">Drinks & Billing</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill('kitchen@bermuda.pub', 'Kitchen@123')}
-                className="bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 p-2.5 rounded-2xl text-left transition group"
-              >
-                <div className="font-extrabold flex items-center gap-1 group-hover:text-emerald-200">
-                  <Utensils className="w-3.5 h-3.5 text-emerald-400" /> Kitchen Chef
-                </div>
-                <span className="block text-[10px] text-emerald-400/70 font-mono">Food KDS Display</span>
+                <span className="block text-[10px] text-purple-400/70 font-mono">KDS & Billing</span>
               </button>
             </div>
           </div>

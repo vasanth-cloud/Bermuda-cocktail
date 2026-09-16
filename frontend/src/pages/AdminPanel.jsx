@@ -176,10 +176,10 @@ export default function AdminPanel() {
         return <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><Crown className="w-3 h-3 text-amber-400" /> Admin</span>;
       case 'WAITER':
         return <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><Users className="w-3 h-3 text-blue-400" /> Waiter</span>;
+      case 'BAR_KITCHEN':
       case 'BAR_RECEPTION':
-        return <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><Wine className="w-3 h-3 text-purple-400" /> Reception Bar</span>;
       case 'KITCHEN_CHEF':
-        return <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><Utensils className="w-3 h-3 text-emerald-400" /> Kitchen Chef</span>;
+        return <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><Wine className="w-3 h-3 text-purple-400" /> Bar & Kitchen</span>;
       default:
         return <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full">{role}</span>;
     }
@@ -608,8 +608,7 @@ export default function AdminPanel() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
                 >
                   <option value="WAITER" className="bg-slate-900 text-blue-300">🚶 WAITER (Floor Table Orders & QR Confirmation)</option>
-                  <option value="BAR_RECEPTION" className="bg-slate-900 text-purple-300">🍸 BAR_RECEPTION (Drinks Terminal & Cash Counter)</option>
-                  <option value="KITCHEN_CHEF" className="bg-slate-900 text-emerald-300">🍳 KITCHEN_CHEF (Food KDS Chef Display)</option>
+                  <option value="BAR_KITCHEN" className="bg-slate-900 text-purple-300">🍸🍳 BAR_KITCHEN (Unified Drinks, Food KDS & Reception Billing)</option>
                   <option value="ADMIN" className="bg-slate-900 text-amber-300">👑 ADMIN (Full System Access)</option>
                 </select>
               </div>

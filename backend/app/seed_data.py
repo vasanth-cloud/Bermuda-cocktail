@@ -23,17 +23,17 @@ def seed_initial_data(db: Session):
             is_active=True
         )
         bar_user = User(
-            name="Bar Receptionist",
+            name="Bar & Kitchen Staff",
             email="bar@bermuda.pub",
             password_hash=hash_password("Bar@123"),
-            role="BAR_RECEPTION",
+            role="BAR_KITCHEN",
             is_active=True
         )
         kitchen_user = User(
             name="Chef Mario",
             email="kitchen@bermuda.pub",
             password_hash=hash_password("Kitchen@123"),
-            role="KITCHEN_CHEF",
+            role="BAR_KITCHEN",
             is_active=True
         )
         db.add_all([admin_user, waiter_user, bar_user, kitchen_user])
