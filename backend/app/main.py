@@ -15,11 +15,17 @@ Base.metadata.create_all(bind=engine)
 # Seed database on startup
 db_session = Depends(get_db)
 
+import os
+
 app = FastAPI(title="Bermuda Cocktail Pub POS & Order System", version="1.0.0")
+
+# Support Cloud & Custom Domain CORS
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
+origins_list = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"] if "*" in origins_list else origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -56,7 +62,7 @@ async def websocket_endpoint(websocket: WebSocket, channel: str):
     except WebSocketDisconnect:
         manager.disconnect(websocket, channel)
 
-# --- System Local IP Endpoint ---
+# --- System Local IP / Hosting Domain Endpoint ---
 import socket
 
 def get_local_ip():
@@ -72,10 +78,13 @@ def get_local_ip():
 @app.get("/api/system/ip")
 def get_system_ip():
     ip = get_local_ip()
+    custom_domain = os.getenv("CUSTOM_DOMAIN", "")
     return {
         "local_ip": ip,
         "default_port": 3000,
-        "qr_base_url": f"http://{ip}:3000"
+        "custom_domain": custom_domain,
+        "mode": "ONLINE_CLOUD_HOSTED" if custom_domain else "LOCAL_SERVER",
+        "qr_base_url": custom_domain if custom_domain else f"http://{ip}:3000"
     }
 
 # --- Table & Zone Endpoints ---

@@ -76,8 +76,12 @@ export default function AdminPanel() {
   };
 
   const activeQrUrl = selectedTableForQr?.table_number
-    ? `http://${localIpHost}/?table=${selectedTableForQr.table_number}`
-    : `http://${localIpHost}/`;
+    ? (localIpHost.startsWith('http://') || localIpHost.startsWith('https://')
+        ? `${localIpHost}/?table=${selectedTableForQr.table_number}`
+        : `${window.location.protocol}//${localIpHost}/?table=${selectedTableForQr.table_number}`)
+    : (localIpHost.startsWith('http://') || localIpHost.startsWith('https://')
+        ? `${localIpHost}/`
+        : `${window.location.protocol}//${localIpHost}/`);
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -176,15 +180,15 @@ export default function AdminPanel() {
             </div>
 
             <div className="mb-4">
-              <label className="text-xs font-bold text-slate-300 block mb-1">Server Wi-Fi Host IP:</label>
+              <label className="text-xs font-bold text-slate-300 block mb-1">Live Domain / Host URL (for QR Stickers):</label>
               <input
                 type="text"
                 value={localIpHost}
                 onChange={(e) => setLocalIpHost(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none"
-                placeholder="10.50.71.138:3000"
+                placeholder="thebermudapub.com or 192.168.1.50:3000"
               />
-              <span className="text-[10px] text-slate-400 block mt-0.5">Detected local IP for mobile phone QR scanning.</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">Enter custom domain (e.g. thebermudapub.com) or local IP for QR code generation.</span>
             </div>
 
             {/* Live Rendered Scannable QR Sticker Mockup */}
