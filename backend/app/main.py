@@ -85,6 +85,8 @@ def get_system_ip():
         "custom_domain": custom_domain,
         "mode": "ONLINE_CLOUD_HOSTED" if custom_domain else "LOCAL_SERVER",
         "qr_base_url": custom_domain if custom_domain else f"http://{ip}:3000"
+    }
+
 import hashlib
 
 def hash_password(password: str) -> str:
