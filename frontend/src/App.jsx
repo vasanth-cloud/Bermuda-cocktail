@@ -7,6 +7,63 @@ import KitchenKDS from './pages/KitchenKDS';
 import StaffPanel from './pages/StaffPanel';
 import AdminPanel from './pages/AdminPanel';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Uncaught React Error:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  handleReset = () => {
+    localStorage.clear();
+    window.location.href = window.location.origin;
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 p-6 flex flex-col items-center justify-center font-sans">
+          <div className="bg-slate-900 border-2 border-rose-500/50 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+              <span className="text-2xl">🚨</span>
+              <h2 className="text-lg font-black text-rose-400">Application Error Detected</h2>
+            </div>
+            
+            <p className="text-xs text-slate-300">
+              An unexpected display error occurred in the browser. Click below to clear local session cache and restore the application.
+            </p>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-rose-300 overflow-x-auto max-h-48">
+              {this.state.error?.toString()}
+              {this.state.errorInfo?.componentStack && (
+                <div className="mt-2 text-slate-500 text-[10px]">
+                  {this.state.errorInfo.componentStack}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={this.handleReset}
+              className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl text-xs shadow-lg transition"
+            >
+              🔄 Reset App Cache & Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function MainContent() {
   const { activeTab } = useOrder();
 
@@ -23,20 +80,23 @@ function MainContent() {
 
 export default function App() {
   return (
-    <OrderProvider>
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row relative overflow-x-hidden pub-ambient-bg">
-        {/* Ambient Pub Spotlight Glows */}
-        <div className="pub-spotlight spotlight-left pointer-events-none" />
-        <div className="pub-spotlight spotlight-right pointer-events-none" />
+    <ErrorBoundary>
+      <OrderProvider>
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row relative overflow-x-hidden pub-ambient-bg">
+          {/* Ambient Pub Spotlight Glows */}
+          <div className="pub-spotlight spotlight-left pointer-events-none" />
+          <div className="pub-spotlight spotlight-right pointer-events-none" />
 
-        {/* Executive Left Vertical Navbar */}
-        <Navbar />
+          {/* Executive Left Vertical Navbar */}
+          <Navbar />
 
-        {/* Main Content Area - Shifted right of left vertical navbar */}
-        <div className="flex-1 md:ml-64 lg:ml-72 min-w-0 z-10">
-          <MainContent />
+          {/* Main Content Area - Shifted right of left vertical navbar */}
+          <div className="flex-1 md:ml-64 lg:ml-72 min-w-0 z-10">
+            <MainContent />
+          </div>
         </div>
-      </div>
-    </OrderProvider>
+      </OrderProvider>
+    </ErrorBoundary>
   );
 }
+

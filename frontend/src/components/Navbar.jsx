@@ -213,11 +213,11 @@ export default function Navbar() {
                     Active Session
                   </span>
                   {(() => {
-                    const badge = getRoleBadge(currentUser.role);
-                    const RoleIcon = badge.icon;
+                    const badge = getRoleBadge(currentUser?.role);
+                    const RoleIcon = badge?.icon || UserCheck;
                     return (
-                      <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge.color}`}>
-                        <RoleIcon className="w-3 h-3" /> {badge.label}
+                      <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge?.color || 'text-slate-400 bg-slate-800'}`}>
+                        {RoleIcon && <RoleIcon className="w-3 h-3" />} {badge?.label || 'Staff'}
                       </span>
                     );
                   })()}
