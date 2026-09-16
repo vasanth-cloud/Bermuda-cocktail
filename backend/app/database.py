@@ -3,7 +3,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Support Cloud Production DATABASE_URL (Render, Railway, Heroku, AWS, PostgreSQL, MySQL)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Support PostgreSQL (pgAdmin 4), Cloud DATABASE_URL, or fallback SQLite
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bermuda_pub.db")
 
 # Fix legacy postgres:// URL format for SQLAlchemy
