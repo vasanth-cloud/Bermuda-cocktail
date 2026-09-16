@@ -743,12 +743,30 @@ def delete_member(member_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/members/{member_id}/record-visit")
 def record_member_visit(member_id: int, db: Session = Depends(get_db)):
+    from datetime import datetime
     member = db.query(models.CustomerMember).filter(models.CustomerMember.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
     member.visit_count += 1
+    
+    # Save to entry audit log table
+    entry_log = models.MemberEntryLog(
+        member_id=member.id,
+        member_code=member.member_code,
+        name=member.name,
+        phone=member.phone,
+        status=member.status,
+        visit_count=member.visit_count,
+        entry_time=datetime.utcnow()
+    )
+    db.add(entry_log)
     db.commit()
     db.refresh(member)
     return {"message": f"Recorded visit for {member.name}", "visit_count": member.visit_count}
+
+@app.get("/api/members/entry-logs", response_model=List[schemas.MemberEntryLogSchema])
+def get_member_entry_logs(db: Session = Depends(get_db)):
+    return db.query(models.MemberEntryLog).order_by(models.MemberEntryLog.entry_time.desc()).all()
+
 

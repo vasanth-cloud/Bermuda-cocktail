@@ -175,3 +175,17 @@ class CustomerMemberSchema(CustomerMemberBase):
     class Config:
         from_attributes = True
 
+class MemberEntryLogSchema(BaseModel):
+    id: int
+    member_id: int
+    member_code: str
+    name: str
+    phone: str
+    status: str
+    visit_count: int
+    entry_time: datetime
+
+    class Config:
+        from_attributes = True
+
+

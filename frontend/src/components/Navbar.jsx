@@ -20,7 +20,8 @@ import {
   LogOut,
   UserCheck,
   Crown,
-  CreditCard
+  CreditCard,
+  Scan
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -57,6 +58,14 @@ export default function Navbar() {
       bg: 'bg-amber-500/10 border-amber-500/20' 
     },
     { 
+      id: 'entry_scanner', 
+      label: 'Member QR Scanner', 
+      desc: 'Entrance Scan & Audit Logs', 
+      icon: Scan, 
+      color: 'text-emerald-400', 
+      bg: 'bg-emerald-500/10 border-emerald-500/20' 
+    },
+    { 
       id: 'bar', 
       label: 'Bar & Kitchen KDS', 
       desc: 'Drinks, Food & Reception Billing', 
@@ -75,7 +84,7 @@ export default function Navbar() {
     { 
       id: 'members', 
       label: 'VIP Member Cards', 
-      desc: 'Bermuda VIP Cards & Visits', 
+      desc: 'Bermuda VIP Cards & Directory', 
       icon: CreditCard, 
       color: 'text-amber-400', 
       bg: 'bg-amber-500/10 border-amber-500/20' 
@@ -100,13 +109,13 @@ export default function Navbar() {
     }
 
     if (currentUser.role === 'ADMIN') {
-      return navItems; // ONLY Master Admin gets Cloud Admin terminal
+      return navItems; // Master Admin gets all terminals
     }
     if (currentUser.role === 'WAITER') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'staff' || item.id === 'members');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'members');
     }
     if (currentUser.role === 'BAR_KITCHEN' || currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'bar' || item.id === 'members');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'bar' || item.id === 'members');
     }
 
     // Default: Hide Cloud Admin from all staff users

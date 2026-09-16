@@ -568,11 +568,24 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  // Member Entry Audit Logs State
+  const [entryLogs, setEntryLogs] = useState([]);
+
+  const fetchEntryLogs = async () => {
+    try {
+      const res = await fetch('/api/members/entry-logs');
+      if (res.ok) setEntryLogs(await res.json());
+    } catch (e) {
+      console.error("Error fetching entry logs:", e);
+    }
+  };
+
   const recordMemberVisit = async (memberId) => {
     try {
       const res = await fetch(`/api/members/${memberId}/record-visit`, { method: 'POST' });
       if (res.ok) {
         await fetchMembers();
+        await fetchEntryLogs();
         return true;
       }
     } catch (err) {
@@ -634,7 +647,9 @@ export const OrderProvider = ({ children }) => {
         createMember,
         updateMember,
         deleteMember,
-        recordMemberVisit
+        recordMemberVisit,
+        entryLogs,
+        fetchEntryLogs
       }}
     >
       {children}

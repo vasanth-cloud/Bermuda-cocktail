@@ -126,3 +126,16 @@ class CustomerMember(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class MemberEntryLog(Base):
+    __tablename__ = "member_entry_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("customer_members.id"))
+    member_code = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    status = Column(String, default="ACTIVE")
+    visit_count = Column(Integer, default=1)
+    entry_time = Column(DateTime, default=datetime.utcnow)
+
+
