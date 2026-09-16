@@ -88,8 +88,7 @@ export default function AdminPanel() {
     aadhar_number: '',
     email: '',
     address: '',
-    status: 'ACTIVE',
-    discount_percentage: '10'
+    status: 'ACTIVE'
   });
   const [memberError, setMemberError] = useState('');
   const [memberSuccess, setMemberSuccess] = useState('');
@@ -103,8 +102,7 @@ export default function AdminPanel() {
     aadhar_number: '',
     email: '',
     address: '',
-    status: 'ACTIVE',
-    discount_percentage: 0
+    status: 'ACTIVE'
   });
 
   // Digital Member VIP Card Modal State
@@ -153,8 +151,7 @@ export default function AdminPanel() {
     setMemberSuccess('');
 
     const res = await createMember({
-      ...newMemberData,
-      discount_percentage: parseFloat(newMemberData.discount_percentage) || 0
+      ...newMemberData
     });
 
     setIsSubmittingMember(false);
@@ -166,8 +163,7 @@ export default function AdminPanel() {
         aadhar_number: '',
         email: '',
         address: '',
-        status: 'ACTIVE',
-        discount_percentage: '10'
+        status: 'ACTIVE'
       });
       setIsCreateMemberOpen(false);
     } else {
@@ -183,8 +179,7 @@ export default function AdminPanel() {
       aadhar_number: member.aadhar_number || '',
       email: member.email || '',
       address: member.address || '',
-      status: member.status || 'ACTIVE',
-      discount_percentage: member.discount_percentage || 0
+      status: member.status || 'ACTIVE'
     });
   };
 
@@ -196,8 +191,7 @@ export default function AdminPanel() {
     }
 
     const success = await updateMember(editingMember.id, {
-      ...editingMemberData,
-      discount_percentage: parseFloat(editingMemberData.discount_percentage) || 0
+      ...editingMemberData
     });
 
     if (success) {
@@ -811,12 +805,12 @@ export default function AdminPanel() {
 
                     <td className="p-3">
                       {member.status === 'VIP' ? (
-                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-                          <Crown className="w-3 h-3 text-amber-400" /> VIP Member ({member.discount_percentage || 0}% Off)
+                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1 w-fit shadow">
+                          <Crown className="w-3.5 h-3.5 text-amber-400" /> VIP Member
                         </span>
                       ) : member.status === 'ACTIVE' ? (
-                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-                          <CheckCircle className="w-3 h-3 text-emerald-400" /> Active
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1 w-fit">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Active Member
                         </span>
                       ) : (
                         <span className="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full w-fit">
@@ -1343,31 +1337,17 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-300 block mb-1">Membership Status</label>
-                  <select
-                    value={newMemberData.status}
-                    onChange={(e) => setNewMemberData({ ...newMemberData, status: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
-                  >
-                    <option value="ACTIVE" className="bg-slate-900 text-emerald-300">🟢 ACTIVE (Regular Member)</option>
-                    <option value="VIP" className="bg-slate-900 text-amber-300">👑 VIP MEMBER (Priority Bar Access)</option>
-                    <option value="INACTIVE" className="bg-slate-900 text-slate-400">⚪ INACTIVE</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-300 block mb-1">Member Discount (%)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    placeholder="10"
-                    value={newMemberData.discount_percentage}
-                    onChange={(e) => setNewMemberData({ ...newMemberData, discount_percentage: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-400 font-bold focus:outline-none focus:border-amber-500 font-mono"
-                  />
-                </div>
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Membership Status</label>
+                <select
+                  value={newMemberData.status}
+                  onChange={(e) => setNewMemberData({ ...newMemberData, status: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="ACTIVE" className="bg-slate-900 text-emerald-300">🟢 ACTIVE (Regular Member)</option>
+                  <option value="VIP" className="bg-slate-900 text-amber-300">👑 VIP MEMBER (Priority Bar Access)</option>
+                  <option value="INACTIVE" className="bg-slate-900 text-slate-400">⚪ INACTIVE</option>
+                </select>
               </div>
 
               <div>
@@ -1469,30 +1449,17 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-300 block mb-1">Membership Status</label>
-                  <select
-                    value={editingMemberData.status}
-                    onChange={(e) => setEditingMemberData({ ...editingMemberData, status: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
-                  >
-                    <option value="ACTIVE" className="bg-slate-900 text-emerald-300">🟢 ACTIVE (Regular Member)</option>
-                    <option value="VIP" className="bg-slate-900 text-amber-300">👑 VIP MEMBER (Priority Bar Access)</option>
-                    <option value="INACTIVE" className="bg-slate-900 text-slate-400">⚪ INACTIVE</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-300 block mb-1">Member Discount (%)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={editingMemberData.discount_percentage}
-                    onChange={(e) => setEditingMemberData({ ...editingMemberData, discount_percentage: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-400 font-bold focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                </div>
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Membership Status</label>
+                <select
+                  value={editingMemberData.status}
+                  onChange={(e) => setEditingMemberData({ ...editingMemberData, status: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="ACTIVE" className="bg-slate-900 text-emerald-300">🟢 ACTIVE (Regular Member)</option>
+                  <option value="VIP" className="bg-slate-900 text-amber-300">👑 VIP MEMBER (Priority Bar Access)</option>
+                  <option value="INACTIVE" className="bg-slate-900 text-slate-400">⚪ INACTIVE</option>
+                </select>
               </div>
 
               <div>
@@ -1589,7 +1556,7 @@ export default function AdminPanel() {
 
               <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-amber-500/20 pt-2 font-mono">
                 <span>Visits Recorded: <strong className="text-amber-300">{cardPreviewMember.visit_count || 1}</strong></span>
-                <span>Discount: <strong className="text-amber-300">{cardPreviewMember.discount_percentage || 10}% OFF</strong></span>
+                <span>Tier: <strong className="text-amber-300">{cardPreviewMember.status}</strong></span>
               </div>
             </div>
 
