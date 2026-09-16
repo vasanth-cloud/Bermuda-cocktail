@@ -24,7 +24,24 @@ export const OrderProvider = ({ children }) => {
   const [syncStatus, setSyncStatus] = useState({ pending_sync_count: 0, connection_mode: 'OFFLINE_LOCAL_SERVER' });
   const [wsConnected, setWsConnected] = useState(false);
   const [isCustomerQrMode, setIsCustomerQrMode] = useState(false);
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('bermuda_theme') || 'dark';
+    } catch (e) {
+      return 'dark';
+    }
+  });
+
+  // Apply theme class to <html> element dynamically whenever theme state changes
+  useEffect(() => {
+    try {
+      document.documentElement.classList.remove('dark', 'neon', 'light');
+      document.documentElement.classList.add(theme);
+      localStorage.setItem('bermuda_theme', theme);
+    } catch (e) {
+      console.error("Theme toggle error:", e);
+    }
+  }, [theme]);
 
   // User Auth State
   const [currentUser, setCurrentUser] = useState(() => {
@@ -457,6 +474,36 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  const updateProduct = async (productId, productData) => {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productData)
+      });
+      if (res.ok) {
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error updating product:", err);
+    }
+    return false;
+  };
+
+  const deleteProduct = async (productId) => {
+    try {
+      const res = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error deleting product:", err);
+    }
+    return false;
+  };
+
   return (
     <OrderContext.Provider
       value={{
@@ -487,7 +534,9 @@ export const OrderProvider = ({ children }) => {
         theme,
         setTheme,
         addProduct,
+        updateProduct,
         updateProductPrice,
+        deleteProduct,
         toggleProductAvailability,
         isCustomerQrMode,
         setIsCustomerQrMode,

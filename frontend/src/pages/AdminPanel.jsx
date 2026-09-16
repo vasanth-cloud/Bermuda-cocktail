@@ -35,7 +35,9 @@ export default function AdminPanel() {
     syncStatus, 
     triggerSync, 
     addProduct, 
+    updateProduct,
     updateProductPrice, 
+    deleteProduct,
     toggleProductAvailability, 
     paymentLogs, 
     paymentSummary,
@@ -63,6 +65,16 @@ export default function AdminPanel() {
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+
+  // Edit Product Modal State
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingProductData, setEditingProductData] = useState({
+    name: '',
+    category_id: 1,
+    price: '',
+    target_dept: 'KITCHEN',
+    description: ''
+  });
 
   useEffect(() => {
     fetch('/api/system/ip')
@@ -121,6 +133,41 @@ export default function AdminPanel() {
         target_dept: 'KITCHEN',
         description: ''
       });
+    }
+  };
+
+  const handleOpenEditModal = (item) => {
+    setEditingProduct(item);
+    setEditingProductData({
+      name: item.name,
+      category_id: item.category_id,
+      price: item.price,
+      target_dept: item.target_dept || 'KITCHEN',
+      description: item.description || ''
+    });
+  };
+
+  const handleSaveProductEdit = async (e) => {
+    e.preventDefault();
+    if (!editingProductData.name || !editingProductData.price) {
+      alert("Please fill in item name and price");
+      return;
+    }
+
+    const success = await updateProduct(editingProduct.id, {
+      ...editingProductData,
+      category_id: Number(editingProductData.category_id),
+      price: parseFloat(editingProductData.price)
+    });
+
+    if (success) {
+      setEditingProduct(null);
+    }
+  };
+
+  const handleDeleteProductItem = async (item) => {
+    if (window.confirm(`Are you sure you want to delete product "${item.name}"?`)) {
+      await deleteProduct(item.id);
     }
   };
 
@@ -355,7 +402,8 @@ export default function AdminPanel() {
                   <th className="p-3">Category</th>
                   <th className="p-3">Route Dept</th>
                   <th className="p-3">Price (₹)</th>
-                  <th className="p-3 text-right rounded-r-xl">Status</th>
+                  <th className="p-3 text-center">Status</th>
+                  <th className="p-3 text-right rounded-r-xl">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -415,7 +463,7 @@ export default function AdminPanel() {
                               setEditingPriceValue(item.price);
                             }}
                             className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-amber-400"
-                            title="Edit Price"
+                            title="Edit Price Quick"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
@@ -423,7 +471,7 @@ export default function AdminPanel() {
                       )}
                     </td>
 
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-center">
                       <button
                         onClick={() => toggleProductAvailability(item.id, !item.is_available)}
                         className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold transition ${
@@ -434,6 +482,25 @@ export default function AdminPanel() {
                       >
                         {item.is_available ? 'Available' : 'Sold Out'}
                       </button>
+                    </td>
+
+                    <td className="p-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleOpenEditModal(item)}
+                          className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-lg transition"
+                          title="Edit Item Details"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProductItem(item)}
+                          className="p-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/30 text-rose-300 rounded-lg transition"
+                          title="Delete Item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -750,6 +817,131 @@ export default function AdminPanel() {
                   className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg"
                 >
                   Save Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Menu Item Modal */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-amber-400" /> Edit Menu Item
+              </h3>
+              <button
+                onClick={() => setEditingProduct(null)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProductEdit} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Item Name *</label>
+                <input
+                  type="text"
+                  value={editingProductData.name}
+                  onChange={(e) => setEditingProductData({ ...editingProductData, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Category</label>
+                  <select
+                    value={editingProductData.category_id}
+                    onChange={(e) => {
+                      const catId = Number(e.target.value);
+                      const cat = categories.find((c) => c.id === catId);
+                      setEditingProductData({
+                        ...editingProductData,
+                        category_id: catId,
+                        target_dept: cat?.target_dept || editingProductData.target_dept
+                      });
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none"
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id} className="bg-slate-900">
+                        {cat.name} ({cat.target_dept})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Price (₹) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingProductData.price}
+                    onChange={(e) => setEditingProductData({ ...editingProductData, price: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Split Routing Destination</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProductData({ ...editingProductData, target_dept: 'BAR' })}
+                    className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition ${
+                      editingProductData.target_dept === 'BAR'
+                        ? 'bg-purple-950 border-purple-500 text-purple-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <Wine className="w-4 h-4" /> Bar (Drinks)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditingProductData({ ...editingProductData, target_dept: 'KITCHEN' })}
+                    className={`py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition ${
+                      editingProductData.target_dept === 'KITCHEN'
+                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <Utensils className="w-4 h-4" /> Kitchen (Food)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Description (Optional)</label>
+                <textarea
+                  rows="2"
+                  value={editingProductData.description}
+                  onChange={(e) => setEditingProductData({ ...editingProductData, description: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                ></textarea>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg"
+                >
+                  Update Item
                 </button>
               </div>
             </form>

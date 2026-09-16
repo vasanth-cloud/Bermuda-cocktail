@@ -213,6 +213,8 @@ async def update_product(product_id: int, prod_update: schemas.ProductUpdate, db
 
     if prod_update.name is not None:
         product.name = prod_update.name
+    if prod_update.category_id is not None:
+        product.category_id = prod_update.category_id
     if prod_update.price is not None:
         product.price = prod_update.price
     if prod_update.description is not None:
@@ -227,6 +229,18 @@ async def update_product(product_id: int, prod_update: schemas.ProductUpdate, db
 
     await manager.broadcast_all({"event": "MENU_UPDATED"})
     return product
+
+@app.delete("/api/products/{product_id}")
+async def delete_product(product_id: int, db: Session = Depends(get_db)):
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    db.delete(product)
+    db.commit()
+
+    await manager.broadcast_all({"event": "MENU_UPDATED"})
+    return {"message": "Product deleted successfully"}
 
 # --- Order & Split Routing Endpoints ---
 @app.post("/api/orders", response_model=schemas.OrderSchema)

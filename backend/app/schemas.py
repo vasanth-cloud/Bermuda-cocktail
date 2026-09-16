@@ -58,6 +58,7 @@ class ProductCreate(BaseModel):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
+    category_id: Optional[int] = None
     price: Optional[float] = None
     description: Optional[str] = None
     is_available: Optional[bool] = None
