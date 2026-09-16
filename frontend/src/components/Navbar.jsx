@@ -19,7 +19,8 @@ import {
   LogIn,
   LogOut,
   UserCheck,
-  Crown
+  Crown,
+  CreditCard
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -72,6 +73,14 @@ export default function Navbar() {
       bg: 'bg-blue-500/10 border-blue-500/20' 
     },
     { 
+      id: 'members', 
+      label: 'VIP Member Cards', 
+      desc: 'Bermuda VIP Cards & Visits', 
+      icon: CreditCard, 
+      color: 'text-amber-400', 
+      bg: 'bg-amber-500/10 border-amber-500/20' 
+    },
+    { 
       id: 'admin', 
       label: 'Cloud Admin', 
       desc: 'Master Menu & Staff Accounts', 
@@ -94,10 +103,10 @@ export default function Navbar() {
       return navItems; // ONLY Master Admin gets Cloud Admin terminal
     }
     if (currentUser.role === 'WAITER') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'staff');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'staff' || item.id === 'members');
     }
     if (currentUser.role === 'BAR_KITCHEN' || currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'bar');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'bar' || item.id === 'members');
     }
 
     // Default: Hide Cloud Admin from all staff users

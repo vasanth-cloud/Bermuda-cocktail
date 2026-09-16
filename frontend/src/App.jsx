@@ -5,6 +5,7 @@ import CustomerMenu from './pages/CustomerMenu';
 import BarReception from './pages/BarReception';
 import StaffPanel from './pages/StaffPanel';
 import AdminPanel from './pages/AdminPanel';
+import MemberCardPanel from './pages/MemberCardPanel';
 import LoginPage from './pages/LoginPage';
 
 class ErrorBoundary extends React.Component {
@@ -72,6 +73,7 @@ function MainContent() {
       {activeTab === 'customer' && <CustomerMenu />}
       {(activeTab === 'bar' || activeTab === 'kitchen') && <BarReception />}
       {activeTab === 'staff' && <StaffPanel />}
+      {activeTab === 'members' && <MemberCardPanel />}
       {activeTab === 'admin' && <AdminPanel />}
     </main>
   );
