@@ -594,6 +594,25 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  const bulkImportMembers = async (membersList) => {
+    try {
+      const res = await fetch('/api/members/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(membersList)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchMembers();
+        return { success: true, ...data };
+      }
+      return { success: false, error: data.detail || 'Bulk import failed' };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: 'Network error bulk importing members' };
+    }
+  };
+
   return (
     <OrderContext.Provider
       value={{
@@ -649,7 +668,8 @@ export const OrderProvider = ({ children }) => {
         deleteMember,
         recordMemberVisit,
         entryLogs,
-        fetchEntryLogs
+        fetchEntryLogs,
+        bulkImportMembers
       }}
     >
       {children}

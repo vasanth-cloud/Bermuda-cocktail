@@ -769,4 +769,50 @@ def record_member_visit(member_id: int, db: Session = Depends(get_db)):
 def get_member_entry_logs(db: Session = Depends(get_db)):
     return db.query(models.MemberEntryLog).order_by(models.MemberEntryLog.entry_time.desc()).all()
 
+@app.post("/api/members/bulk-import")
+def bulk_import_members(members_list: List[schemas.CustomerMemberCreate], db: Session = Depends(get_db)):
+    import random
+    added_count = 0
+    skipped_count = 0
+    
+    existing_codes = set(m[0] for m in db.query(models.CustomerMember.member_code).all())
+    
+    new_objects = []
+    for item in members_list:
+        if not item.name or not item.phone:
+            skipped_count += 1
+            continue
+            
+        code = item.member_code
+        if not code or code in existing_codes:
+            code = f"BMC-{random.randint(1000, 99999)}"
+            while code in existing_codes:
+                code = f"BMC-{random.randint(10000, 999999)}"
+        
+        existing_codes.add(code)
+        
+        new_mem = models.CustomerMember(
+            member_code=code,
+            name=str(item.name).strip(),
+            phone=str(item.phone).strip(),
+            aadhar_number=str(item.aadhar_number).strip() if item.aadhar_number else None,
+            email=str(item.email).strip() if item.email else None,
+            address=str(item.address).strip() if item.address else None,
+            status=str(item.status).upper() if item.status and str(item.status).upper() in ["ACTIVE", "VIP", "INACTIVE"] else "ACTIVE",
+            discount_percentage=0.0
+        )
+        new_objects.append(new_mem)
+        added_count += 1
+
+    if new_objects:
+        db.bulk_save_objects(new_objects)
+        db.commit()
+
+    return {
+        "message": f"Successfully imported {added_count} members into database",
+        "added_count": added_count,
+        "skipped_count": skipped_count
+    }
+
+
 

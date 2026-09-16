@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
 import { 
   CreditCard, 
@@ -23,9 +23,9 @@ import {
   Crown,
   Save,
   Printer,
-  Camera,
-  Scan,
-  Volume2
+  Upload,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -36,7 +36,8 @@ export default function MemberCardPanel() {
     createMember, 
     updateMember, 
     deleteMember, 
-    recordMemberVisit 
+    recordMemberVisit,
+    bulkImportMembers
   } = useOrder();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,49 +73,17 @@ export default function MemberCardPanel() {
   // Print Card Modal State
   const [printableMember, setPrintableMember] = useState(null);
 
-  // Machine / Camera Scanner Modal State
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scanInputCode, setScanInputCode] = useState('');
-  const [scannedMemberResult, setScannedMemberResult] = useState(null);
-  const [scanErrorMsg, setScanErrorMsg] = useState('');
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const scannerInputRef = useRef(null);
-  const videoRef = useRef(null);
+  // Bulk Import Modal State
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkFile, setBulkFile] = useState(null);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkError, setBulkError] = useState('');
+  const [bulkSuccess, setBulkSuccess] = useState('');
 
   useEffect(() => {
     fetchMembers();
   }, []);
-
-  // Focus scanner input automatically when scanner modal opens
-  useEffect(() => {
-    if (isScannerOpen && scannerInputRef.current) {
-      scannerInputRef.current.focus();
-    }
-  }, [isScannerOpen]);
-
-  // Handle WebCam Stream Start/Stop
-  useEffect(() => {
-    let stream = null;
-    if (isScannerOpen && isCameraActive) {
-      navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'environment' } })
-        .then((s) => {
-          stream = s;
-          if (videoRef.current) {
-            videoRef.current.srcObject = s;
-          }
-        })
-        .catch((err) => {
-          console.warn("Camera access failed:", err);
-          setScanErrorMsg("Camera access not allowed or unavailable. Use hardware USB scanner input below.");
-        });
-    }
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-      }
-    };
-  }, [isScannerOpen, isCameraActive]);
 
   const handleSearch = (e) => {
     const q = e.target.value;
@@ -147,7 +116,6 @@ export default function MemberCardPanel() {
         status: 'ACTIVE'
       });
       setIsCreateOpen(false);
-      // Automatically prompt to print card
       setPrintableMember(res.member);
       setTimeout(() => setSuccessMessage(''), 4000);
     } else {
@@ -203,36 +171,107 @@ export default function MemberCardPanel() {
     }
   };
 
-  // MACHINE QR CODE ENTRY SCANNER SUBMIT (Hardware USB Reader / Manual Input)
-  const handleScannerSubmit = async (e) => {
-    e?.preventDefault();
-    const queryCode = scanInputCode.trim();
-    if (!queryCode) return;
+  // CSV Parsing Helper
+  const parseCSVText = (text) => {
+    const lines = text.split(/\r\n|\n/);
+    if (lines.length < 2) return [];
 
-    setScanErrorMsg('');
-    setScannedMemberResult(null);
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
+    
+    const nameIdx = headers.findIndex(h => h.includes('name'));
+    const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('contact'));
+    const codeIdx = headers.findIndex(h => h.includes('code') || h.includes('member_code') || h.includes('card'));
+    const aadharIdx = headers.findIndex(h => h.includes('aadhar') || h.includes('id'));
+    const emailIdx = headers.findIndex(h => h.includes('email'));
+    const addressIdx = headers.findIndex(h => h.includes('address') || h.includes('city'));
+    const statusIdx = headers.findIndex(h => h.includes('status') || h.includes('type'));
 
-    // Look up member by code, phone, or id
-    const found = members.find(
-      (m) => m.member_code.toLowerCase() === queryCode.toLowerCase() || m.phone === queryCode
-    );
+    const parsedMembers = [];
 
-    if (found) {
-      const success = await recordMemberVisit(found.id);
-      if (success) {
-        const updatedVisitCount = found.visit_count + 1;
-        setScannedMemberResult({ ...found, visit_count: updatedVisitCount });
-        setScanInputCode('');
-      } else {
-        setScanErrorMsg("Failed to record entry visit. Please try again.");
-      }
-    } else {
-      setScanErrorMsg(`Invalid Member QR Code: "${queryCode}". Customer not found in records.`);
-      setScanInputCode('');
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(',').map(cell => cell.trim().replace(/^"|"$/g, ''));
+      if (row.length < 2) continue;
+
+      const name = nameIdx !== -1 ? row[nameIdx] : row[0];
+      const phone = phoneIdx !== -1 ? row[phoneIdx] : row[1];
+
+      if (!name || !phone) continue;
+
+      parsedMembers.push({
+        name: name,
+        phone: phone,
+        member_code: codeIdx !== -1 && row[codeIdx] ? row[codeIdx] : null,
+        aadhar_number: aadharIdx !== -1 && row[aadharIdx] ? row[aadharIdx] : null,
+        email: emailIdx !== -1 && row[emailIdx] ? row[emailIdx] : null,
+        address: addressIdx !== -1 && row[addressIdx] ? row[addressIdx] : null,
+        status: statusIdx !== -1 && row[statusIdx] ? row[statusIdx].toUpperCase() : 'ACTIVE'
+      });
     }
 
-    if (scannerInputRef.current) {
-      scannerInputRef.current.focus();
+    return parsedMembers;
+  };
+
+  // Handle File Upload Change
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setBulkFile(file);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setBulkText(evt.target.result);
+    };
+    reader.readAsText(file);
+  };
+
+  // Download Sample CSV Template
+  const handleDownloadSampleCSV = () => {
+    const sampleCSV = `Name,Phone,Member Code,Aadhar Number,Email,Address,Status
+Rahul Sharma,9876543210,BMC-1001,123456789012,rahul@gmail.com,Dharmapuri,ACTIVE
+Priya Patel,9876543211,BMC-1002,987654321098,priya@gmail.com,Bangalore,VIP
+Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
+
+    const blob = new Blob([sampleCSV], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "Bermuda_Member_Import_Sample_Template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Bulk Import Submit
+  const handleBulkSubmit = async (e) => {
+    e.preventDefault();
+    setBulkError('');
+    setBulkSuccess('');
+
+    if (!bulkText.trim()) {
+      setBulkError('Please upload a CSV file or paste member CSV data into the text box.');
+      return;
+    }
+
+    const parsed = parseCSVText(bulkText);
+    if (parsed.length === 0) {
+      setBulkError('No valid member records found in CSV. Please ensure column headers include "Name" and "Phone".');
+      return;
+    }
+
+    setBulkSubmitting(true);
+    const res = await bulkImportMembers(parsed);
+    setBulkSubmitting(false);
+
+    if (res.success) {
+      setBulkSuccess(`Successfully imported ${res.added_count} customer members into database!`);
+      setBulkText('');
+      setBulkFile(null);
+      setTimeout(() => {
+        setIsBulkImportOpen(false);
+        setBulkSuccess('');
+      }, 3000);
+    } else {
+      setBulkError(res.error || 'Bulk import failed.');
     }
   };
 
@@ -249,7 +288,7 @@ export default function MemberCardPanel() {
           <div>
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400 text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                <Crown className="w-3.5 h-3.5 text-amber-400" /> Bermuda Pub Exclusive
+                <Crown className="w-3.5 h-3.5 text-amber-400" /> Bermuda Pub Directory
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-100 mt-2 flex items-center gap-2">
@@ -257,20 +296,21 @@ export default function MemberCardPanel() {
               VIP Member Card System
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Issue physical cards with QR passes, scan customer cards upon entry & print VIP cards
+              Issue physical cards, bulk import 1000+ member database records & print VIP pass cards
             </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0 flex-wrap">
             <button
               onClick={() => {
-                setIsScannerOpen(true);
-                setScannedMemberResult(null);
-                setScanErrorMsg('');
+                setIsBulkImportOpen(true);
+                setBulkError('');
+                setBulkSuccess('');
+                setBulkText('');
               }}
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-3 rounded-xl shadow-lg shadow-emerald-500/20 hover:scale-[1.02] transition flex items-center justify-center gap-2 text-xs sm:text-sm"
             >
-              <Scan className="w-5 h-5 stroke-[2.5]" /> 📷 Scan Member QR Entry
+              <Upload className="w-5 h-5 stroke-[2.5]" /> 📥 Bulk Import Members (CSV)
             </button>
 
             <button
@@ -382,7 +422,7 @@ export default function MemberCardPanel() {
                 <tr>
                   <td colSpan="7" className="text-center py-12 text-slate-500">
                     <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                    No member cards found matching your query.
+                    No member cards found matching your query. Click "Bulk Import Members" to import 1000+ member database.
                   </td>
                 </tr>
               ) : (
@@ -480,123 +520,105 @@ export default function MemberCardPanel() {
         </div>
       </div>
 
-      {/* MODAL: Machine / WebCam Entry QR Scanner */}
-      {isScannerOpen && (
+      {/* MODAL: Bulk Import Members (1000 Database CSV Upload) */}
+      {isBulkImportOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-emerald-500/40 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 relative overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-slate-900 border-2 border-emerald-500/40 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 relative overflow-hidden animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <Scan className="w-6 h-6 text-emerald-400" />
+                <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
                 <div>
-                  <h3 className="text-lg font-black text-slate-100">Pub Entry QR Reader Machine</h3>
-                  <p className="text-[11px] text-slate-400">Scan physical card QR or input barcode code</p>
+                  <h3 className="text-lg font-black text-slate-100">Bulk Import 1000+ Member Database</h3>
+                  <p className="text-xs text-slate-400">Upload CSV file or paste raw member records</p>
                 </div>
               </div>
               <button
-                onClick={() => {
-                  setIsScannerOpen(false);
-                  setIsCameraActive(false);
-                }}
+                onClick={() => setIsBulkImportOpen(false)}
                 className="text-slate-400 hover:text-slate-100 p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Hardware Reader / Input Box */}
-            <form onSubmit={handleScannerSubmit} className="space-y-3">
-              <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-                Scanner Hardware Input / USB QR Code:
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <QrCode className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    ref={scannerInputRef}
-                    type="text"
-                    value={scanInputCode}
-                    onChange={(e) => setScanInputCode(e.target.value)}
-                    placeholder="Point scanner here (e.g. BMC-2896)..."
-                    className="w-full bg-slate-950 border-2 border-emerald-500/40 rounded-xl pl-10 pr-3 py-2.5 text-slate-100 text-sm font-mono font-bold focus:outline-none focus:border-emerald-400"
-                  />
+            {/* Template Download Option */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4" /> Need a CSV Template?
                 </div>
+                <div className="text-[11px] text-slate-400">
+                  Download sample file formatted with Name, Phone, Member Code, Aadhar, Email, Address, Status columns
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadSampleCSV}
+                className="bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 px-3.5 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shrink-0"
+              >
+                <Download className="w-4 h-4" /> Download Sample CSV
+              </button>
+            </div>
+
+            <form onSubmit={handleBulkSubmit} className="space-y-4">
+              {/* Option 1: Choose CSV File */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                  1. Upload CSV File:
+                </label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleFileUpload}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-extrabold file:bg-emerald-500 file:text-slate-950 hover:file:bg-emerald-400 cursor-pointer"
+                />
+              </div>
+
+              {/* Option 2: Paste Raw CSV Data */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                  2. Or Paste CSV Text / Raw Data Below:
+                </label>
+                <textarea
+                  rows="6"
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                  placeholder={`Name,Phone,Member Code,Aadhar Number,Email,Address,Status\nRahul Sharma,9876543210,BMC-1001,123456789012,rahul@gmail.com,Dharmapuri,ACTIVE\nPriya Patel,9876543211,BMC-1002,987654321098,priya@gmail.com,Bangalore,VIP`}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 font-mono placeholder-slate-600 focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+
+              {bulkSuccess && (
+                <div className="bg-emerald-950/90 border border-emerald-500/50 p-3.5 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>{bulkSuccess}</span>
+                </div>
+              )}
+
+              {bulkError && (
+                <div className="bg-rose-950/90 border border-rose-500/50 p-3.5 rounded-xl text-xs text-rose-300 font-bold flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-rose-400 shrink-0" />
+                  <span>{bulkError}</span>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkImportOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 text-xs transition"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition shrink-0"
+                  disabled={bulkSubmitting}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
                 >
-                  Verify Entry
+                  {bulkSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 stroke-[2.5]" />}
+                  Import All Members into Database
                 </button>
               </div>
             </form>
-
-            {/* WebCam Video Option */}
-            <div className="pt-2 border-t border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                  <Camera className="w-4 h-4 text-amber-400" /> Camera WebScan Feed:
-                </span>
-                <button
-                  onClick={() => setIsCameraActive(!isCameraActive)}
-                  className="text-xs font-bold px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700"
-                >
-                  {isCameraActive ? 'Stop Camera' : 'Turn On WebCam'}
-                </button>
-              </div>
-
-              {isCameraActive && (
-                <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video flex items-center justify-center">
-                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 border-2 border-dashed border-emerald-400/60 rounded-2xl pointer-events-none flex items-center justify-center">
-                    <span className="text-xs font-bold text-emerald-400 bg-slate-950/80 px-3 py-1 rounded-full border border-emerald-400/40">
-                      Align QR Code Inside Box
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Success Entry Confirmation Alert */}
-            {scannedMemberResult && (
-              <div className="bg-emerald-950/90 border-2 border-emerald-400 p-4 rounded-2xl space-y-2 animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-emerald-300 uppercase tracking-widest flex items-center gap-1.5">
-                    <CheckCircle className="w-5 h-5 text-emerald-400" /> 🟢 ENTRY CONFIRMED & RECORDED
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold px-2 py-0.5 rounded bg-emerald-900/60 border border-emerald-500/40">
-                    {scannedMemberResult.member_code}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <div className="text-lg font-black text-slate-100">{scannedMemberResult.name}</div>
-                    <div className="text-xs text-slate-300 font-mono">Ph: {scannedMemberResult.phone}</div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-2xl font-black text-amber-400">{scannedMemberResult.visit_count}</div>
-                    <div className="text-[10px] text-slate-400 uppercase font-bold">Total Visits</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {scanErrorMsg && (
-              <div className="bg-rose-950/90 border border-rose-500/50 p-3.5 rounded-2xl text-xs text-rose-300 font-bold flex items-center gap-2">
-                <Shield className="w-5 h-5 text-rose-400 shrink-0" />
-                <span>{scanErrorMsg}</span>
-              </div>
-            )}
-
-            <button
-              onClick={() => {
-                setIsScannerOpen(false);
-                setIsCameraActive(false);
-              }}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition"
-            >
-              Close Machine Scanner
-            </button>
           </div>
         </div>
       )}
@@ -614,7 +636,6 @@ export default function MemberCardPanel() {
               </button>
             </div>
 
-            {/* PRINTABLE CARD DESIGN PREVIEW CONTAINER */}
             <div
               id="printable-vip-card"
               className="bg-gradient-to-br from-amber-950 via-slate-950 to-amber-900 border-2 border-amber-500/60 rounded-2xl p-5 shadow-2xl text-slate-100 space-y-4 relative overflow-hidden"
