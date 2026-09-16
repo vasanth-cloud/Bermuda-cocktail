@@ -648,3 +648,107 @@ def trigger_cloud_sync(db: Session = Depends(get_db)):
         log.synced_at = models.datetime.utcnow()
     db.commit()
     return {"message": f"Successfully synced {count} transactions to Cloud Admin Panel"}
+
+# --- Member Card Management Endpoints ---
+@app.get("/api/members", response_model=List[schemas.CustomerMemberSchema])
+def get_members(q: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(models.CustomerMember)
+    if q:
+        search_pattern = f"%{q}%"
+        query = query.filter(
+            (models.CustomerMember.name.ilike(search_pattern)) |
+            (models.CustomerMember.phone.ilike(search_pattern)) |
+            (models.CustomerMember.member_code.ilike(search_pattern)) |
+            (models.CustomerMember.aadhar_number.ilike(search_pattern))
+        )
+    return query.order_by(models.CustomerMember.created_at.desc()).all()
+
+@app.post("/api/members", response_model=schemas.CustomerMemberSchema)
+def create_member(member_data: schemas.CustomerMemberCreate, db: Session = Depends(get_db)):
+    if not member_data.member_code:
+        import random
+        member_code = f"BMC-{random.randint(1000, 9999)}"
+    else:
+        member_code = member_data.member_code
+
+    existing = db.query(models.CustomerMember).filter(models.CustomerMember.member_code == member_code).first()
+    if existing:
+        import random
+        member_code = f"BMC-{random.randint(10000, 99999)}"
+
+    new_member = models.CustomerMember(
+        member_code=member_code,
+        name=member_data.name,
+        phone=member_data.phone,
+        aadhar_number=member_data.aadhar_number,
+        email=member_data.email,
+        address=member_data.address,
+        status=member_data.status or "ACTIVE",
+        discount_percentage=member_data.discount_percentage or 0.0
+    )
+    db.add(new_member)
+    db.commit()
+    db.refresh(new_member)
+    return new_member
+
+@app.get("/api/members/{member_identifier}", response_model=schemas.CustomerMemberSchema)
+def get_member_by_code(member_identifier: str, db: Session = Depends(get_db)):
+    member = None
+    if member_identifier.isdigit():
+        member = db.query(models.CustomerMember).filter(models.CustomerMember.id == int(member_identifier)).first()
+    if not member:
+        member = db.query(models.CustomerMember).filter(
+            (models.CustomerMember.member_code == member_identifier) |
+            (models.CustomerMember.phone == member_identifier)
+        ).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return member
+
+@app.patch("/api/members/{member_id}", response_model=schemas.CustomerMemberSchema)
+def update_member(member_id: int, update_data: schemas.CustomerMemberUpdate, db: Session = Depends(get_db)):
+    member = db.query(models.CustomerMember).filter(models.CustomerMember.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    if update_data.name is not None:
+        member.name = update_data.name
+    if update_data.phone is not None:
+        member.phone = update_data.phone
+    if update_data.aadhar_number is not None:
+        member.aadhar_number = update_data.aadhar_number
+    if update_data.email is not None:
+        member.email = update_data.email
+    if update_data.address is not None:
+        member.address = update_data.address
+    if update_data.status is not None:
+        member.status = update_data.status
+    if update_data.discount_percentage is not None:
+        member.discount_percentage = update_data.discount_percentage
+
+    db.commit()
+    db.refresh(member)
+    return member
+
+@app.delete("/api/members/{member_id}")
+def delete_member(member_id: int, db: Session = Depends(get_db)):
+    member = db.query(models.CustomerMember).filter(models.CustomerMember.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    db.delete(member)
+    db.commit()
+    return {"message": "Member card deleted successfully"}
+
+@app.post("/api/members/{member_id}/record-visit")
+def record_member_visit(member_id: int, db: Session = Depends(get_db)):
+    member = db.query(models.CustomerMember).filter(models.CustomerMember.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    member.visit_count += 1
+    db.commit()
+    db.refresh(member)
+    return {"message": f"Recorded visit for {member.name}", "visit_count": member.visit_count}
+

@@ -141,3 +141,37 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+# Member Card Schemas
+class CustomerMemberBase(BaseModel):
+    name: str
+    phone: str
+    aadhar_number: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = "ACTIVE"
+    discount_percentage: Optional[float] = 0.0
+
+class CustomerMemberCreate(CustomerMemberBase):
+    member_code: Optional[str] = None
+
+class CustomerMemberUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    aadhar_number: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = None
+    discount_percentage: Optional[float] = None
+
+class CustomerMemberSchema(CustomerMemberBase):
+    id: int
+    member_code: str
+    visit_count: int
+    total_spent: float
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+

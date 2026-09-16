@@ -504,6 +504,83 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  // Member Card Management
+  const [members, setMembers] = useState([]);
+
+  const fetchMembers = async (query = '') => {
+    try {
+      const url = query ? `/api/members?q=${encodeURIComponent(query)}` : '/api/members';
+      const res = await fetch(url);
+      if (res.ok) setMembers(await res.json());
+    } catch (e) {
+      console.error("Error fetching members:", e);
+    }
+  };
+
+  const createMember = async (memberData) => {
+    try {
+      const res = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(memberData)
+      });
+      if (res.ok) {
+        await fetchMembers();
+        const created = await res.json();
+        return { success: true, member: created };
+      } else {
+        const err = await res.json();
+        return { success: false, error: err.detail || 'Failed to create member card' };
+      }
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: 'Network error creating member card' };
+    }
+  };
+
+  const updateMember = async (memberId, memberData) => {
+    try {
+      const res = await fetch(`/api/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(memberData)
+      });
+      if (res.ok) {
+        await fetchMembers();
+        return true;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return false;
+  };
+
+  const deleteMember = async (memberId) => {
+    try {
+      const res = await fetch(`/api/members/${memberId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchMembers();
+        return true;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return false;
+  };
+
+  const recordMemberVisit = async (memberId) => {
+    try {
+      const res = await fetch(`/api/members/${memberId}/record-visit`, { method: 'POST' });
+      if (res.ok) {
+        await fetchMembers();
+        return true;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    return false;
+  };
+
   return (
     <OrderContext.Provider
       value={{
@@ -551,7 +628,13 @@ export const OrderProvider = ({ children }) => {
         staffUsers,
         fetchStaffUsers,
         createStaffAccount,
-        deleteStaffAccount
+        deleteStaffAccount,
+        members,
+        fetchMembers,
+        createMember,
+        updateMember,
+        deleteMember,
+        recordMemberVisit
       }}
     >
       {children}

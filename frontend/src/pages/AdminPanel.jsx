@@ -23,7 +23,14 @@ import {
   Mail,
   Lock,
   User,
-  Crown
+  Crown,
+  CreditCard,
+  Phone,
+  FileText,
+  MapPin,
+  Award,
+  Sparkles,
+  Search
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -45,7 +52,13 @@ export default function AdminPanel() {
     fetchStaffUsers,
     createStaffAccount,
     deleteStaffAccount,
-    currentUser
+    currentUser,
+    members,
+    fetchMembers,
+    createMember,
+    updateMember,
+    deleteMember,
+    recordMemberVisit
   } = useOrder();
 
   const [selectedTableForQr, setSelectedTableForQr] = useState(tables[0] || null);
@@ -65,6 +78,37 @@ export default function AdminPanel() {
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+
+  // Member Card Management State
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [isCreateMemberOpen, setIsCreateMemberOpen] = useState(false);
+  const [newMemberData, setNewMemberData] = useState({
+    name: '',
+    phone: '',
+    aadhar_number: '',
+    email: '',
+    address: '',
+    status: 'ACTIVE',
+    discount_percentage: '10'
+  });
+  const [memberError, setMemberError] = useState('');
+  const [memberSuccess, setMemberSuccess] = useState('');
+  const [isSubmittingMember, setIsSubmittingMember] = useState(false);
+
+  // Edit Member Modal State
+  const [editingMember, setEditingMember] = useState(null);
+  const [editingMemberData, setEditingMemberData] = useState({
+    name: '',
+    phone: '',
+    aadhar_number: '',
+    email: '',
+    address: '',
+    status: 'ACTIVE',
+    discount_percentage: 0
+  });
+
+  // Digital Member VIP Card Modal State
+  const [cardPreviewMember, setCardPreviewMember] = useState(null);
 
   // Edit Product Modal State
   const [editingProduct, setEditingProduct] = useState(null);
@@ -87,9 +131,89 @@ export default function AdminPanel() {
       })
       .catch(() => {});
 
-    // Load staff accounts
+    // Load staff accounts & member cards
     fetchStaffUsers();
+    fetchMembers();
   }, []);
+
+  const handleSearchMembers = (query) => {
+    setMemberSearchQuery(query);
+    fetchMembers(query);
+  };
+
+  const handleCreateMemberSubmit = async (e) => {
+    e.preventDefault();
+    if (!newMemberData.name || !newMemberData.phone) {
+      setMemberError("Name and Phone number are required");
+      return;
+    }
+
+    setIsSubmittingMember(true);
+    setMemberError('');
+    setMemberSuccess('');
+
+    const res = await createMember({
+      ...newMemberData,
+      discount_percentage: parseFloat(newMemberData.discount_percentage) || 0
+    });
+
+    setIsSubmittingMember(false);
+    if (res.success) {
+      setMemberSuccess(`Created Gymkhana Member Card for ${res.member.name} (${res.member.member_code})!`);
+      setNewMemberData({
+        name: '',
+        phone: '',
+        aadhar_number: '',
+        email: '',
+        address: '',
+        status: 'ACTIVE',
+        discount_percentage: '10'
+      });
+      setIsCreateMemberOpen(false);
+    } else {
+      setMemberError(res.error || "Failed to create member card");
+    }
+  };
+
+  const handleOpenEditMember = (member) => {
+    setEditingMember(member);
+    setEditingMemberData({
+      name: member.name,
+      phone: member.phone,
+      aadhar_number: member.aadhar_number || '',
+      email: member.email || '',
+      address: member.address || '',
+      status: member.status || 'ACTIVE',
+      discount_percentage: member.discount_percentage || 0
+    });
+  };
+
+  const handleSaveMemberEdit = async (e) => {
+    e.preventDefault();
+    if (!editingMemberData.name || !editingMemberData.phone) {
+      alert("Name and Phone number are required");
+      return;
+    }
+
+    const success = await updateMember(editingMember.id, {
+      ...editingMemberData,
+      discount_percentage: parseFloat(editingMemberData.discount_percentage) || 0
+    });
+
+    if (success) {
+      setEditingMember(null);
+    }
+  };
+
+  const handleDeleteMemberItem = async (member) => {
+    if (window.confirm(`Are you sure you want to delete member card for "${member.name}" (${member.member_code})?`)) {
+      await deleteMember(member.id);
+    }
+  };
+
+  const handleRecordVisit = async (member) => {
+    await recordMemberVisit(member.id);
+  };
 
   // Add Item Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -596,6 +720,159 @@ export default function AdminPanel() {
         </div>
       </div>
 
+      {/* Gymkhana VIP Customer Member Card Management Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div>
+            <h3 className="font-black text-xl text-slate-100 flex items-center gap-2">
+              <CreditCard className="w-6 h-6 text-amber-400" /> Gymkhana Club Member Card Management
+            </h3>
+            <p className="text-xs text-slate-400">
+              Issue digital VIP member cards, record entry visits, store Name, Phone & Aadhaar details, and generate QR member passes.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+            {/* Search Input */}
+            <div className="relative flex-1 sm:flex-initial min-w-[220px]">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search name, phone, card code, Aadhaar..."
+                value={memberSearchQuery}
+                onChange={(e) => handleSearchMembers(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <button
+              onClick={() => setIsCreateMemberOpen(true)}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 py-2 text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" /> Issue New Member Card
+            </button>
+          </div>
+        </div>
+
+        {memberSuccess && (
+          <div className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 p-3 rounded-xl text-xs flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{memberSuccess}</span>
+          </div>
+        )}
+
+        {/* Member Cards Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider">
+              <tr>
+                <th className="p-3 rounded-l-xl">Member Code</th>
+                <th className="p-3">Customer Name</th>
+                <th className="p-3">Phone & Email</th>
+                <th className="p-3">Aadhaar Govt ID</th>
+                <th className="p-3">Status / Tier</th>
+                <th className="p-3">Visits Count</th>
+                <th className="p-3 text-right rounded-r-xl">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {members.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="p-4 text-center text-slate-500 italic">
+                    {memberSearchQuery ? `No member cards found matching "${memberSearchQuery}"` : 'No Gymkhana member cards issued yet. Click "Issue New Member Card" to add customers.'}
+                  </td>
+                </tr>
+              ) : (
+                members.map((member) => (
+                  <tr key={member.id} className="hover:bg-slate-800/50 transition">
+                    <td className="p-3 font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>{member.member_code}</span>
+                    </td>
+
+                    <td className="p-3 font-bold text-slate-100">
+                      {member.name}
+                    </td>
+
+                    <td className="p-3 text-slate-300 font-mono">
+                      <div>{member.phone}</div>
+                      {member.email && <div className="text-[10px] text-slate-500 font-sans">{member.email}</div>}
+                    </td>
+
+                    <td className="p-3 font-mono text-slate-400">
+                      {member.aadhar_number ? (
+                        <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-[11px] text-slate-300">
+                          {member.aadhar_number}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 italic">Not Provided</span>
+                      )}
+                    </td>
+
+                    <td className="p-3">
+                      {member.status === 'VIP' ? (
+                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                          <Crown className="w-3 h-3 text-amber-400" /> VIP Member ({member.discount_percentage || 0}% Off)
+                        </span>
+                      ) : member.status === 'ACTIVE' ? (
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                          <CheckCircle className="w-3 h-3 text-emerald-400" /> Active
+                        </span>
+                      ) : (
+                        <span className="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full w-fit">
+                          {member.status}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="p-3 font-mono">
+                      <div className="flex items-center gap-1 text-slate-200 font-bold">
+                        <span>{member.visit_count || 1} Visits</span>
+                        <button
+                          onClick={() => handleRecordVisit(member)}
+                          className="bg-amber-500/10 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-[9px] px-1.5 py-0.5 rounded font-bold transition ml-1"
+                          title="Record Customer Visit (+1)"
+                        >
+                          +1 Visit
+                        </button>
+                      </div>
+                    </td>
+
+                    <td className="p-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setCardPreviewMember(member)}
+                          className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-lg transition"
+                          title="View & Print VIP Gymkhana Member Card / QR Code"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenEditMember(member)}
+                          className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg transition"
+                          title="Edit Member Details (Phone, Aadhaar, Name)"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteMemberItem(member)}
+                          className="p-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/30 text-rose-300 rounded-lg transition"
+                          title="Delete Member Card"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Create Staff Account Modal */}
       {isCreateUserOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -977,6 +1254,353 @@ export default function AdminPanel() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Gymkhana Member Card Modal */}
+      {isCreateMemberOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-amber-400" /> Issue New Gymkhana Member Card
+              </h3>
+              <button
+                onClick={() => setIsCreateMemberOpen(false)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            {memberError && (
+              <div className="bg-rose-950/60 border border-rose-500/40 text-rose-300 p-3 rounded-xl text-xs">
+                {memberError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateMemberSubmit} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Customer Full Name *</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="e.g. Rajesh Kumar"
+                      value={newMemberData.name}
+                      onChange={(e) => setNewMemberData({ ...newMemberData, name: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Phone Number *</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                    <input
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={newMemberData.phone}
+                      onChange={(e) => setNewMemberData({ ...newMemberData, phone: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 font-mono focus:outline-none focus:border-amber-500"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Aadhaar / Govt ID Number</label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="1234-5678-9012"
+                      value={newMemberData.aadhar_number}
+                      onChange={(e) => setNewMemberData({ ...newMemberData, aadhar_number: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                    <input
+                      type="email"
+                      placeholder="rajesh@gymkhana.pub"
+                      value={newMemberData.email}
+                      onChange={(e) => setNewMemberData({ ...newMemberData, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Membership Status</label>
+                  <select
+                    value={newMemberData.status}
+                    onChange={(e) => setNewMemberData({ ...newMemberData, status: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="ACTIVE" className="bg-slate-900 text-emerald-300">🟢 ACTIVE (Regular Member)</option>
+                    <option value="VIP" className="bg-slate-900 text-amber-300">👑 VIP MEMBER (Priority Bar Access)</option>
+                    <option value="INACTIVE" className="bg-slate-900 text-slate-400">⚪ INACTIVE</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Member Discount (%)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    placeholder="10"
+                    value={newMemberData.discount_percentage}
+                    onChange={(e) => setNewMemberData({ ...newMemberData, discount_percentage: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-400 font-bold focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Residential Address / City</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="e.g. Indiranagar, Bangalore"
+                    value={newMemberData.address}
+                    onChange={(e) => setNewMemberData({ ...newMemberData, address: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateMemberOpen(false)}
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingMember}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg"
+                >
+                  {isSubmittingMember ? 'Generating Pass...' : 'Issue Member Pass'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Member Details Modal */}
+      {editingMember && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-blue-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-400" /> Edit Gymkhana Member Details
+              </h3>
+              <button
+                onClick={() => setEditingMember(null)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMemberEdit} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Customer Full Name *</label>
+                  <input
+                    type="text"
+                    value={editingMemberData.name}
+                    onChange={(e) => setEditingMemberData({ ...editingMemberData, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Phone Number *</label>
+                  <input
+                    type="tel"
+                    value={editingMemberData.phone}
+                    onChange={(e) => setEditingMemberData({ ...editingMemberData, phone: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-mono focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Aadhaar / Govt ID Number</label>
+                  <input
+                    type="text"
+                    value={editingMemberData.aadhar_number}
+                    onChange={(e) => setEditingMemberData({ ...editingMemberData, aadhar_number: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-mono focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={editingMemberData.email}
+                    onChange={(e) => setEditingMemberData({ ...editingMemberData, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Membership Status</label>
+                  <select
+                    value={editingMemberData.status}
+                    onChange={(e) => setEditingMemberData({ ...editingMemberData, status: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
+                  >
+                    <option value="ACTIVE" className="bg-slate-900 text-emerald-300">🟢 ACTIVE (Regular Member)</option>
+                    <option value="VIP" className="bg-slate-900 text-amber-300">👑 VIP MEMBER (Priority Bar Access)</option>
+                    <option value="INACTIVE" className="bg-slate-900 text-slate-400">⚪ INACTIVE</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Member Discount (%)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={editingMemberData.discount_percentage}
+                    onChange={(e) => setEditingMemberData({ ...editingMemberData, discount_percentage: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-400 font-bold focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Residential Address / City</label>
+                <input
+                  type="text"
+                  value={editingMemberData.address}
+                  onChange={(e) => setEditingMemberData({ ...editingMemberData, address: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingMember(null)}
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-black shadow-lg"
+                >
+                  Update Member Details
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Digital Gymkhana Member Card & QR Preview Modal */}
+      {cardPreviewMember && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 text-center relative overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-extrabold text-base text-amber-400 flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-400" /> Bermuda Gymkhana VIP Card
+              </h3>
+              <button
+                onClick={() => setCardPreviewMember(null)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Gymkhana Card Badge Mockup */}
+            <div className="bg-gradient-to-br from-amber-950 via-slate-950 to-amber-950 border-2 border-amber-500/60 p-6 rounded-2xl space-y-4 shadow-2xl relative overflow-hidden text-left">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-black text-amber-400 tracking-widest uppercase">BERMUDA GYMKHANA PUB & CLUB</div>
+                  <div className="text-xl font-black text-slate-100">{cardPreviewMember.name}</div>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center font-bold text-xs shadow">
+                  VIP
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                <div>
+                  <div className="text-[9px] text-slate-400 uppercase">MEMBER CARD CODE</div>
+                  <div className="text-amber-300 font-bold">{cardPreviewMember.member_code}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] text-slate-400 uppercase">PHONE NO.</div>
+                  <div className="text-slate-200 font-bold">{cardPreviewMember.phone}</div>
+                </div>
+                {cardPreviewMember.aadhar_number && (
+                  <div className="col-span-2">
+                    <div className="text-[9px] text-slate-400 uppercase">AADHAAR GOVT ID</div>
+                    <div className="text-slate-300">{cardPreviewMember.aadhar_number}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Real QR Code Pass */}
+              <div className="bg-white p-4 rounded-xl text-center shadow-inner my-2">
+                <QRCodeSVG
+                  value={JSON.stringify({
+                    member_code: cardPreviewMember.member_code,
+                    name: cardPreviewMember.name,
+                    phone: cardPreviewMember.phone
+                  })}
+                  size={150}
+                  bgColor={"#FFFFFF"}
+                  fgColor={"#0F172A"}
+                  level={"H"}
+                />
+                <span className="text-[10px] text-slate-600 font-mono block mt-1">SCANNABLE MEMBER QR PAYLOAD</span>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-amber-500/20 pt-2 font-mono">
+                <span>Visits Recorded: <strong className="text-amber-300">{cardPreviewMember.visit_count || 1}</strong></span>
+                <span>Discount: <strong className="text-amber-300">{cardPreviewMember.discount_percentage || 10}% OFF</strong></span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => window.print()}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition"
+              >
+                🖨️ Print Member Card & QR
+              </button>
+            </div>
           </div>
         </div>
       )}

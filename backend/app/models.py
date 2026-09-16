@@ -108,3 +108,21 @@ class User(Base):
     role = Column(String, default="WAITER")  # ADMIN, WAITER, BAR_RECEPTION, KITCHEN_CHEF
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class CustomerMember(Base):
+    __tablename__ = "customer_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_code = Column(String, unique=True, index=True, nullable=False)  # e.g., BMC-1001 or QR Token
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False, index=True)
+    aadhar_number = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    status = Column(String, default="ACTIVE")  # ACTIVE, INACTIVE, VIP
+    discount_percentage = Column(Float, default=0.0)
+    visit_count = Column(Integer, default=1)
+    total_spent = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
