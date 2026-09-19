@@ -17,14 +17,16 @@ export default function BarReception() {
   const [cashierName, setCashierName] = useState('Receptionist');
 
   const filteredOrders = allOrders.filter((ord) => {
-    const matchesTable = selectedTableFilter === 'ALL' || ord.table_id === Number(selectedTableFilter);
+    const matchesTable = selectedTableFilter === 'ALL' || Number(ord.table_id) === Number(selectedTableFilter);
     if (!matchesTable) return false;
 
+    const deptUpper = (dept) => (dept || '').toUpperCase();
+
     if (stationFilter === 'BAR') {
-      return ord.items && ord.items.some(it => it.target_dept === 'BAR');
+      return ord.items && ord.items.some(it => deptUpper(it.target_dept) === 'BAR');
     }
     if (stationFilter === 'KITCHEN') {
-      return ord.items && ord.items.some(it => it.target_dept === 'KITCHEN');
+      return ord.items && ord.items.some(it => deptUpper(it.target_dept) === 'KITCHEN');
     }
 
     return true;

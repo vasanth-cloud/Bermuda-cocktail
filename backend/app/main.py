@@ -479,10 +479,11 @@ def get_orders(
     # Filter items if target_dept specified
     if target_dept:
         filtered_orders = []
+        target_dept_upper = target_dept.upper()
         for ord in orders:
-            if ord.status in ["PENDING", "PENDING_WAITER"]:
+            if ord.status == "BILLED":
                 continue
-            dept_items = [it for it in ord.items if it.target_dept == target_dept]
+            dept_items = [it for it in ord.items if (it.target_dept or "").upper() == target_dept_upper]
             if dept_items:
                 # Clone order object with filtered items for response
                 ord.items = dept_items
