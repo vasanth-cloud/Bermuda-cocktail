@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
 import BermudaLogo from '../components/BermudaLogo';
-import { Shield, Key, Mail, Lock, Sparkles, AlertCircle, QrCode, Crown, Users, Wine, Utensils, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight, AlertCircle, QrCode } from 'lucide-react';
 
 export default function LoginPage({ onBypassGuest }) {
   const { loginUser } = useOrder();
@@ -23,88 +23,60 @@ export default function LoginPage({ onBypassGuest }) {
     setIsSubmitting(false);
 
     if (!result.success) {
-      setErrorMsg(result.error || 'Login failed. Check your email and password.');
+      setErrorMsg(result.error || 'Invalid email or password');
     }
   };
 
-  const handleQuickFill = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setErrorMsg('');
-  };
-
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden pub-ambient-bg">
-      {/* Ambient Spotlight Background Effects */}
-      <div className="pub-spotlight spotlight-left pointer-events-none opacity-80" />
-      <div className="pub-spotlight spotlight-right pointer-events-none opacity-80" />
+    <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
+      {/* Background Soft Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Background High-Def Photography Texture */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center opacity-25 pointer-events-none"
-        style={{ backgroundImage: `url('https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1600&q=80')` }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/95 to-slate-950 pointer-events-none" />
-
-      {/* Main Login Card Container */}
-      <div className="relative z-10 w-full max-w-lg space-y-6">
-        {/* Brand Logo & Welcome Banner */}
-        <div className="text-center space-y-3">
-          <BermudaLogo size="lg" className="mx-auto drop-shadow-2xl" />
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-amber-300 tracking-tight">
-              BERMUDA POS & STAFF PORTAL
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Please sign in with your staff or master admin account to open terminal home page.
-            </p>
-          </div>
+      <div className="relative z-10 w-full max-w-sm space-y-6">
+        {/* Simple Vertical Brand Logo */}
+        <div className="text-center space-y-2">
+          <BermudaLogo variant="login" size="xl" className="mx-auto" />
+          <h1 className="text-xl sm:text-2xl font-black text-amber-400 tracking-tight">
+            BERMUDA PUB POS
+          </h1>
+          <p className="text-xs text-slate-400">Sign in to access your terminal</p>
         </div>
 
-        {/* Login Form Box */}
-        <div className="bg-slate-900/90 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-5 relative overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-            <h2 className="font-extrabold text-base text-slate-100 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-amber-400" /> Account Authentication
-            </h2>
-            <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30">
-              SECURE POS LOGIN
-            </span>
-          </div>
-
+        {/* Clean Simple Login Card */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
           {errorMsg && (
-            <div className="bg-rose-950/80 border border-rose-500/50 text-rose-300 p-3.5 rounded-2xl text-xs flex items-center gap-2 shadow-lg">
+            <div className="bg-rose-950/80 border border-rose-500/40 text-rose-300 p-3 rounded-xl text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4 text-xs">
             <div>
-              <label className="text-xs font-bold text-slate-300 block mb-1">Email / Login ID *</label>
+              <label className="font-bold text-slate-300 block mb-1">Email / Login ID</label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
+                <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="avasanth081@gmail.com"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-300 block mb-1">Password *</label>
+              <label className="font-bold text-slate-300 block mb-1">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
+                <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
                   required
                 />
               </div>
@@ -113,21 +85,21 @@ export default function LoginPage({ onBypassGuest }) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 text-slate-950 py-3.5 rounded-2xl font-black text-sm shadow-xl shadow-amber-500/25 transition flex items-center justify-center gap-2"
+              className="w-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 py-3 rounded-xl font-black text-xs shadow-lg transition flex items-center justify-center gap-1.5"
             >
-              {isSubmitting ? 'Authenticating...' : 'Sign In & Open Terminal'} <ArrowRight className="w-4 h-4" />
+              {isSubmitting ? 'Signing In...' : 'Sign In'} <ArrowRight className="w-4 h-4" />
             </button>
           </form>
         </div>
 
-        {/* Guest Mode Link for Customers */}
+        {/* Guest View Option */}
         {onBypassGuest && (
-          <div className="text-center">
+          <div className="text-center pt-1">
             <button
               onClick={onBypassGuest}
-              className="text-xs text-slate-400 hover:text-amber-400 font-semibold underline underline-offset-4 transition flex items-center justify-center gap-1.5 mx-auto"
+              className="text-xs text-slate-400 hover:text-amber-400 font-semibold transition flex items-center justify-center gap-1.5 mx-auto"
             >
-              <QrCode className="w-4 h-4 text-amber-400" /> Browse Customer Digital Menu (Guest View)
+              <QrCode className="w-3.5 h-3.5 text-amber-400" /> Browse Customer QR Menu (Guest View)
             </button>
           </div>
         )}
