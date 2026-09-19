@@ -39,10 +39,9 @@ export default function LoginPage({ onBypassGuest }) {
 
       {/* Main Centered Content Container */}
       <div className="relative z-10 w-full max-w-sm flex flex-col items-center justify-center text-center space-y-5">
-        {/* Vertical Brand Logo at Top Center of Form */}
-        <div className="text-center space-y-1.5">
-          <BermudaLogo variant="login" size="xl" className="mx-auto drop-shadow-2xl" />
-          <h1 className="text-xl sm:text-2xl font-black text-amber-400 tracking-tight drop-shadow">
+        {/* Clean Header Title without Logo */}
+        <div className="text-center space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight drop-shadow">
             BERMUDA PUB POS
           </h1>
           <p className="text-xs text-slate-300 font-medium drop-shadow">Sign in to access your terminal</p>
