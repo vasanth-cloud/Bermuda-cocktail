@@ -183,39 +183,39 @@ export default function TopHeader() {
 
             {/* Profile Dropdown Menu */}
             {isProfileOpen && currentUser && (
-              <div className="absolute right-0 mt-2 w-64 bg-slate-900 light:bg-white border border-amber-500/30 rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3">
-                <div className="flex items-center gap-3 pb-3 border-b border-slate-800/50 light:border-slate-200">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 light:text-amber-700 text-base font-black">
+              <div className="absolute right-0 top-full mt-2 w-64 bg-slate-900 light:bg-white border-2 border-amber-500/50 rounded-2xl shadow-2xl p-3.5 z-50 animate-in fade-in zoom-in-95 space-y-2.5 max-h-[85vh] overflow-y-auto">
+                <div className="flex items-center gap-3 pb-2.5 border-b border-slate-800/80 light:border-slate-200">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 light:text-amber-700 text-sm font-black">
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-black text-slate-100 light:text-slate-900 truncate">{currentUser.name}</div>
-                    <div className="text-xs text-slate-400 light:text-slate-600 font-mono truncate">{currentUser.email}</div>
+                    <div className="text-xs font-black text-slate-100 light:text-slate-900 truncate">{currentUser.name}</div>
+                    <div className="text-[10px] text-slate-400 light:text-slate-600 font-mono truncate">{currentUser.email}</div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between text-xs py-0.5">
                   <span className="text-slate-400 light:text-slate-600 font-bold">Role:</span>
                   {(() => {
                     const badge = getRoleBadge(currentUser.role);
                     const RoleIcon = badge.icon;
                     return (
-                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${badge.color}`}>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge.color}`}>
                         <RoleIcon className="w-3 h-3" /> {badge.label}
                       </span>
                     );
                   })()}
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/50 light:border-slate-200">
+                <div className="pt-2 border-t border-slate-800/80 light:border-slate-200">
                   <button
                     onClick={() => {
                       logoutUser();
                       setIsProfileOpen(false);
                     }}
-                    className="w-full bg-rose-950/60 light:bg-rose-100 hover:bg-rose-900 light:hover:bg-rose-200 border border-rose-500/40 text-rose-300 light:text-rose-800 font-bold py-2 rounded-xl text-xs transition flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-black py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-2"
                   >
-                    <LogOut className="w-4 h-4 text-rose-400 light:text-rose-700" /> Sign Out Session
+                    <LogOut className="w-4 h-4 stroke-[2.5]" /> Sign Out Session
                   </button>
                 </div>
               </div>

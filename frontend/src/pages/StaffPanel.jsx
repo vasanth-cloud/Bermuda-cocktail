@@ -150,15 +150,21 @@ export default function StaffPanel() {
 
   const handleConfirmPayment = async (e) => {
     e.preventDefault();
-    if (!activePaymentOrder || !amountCollected) return;
+    if (!activePaymentOrder) return;
 
     setIsSubmittingPayment(true);
-    const success = await collectPayment(
-      activePaymentOrder.id,
-      paymentMode,
-      amountCollected,
-      waiterName
-    );
+    let success = false;
+    if (activePaymentOrder.id && activePaymentOrder.id !== 0) {
+      success = await collectPayment(
+        activePaymentOrder.id,
+        paymentMode,
+        amountCollected || 0,
+        waiterName || currentUser?.name || 'Waiter'
+      );
+    } else if (activePaymentOrder.table_id) {
+      await settleTableBill(activePaymentOrder.table_id);
+      success = true;
+    }
     setIsSubmittingPayment(false);
 
     if (success) {
@@ -398,7 +404,17 @@ export default function StaffPanel() {
                     return (
                       <div
                         key={table.id}
-                        className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
+                        onClick={() => {
+                          if (activeOrder) {
+                            setEditingOrderForWaiter(activeOrder);
+                            setItemsToAdd([]);
+                          } else {
+                            setSelectedTable(table);
+                            setActiveTab('customer');
+                          }
+                        }}
+                        className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group hover:scale-[1.03] shadow-md ${statusStyle.cardClass}`}
+                        title={`Click to view/edit order for Table ${table.table_number}`}
                       >
                         {/* Top Row: Duration & Claimed Waiter Name */}
                         <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
@@ -418,19 +434,28 @@ export default function StaffPanel() {
                           </div>
                         </div>
 
-                        {/* Bottom Row: Quick Action Icons */}
-                        <div className="flex items-center justify-center gap-1.5 pt-0.5 border-t border-black/10">
+                        {/* Bottom Row: Quick Action Buttons */}
+                        <div className="flex items-center justify-center gap-1 pt-0.5 border-t border-black/20">
                           {/* Print Icon Button */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setActivePrintOrder(activeOrder);
+                              const orderToPrint = activeOrder || {
+                                id: 0,
+                                order_number: `ORD-${table.table_number}`,
+                                table: table,
+                                customer_name: 'Guest',
+                                total_amount: 0,
+                                items: [],
+                                waiter_name: currentUser?.name || 'Waiter'
+                              };
+                              setActivePrintOrder(orderToPrint);
                             }}
-                            className="p-1 rounded bg-black/20 hover:bg-black/40 transition text-white"
+                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-white"
                             title="Print KOT / Bill Receipt"
                           >
-                            <Printer className="w-3 h-3" />
+                            <Printer className="w-3.5 h-3.5" />
                           </button>
 
                           {/* View/Edit Icon Button */}
@@ -441,12 +466,15 @@ export default function StaffPanel() {
                               if (activeOrder) {
                                 setEditingOrderForWaiter(activeOrder);
                                 setItemsToAdd([]);
+                              } else {
+                                setSelectedTable(table);
+                                setActiveTab('customer');
                               }
                             }}
-                            className="p-1 rounded bg-black/20 hover:bg-black/40 transition text-white"
+                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-white"
                             title="View / Edit Order Items"
                           >
-                            <Eye className="w-3 h-3" />
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Pay / Collect Icon Button */}
@@ -454,15 +482,21 @@ export default function StaffPanel() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (activeOrder) {
-                                setActivePaymentOrder(activeOrder);
-                                setAmountCollected(activeOrder.total_amount.toString());
-                              }
+                              const paymentOrder = activeOrder || {
+                                id: 0,
+                                order_number: `ORD-${table.table_number}`,
+                                table_id: table.id,
+                                table: table,
+                                total_amount: 0,
+                                items: []
+                              };
+                              setActivePaymentOrder(paymentOrder);
+                              setAmountCollected((paymentOrder.total_amount || 0).toString());
                             }}
-                            className="p-1 rounded bg-black/20 hover:bg-black/40 transition text-white"
-                            title="Collect Payment"
+                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-white"
+                            title="Collect Payment & Settle Table"
                           >
-                            <DollarSign className="w-3 h-3" />
+                            <DollarSign className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
