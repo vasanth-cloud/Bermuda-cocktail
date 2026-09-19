@@ -29,27 +29,27 @@ export default function LoginPage({ onBypassGuest }) {
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
-      {/* Real High-Def Cocktail Bar Photography Background with Transparent Overlay */}
+      {/* Premium Pub & Cocktail Bar Photography Background (No logos in background) */}
       <div 
-        className="absolute inset-0 bg-cover bg-center opacity-40 scale-105 pointer-events-none"
-        style={{ backgroundImage: `url('https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1600&q=80')` }}
+        className="absolute inset-0 bg-cover bg-center opacity-50 scale-105 pointer-events-none transition-transform duration-1000"
+        style={{ backgroundImage: `url('https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1920&q=80')` }}
       />
-      {/* Semi-Transparent Dark Glass Overlay */}
-      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-md pointer-events-none" />
+      {/* Dark Ambient Glass Vignette Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/65 to-slate-950 backdrop-blur-md pointer-events-none" />
 
-      {/* Main Transparent Centered Card */}
+      {/* Main Centered Content Container */}
       <div className="relative z-10 w-full max-w-sm flex flex-col items-center justify-center text-center space-y-5">
-        {/* Simple Vertical Brand Logo */}
+        {/* Vertical Brand Logo at Top Center of Form */}
         <div className="text-center space-y-1.5">
-          <BermudaLogo variant="login" size="xl" className="mx-auto" />
-          <h1 className="text-xl sm:text-2xl font-black text-amber-400 tracking-tight">
+          <BermudaLogo variant="login" size="xl" className="mx-auto drop-shadow-2xl" />
+          <h1 className="text-xl sm:text-2xl font-black text-amber-400 tracking-tight drop-shadow">
             BERMUDA PUB POS
           </h1>
-          <p className="text-xs text-slate-300 font-medium">Sign in to access your terminal</p>
+          <p className="text-xs text-slate-300 font-medium drop-shadow">Sign in to access your terminal</p>
         </div>
 
         {/* Clean Glassmorphic Centered Form Card */}
-        <div className="bg-slate-900/60 border border-amber-500/30 rounded-3xl p-6 shadow-2xl backdrop-blur-xl w-full space-y-4">
+        <div className="bg-slate-900/70 border border-amber-500/30 rounded-3xl p-6 shadow-2xl backdrop-blur-xl w-full space-y-4">
           {errorMsg && (
             <div className="bg-rose-950/80 border border-rose-500/40 text-rose-300 p-3 rounded-xl text-xs flex items-center justify-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -66,7 +66,7 @@ export default function LoginPage({ onBypassGuest }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="avasanth081@gmail.com"
-                  className="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-4 py-2.5 text-xs text-slate-100 text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 transition shadow-inner"
+                  className="w-full bg-slate-950/85 border border-slate-700/80 rounded-xl px-4 py-2.5 text-xs text-slate-100 text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 transition shadow-inner"
                   required
                 />
               </div>
@@ -80,7 +80,7 @@ export default function LoginPage({ onBypassGuest }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-4 py-2.5 text-xs text-slate-100 text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 transition shadow-inner"
+                  className="w-full bg-slate-950/85 border border-slate-700/80 rounded-xl px-4 py-2.5 text-xs text-slate-100 text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 transition shadow-inner"
                   required
                 />
               </div>
@@ -101,7 +101,7 @@ export default function LoginPage({ onBypassGuest }) {
           <div className="text-center pt-1">
             <button
               onClick={onBypassGuest}
-              className="text-xs text-slate-300 hover:text-amber-400 font-semibold transition flex items-center justify-center gap-1.5 mx-auto bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800"
+              className="text-xs text-slate-300 hover:text-amber-400 font-semibold transition flex items-center justify-center gap-1.5 mx-auto bg-slate-900/60 px-3.5 py-1.5 rounded-full border border-slate-800 shadow"
             >
               <QrCode className="w-3.5 h-3.5 text-amber-400" /> Browse Customer QR Menu (Guest View)
             </button>
