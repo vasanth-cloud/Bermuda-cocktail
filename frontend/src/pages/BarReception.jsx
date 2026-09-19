@@ -156,8 +156,8 @@ export default function BarReception() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredOrders.map((order) => {
             const isBilled = order.status === 'BILLED';
-            const barItems = order.items.filter((it) => it.target_dept === 'BAR');
-            const kitchenItems = order.items.filter((it) => it.target_dept === 'KITCHEN');
+            const barItems = order.items.filter((it) => (it.target_dept || '').toUpperCase() === 'BAR');
+            const kitchenItems = order.items.filter((it) => (it.target_dept || '').toUpperCase() === 'KITCHEN');
 
             // COMPACT SLIM CARD FOR BILLED ORDERS
             if (isBilled) {

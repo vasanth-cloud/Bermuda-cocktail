@@ -476,21 +476,22 @@ def get_orders(
 
     orders = query.order_by(models.Order.created_at.desc()).all()
 
-    # Filter items if target_dept specified
+    # Convert to Pydantic schemas first so we DO NOT mutate SQLAlchemy ORM objects in session
+    dtos = [schemas.OrderSchema.model_validate(ord) for ord in orders]
+
     if target_dept:
         filtered_orders = []
         target_dept_upper = target_dept.upper()
-        for ord in orders:
-            if ord.status == "BILLED":
+        for dto in dtos:
+            if dto.status == "BILLED":
                 continue
-            dept_items = [it for it in ord.items if (it.target_dept or "").upper() == target_dept_upper]
+            dept_items = [it for it in dto.items if (it.target_dept or "").upper() == target_dept_upper]
             if dept_items:
-                # Clone order object with filtered items for response
-                ord.items = dept_items
-                filtered_orders.append(ord)
+                dto.items = dept_items
+                filtered_orders.append(dto)
         return filtered_orders
 
-    return orders
+    return dtos
 
 @app.patch("/api/orders/{order_id}/status")
 async def update_order_status(order_id: int, status_update: schemas.OrderStatusUpdate, db: Session = Depends(get_db)):
@@ -528,8 +529,8 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
     db.commit()
     db.refresh(order)
 
-    bar_items_count = sum(1 for it in order.items if it.target_dept == "BAR")
-    kitchen_items_count = sum(1 for it in order.items if it.target_dept == "KITCHEN")
+    bar_items_count = sum(1 for it in order.items if (it.target_dept or "").upper() == "BAR")
+    kitchen_items_count = sum(1 for it in order.items if (it.target_dept or "").upper() == "KITCHEN")
 
     order_payload = {
         "event": "WAITER_CONFIRMED_ORDER",

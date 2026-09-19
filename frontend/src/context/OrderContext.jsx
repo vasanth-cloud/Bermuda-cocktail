@@ -295,7 +295,7 @@ export const OrderProvider = ({ children }) => {
   useEffect(() => {
     fetchData();
     fetchOrders();
-  }, []);
+  }, [activeTab]);
 
   const playNotificationChime = () => {
     try {
@@ -343,14 +343,18 @@ export const OrderProvider = ({ children }) => {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-          if (!isDisposed) setWsConnected(true);
+          if (!isDisposed) {
+            setWsConnected(true);
+            fetchOrders();
+            fetchData();
+          }
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER'].includes(data.event)) {
-              if (data.event === 'NEW_ORDER' || data.event === 'ITEM_STATUS_UPDATED') {
+            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
+              if (['NEW_ORDER', 'ITEM_STATUS_UPDATED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
                 playNotificationChime();
               }
               fetchOrders();

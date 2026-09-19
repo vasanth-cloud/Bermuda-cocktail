@@ -41,7 +41,7 @@ export default function KitchenKDS() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {kitchenOrders.map((order) => {
-            const foodItems = order.items.filter((it) => it.target_dept === 'KITCHEN');
+            const foodItems = order.items.filter((it) => (it.target_dept || '').toUpperCase() === 'KITCHEN');
             if (foodItems.length === 0) return null;
 
             return (

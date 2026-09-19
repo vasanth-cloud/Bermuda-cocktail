@@ -222,9 +222,9 @@ export default function CustomerMenu() {
 
                     <div className="flex items-center gap-1.5">
                       <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                        item.target_dept === 'BAR' ? 'bg-purple-950 text-purple-300 border border-purple-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                        (item.target_dept || '').toUpperCase() === 'BAR' ? 'bg-purple-950 text-purple-300 border border-purple-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                       }`}>
-                        {item.target_dept === 'BAR' ? '🍸 Bar' : '🍳 Kitchen'}
+                        {(item.target_dept || '').toUpperCase() === 'BAR' ? '🍸 Bar' : '🍳 Kitchen'}
                       </span>
 
                       <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
@@ -288,7 +288,7 @@ export default function CustomerMenu() {
       <div className="space-y-2.5 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-3 sm:space-y-0">
         {filteredProducts.map((product) => {
           const inCart = cart.find((item) => item.product_id === product.id);
-          const isBar = product.target_dept === 'BAR';
+          const isBar = (product.target_dept || '').toUpperCase() === 'BAR';
           const isAvailable = product.is_available ?? true;
           const thumbUrl = productThumbnails[product.id] || (isBar 
             ? 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80'
@@ -424,9 +424,9 @@ export default function CustomerMenu() {
                       <div className="font-bold text-slate-200 flex items-center gap-1.5">
                         {item.product.name}
                         <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                          item.product.target_dept === 'BAR' ? 'bg-purple-900 text-purple-300' : 'bg-emerald-900 text-emerald-300'
+                          (item.product?.target_dept || '').toUpperCase() === 'BAR' ? 'bg-purple-900 text-purple-300' : 'bg-emerald-900 text-emerald-300'
                         }`}>
-                          {item.product.target_dept === 'BAR' ? 'Bar' : 'Kitchen'}
+                          {(item.product?.target_dept || '').toUpperCase() === 'BAR' ? 'Bar' : 'Kitchen'}
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">₹{item.product.price} x {item.quantity} = ₹{item.product.price * item.quantity}</div>
