@@ -102,14 +102,23 @@ export default function CustomerMenu() {
               onClick={async () => {
                 setIsSubmitting(true);
                 const claimingWaiter = currentUser?.name || 'Waiter';
+                
                 // 1. Submit cart items if waiter added extra items
+                let newOrderObj = null;
                 if (cart.length > 0) {
-                  await submitOrder(claimingWaiter);
+                  newOrderObj = await submitOrder(claimingWaiter);
                 }
-                // 2. Confirm pending customer order if present
-                if (tableActiveOrder && (tableActiveOrder.status === 'PENDING' || tableActiveOrder.status === 'PENDING_WAITER')) {
-                  await confirmOrderAsWaiter(tableActiveOrder.id, claimingWaiter);
+                
+                // 2. Find any pending/unconfirmed order for this table
+                const pendingOrd = allOrders?.find(
+                  o => Number(o.table_id) === Number(selectedTable?.id) && 
+                  (o.status === 'PENDING' || o.status === 'PENDING_WAITER')
+                ) || newOrderObj || tableActiveOrder;
+
+                if (pendingOrd && pendingOrd.id) {
+                  await confirmOrderAsWaiter(pendingOrd.id, claimingWaiter);
                 }
+
                 setIsSubmitting(false);
                 setActiveTab('staff');
               }}
