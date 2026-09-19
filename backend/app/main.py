@@ -31,25 +31,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 @app.on_event("startup")
 def startup_event():
+    # Auto-add missing columns to users & orders tables dynamically
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+
+        if "users" in tables:
+            user_cols = [c["name"] for c in inspector.get_columns("users")]
+            if "allowed_terminals" not in user_cols:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN allowed_terminals VARCHAR DEFAULT 'customer,staff'"))
+                    conn.commit()
+
+        if "orders" in tables:
+            order_cols = [c["name"] for c in inspector.get_columns("orders")]
+            col_definitions = {
+                "payment_status": "ALTER TABLE orders ADD COLUMN payment_status VARCHAR DEFAULT 'PENDING'",
+                "payment_mode": "ALTER TABLE orders ADD COLUMN payment_mode VARCHAR",
+                "amount_collected": "ALTER TABLE orders ADD COLUMN amount_collected FLOAT DEFAULT 0.0",
+                "collected_by": "ALTER TABLE orders ADD COLUMN collected_by VARCHAR"
+            }
+            for col_name, col_cmd in col_definitions.items():
+                if col_name not in order_cols:
+                    with engine.connect() as conn:
+                        conn.execute(text(col_cmd))
+                        conn.commit()
+    except Exception as e:
+        print(f"Database migration inspection warning: {e}")
+
     db = next(get_db())
-    # Auto-add missing columns to SQLite orders table if needed
-    with engine.connect() as conn:
-        for col_cmd in [
-            "ALTER TABLE orders ADD COLUMN payment_status VARCHAR DEFAULT 'PENDING'",
-            "ALTER TABLE orders ADD COLUMN payment_mode VARCHAR",
-            "ALTER TABLE orders ADD COLUMN amount_collected FLOAT DEFAULT 0.0",
-            "ALTER TABLE orders ADD COLUMN collected_by VARCHAR",
-            "ALTER TABLE users ADD COLUMN allowed_terminals VARCHAR DEFAULT 'customer,staff'"
-        ]:
-            try:
-                conn.execute(text(col_cmd))
-                conn.commit()
-            except Exception:
-                pass
     seed_initial_data(db)
 
 # --- WebSocket Endpoint ---
