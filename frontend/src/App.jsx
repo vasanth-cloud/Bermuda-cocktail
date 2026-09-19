@@ -88,7 +88,7 @@ function AppContent() {
   const [guestBypass, setGuestBypass] = useState(false);
 
   // Pure Customer QR Scan Mode (e.g. ?table=DN-01) - Dedicated mobile view
-  if (isCustomerQrMode && !currentUser) {
+  if (isCustomerQrMode) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative overflow-x-hidden pub-ambient-bg">
         <div className="pub-spotlight spotlight-left pointer-events-none" />
