@@ -1,32 +1,64 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
-import { Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check, Edit2, Trash2, Search, X } from 'lucide-react';
+import { 
+  Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, 
+  ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check, Edit2, 
+  Trash2, Search, X, Printer, Eye, LogOut, HelpCircle, RefreshCw, Layers
+} from 'lucide-react';
 
 export default function StaffPanel() {
-  const { tables, zones, setSelectedTable, setActiveTab, allOrders, collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter, addItemsToOrder, deleteOrderItem, products, categories } = useOrder();
-  const [selectedZoneFilter, setSelectedZoneFilter] = useState('ALL');
+  const { 
+    tables, zones, setSelectedTable, setActiveTab, allOrders, 
+    collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter, 
+    addItemsToOrder, deleteOrderItem, products, categories, logoutUser, currentUser 
+  } = useOrder();
+
+  // Search & Filter state for POS Top Bar
+  const [searchBillNo, setSearchBillNo] = useState('');
+  const [searchKotNo, setSearchKotNo] = useState('');
 
   // Payment Collection Modal State
   const [activePaymentOrder, setActivePaymentOrder] = useState(null);
   const [paymentMode, setPaymentMode] = useState('CASH');
   const [amountCollected, setAmountCollected] = useState('');
-  const [waiterName, setWaiterName] = useState('Waiter');
+  const [waiterName, setWaiterName] = useState(currentUser?.name || 'Waiter');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
+
+  // Print Bill / KOT Modal State
+  const [activePrintOrder, setActivePrintOrder] = useState(null);
 
   // Waiter Order Edit Modal State
   const [editingOrderForWaiter, setEditingOrderForWaiter] = useState(null);
   const [modalCategoryFilter, setModalCategoryFilter] = useState('ALL');
-  const [modalSearchQuery, setModalSearchQuery] = useState('');
   const [itemsToAdd, setItemsToAdd] = useState([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Format table label (e.g. DN-15 -> D15, SZ-10 -> S10, C1 -> C1)
+  const formatTableLabel = (num) => {
+    if (!num) return 'T';
+    return num.replace(/^DN-/i, 'D').replace(/^SZ-/i, 'S');
+  };
+
+  // Calculate elapsed time in minutes from order creation
+  const getElapsedTimeStr = (createdAt) => {
+    if (!createdAt) return '0 Min';
+    const start = new Date(createdAt).getTime();
+    const now = new Date().getTime();
+    const diffMins = Math.max(0, Math.floor((now - start) / (1000 * 60)));
+    return `${diffMins} Min`;
+  };
+
+  const getTableActiveOrder = (tableId) => {
+    return allOrders.find((o) => o.table_id === tableId && o.status !== 'BILLED');
+  };
 
   const getTableStatusStyle = (table, activeOrder) => {
     if (!activeOrder && (table.current_status === 'VACANT' || !table.current_status)) {
       return {
         label: 'VACANT',
-        badgeClass: 'bg-white text-slate-950 font-black shadow border border-slate-200',
-        cardClass: 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+        type: 'VACANT',
+        cardClass: 'bg-slate-100 text-slate-900 border-2 border-slate-300 hover:border-slate-400 hover:bg-white shadow-sm'
       };
     }
     
@@ -34,8 +66,8 @@ export default function StaffPanel() {
       if (activeOrder.status === 'BILLED' || activeOrder.payment_status === 'COLLECTED') {
         return {
           label: 'PAID TABLE',
-          badgeClass: 'bg-amber-400 text-slate-950 font-black shadow border border-amber-300',
-          cardClass: 'border-amber-500/60 bg-amber-950/20 hover:border-amber-400'
+          type: 'PAID',
+          cardClass: 'bg-amber-400 text-slate-950 border-2 border-amber-300 shadow-md shadow-amber-500/20 font-black'
         };
       }
       
@@ -45,47 +77,39 @@ export default function StaffPanel() {
       if (allItemsReadyOrServed || activeOrder.status === 'SERVED' || activeOrder.status === 'PRINTED') {
         return {
           label: 'PRINTED / FINISHED',
-          badgeClass: 'bg-emerald-500 text-slate-950 font-black shadow border border-emerald-400',
-          cardClass: 'border-emerald-500/60 bg-emerald-950/20 hover:border-emerald-400'
+          type: 'PRINTED',
+          cardClass: 'bg-emerald-600 text-white border-2 border-emerald-400 shadow-md shadow-emerald-600/30 font-bold'
         };
       }
 
       return {
         label: 'RUNNING TABLE',
-        badgeClass: 'bg-blue-600 text-white font-black shadow border border-blue-400',
-        cardClass: 'border-blue-500/60 bg-blue-950/20 hover:border-blue-400'
+        type: 'RUNNING',
+        cardClass: 'bg-blue-600 text-white border-2 border-blue-400 shadow-md shadow-blue-600/30 font-bold'
       };
     }
 
     if (table.current_status === 'BILLED' || table.current_status === 'PAID') {
       return {
         label: 'PAID TABLE',
-        badgeClass: 'bg-amber-400 text-slate-950 font-black shadow border border-amber-300',
-        cardClass: 'border-amber-500/60 bg-amber-950/20'
+        type: 'PAID',
+        cardClass: 'bg-amber-400 text-slate-950 border-2 border-amber-300 shadow-md shadow-amber-500/20 font-black'
       };
     }
 
     if (table.current_status === 'OCCUPIED') {
       return {
         label: 'RUNNING TABLE',
-        badgeClass: 'bg-blue-600 text-white font-black shadow border border-blue-400',
-        cardClass: 'border-blue-500/60 bg-blue-950/20'
+        type: 'RUNNING',
+        cardClass: 'bg-blue-600 text-white border-2 border-blue-400 shadow-md shadow-blue-600/30 font-bold'
       };
     }
 
     return {
       label: 'VACANT',
-      badgeClass: 'bg-white text-slate-950 font-black shadow border border-slate-200',
-      cardClass: 'border-slate-800 bg-slate-900/80'
+      type: 'VACANT',
+      cardClass: 'bg-slate-100 text-slate-900 border-2 border-slate-300 hover:border-slate-400 hover:bg-white shadow-sm'
     };
-  };
-
-  const filteredTables = tables.filter((t) => {
-    return selectedZoneFilter === 'ALL' || t.zone_id === Number(selectedZoneFilter);
-  });
-
-  const getTableActiveOrder = (tableId) => {
-    return allOrders.find((o) => o.table_id === tableId && o.status !== 'BILLED');
   };
 
   // Customer order requests awaiting Waiter confirmation at table
@@ -134,258 +158,325 @@ export default function StaffPanel() {
     }
   };
 
+  // Group tables by Zone for clean POS floor sections
+  const groupedSections = zones.map((zone) => {
+    const zoneTables = tables.filter((t) => t.zone_id === zone.id);
+    return {
+      zone,
+      tables: zoneTables
+    };
+  });
+
+  // Include tables with no zone assigned
+  const unzonedTables = tables.filter((t) => !t.zone_id);
+  if (unzonedTables.length > 0) {
+    groupedSections.push({
+      zone: { id: 0, display_name: 'General Pub Tables' },
+      tables: unzonedTables
+    });
+  }
+
+  // Filter tables by Bill Search or KOT Search if typed
+  const isTableMatchingSearch = (table) => {
+    if (!searchBillNo && !searchKotNo) return true;
+    const activeOrder = getTableActiveOrder(table.id);
+    if (!activeOrder) return false;
+    
+    let match = true;
+    if (searchBillNo && !activeOrder.order_number.toLowerCase().includes(searchBillNo.toLowerCase())) {
+      match = false;
+    }
+    if (searchKotNo && (!activeOrder.items || !activeOrder.items.some(i => i.id.toString().includes(searchKotNo)))) {
+      match = false;
+    }
+    return match;
+  };
+
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+    <div className="w-full bg-slate-950 text-slate-100 min-h-screen pb-12 font-sans space-y-4">
+      {/* PETPOOJA STYLE CLEAN POS TOP TOOLBAR */}
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-xl">
+        {/* Branding & New Order Button */}
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center">
-            <Users className="w-6 h-6" />
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-rose-600 text-white font-black flex items-center justify-center text-xs shadow-md">
+              POS
+            </span>
+            <div>
+              <h1 className="text-sm font-black text-slate-100 leading-tight">
+                The Bermuda <span className="text-slate-400 font-normal text-xs">(R334657)</span>
+              </h1>
+              <p className="text-[10px] text-slate-400">Restaurant Management Platform</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-black text-slate-100 flex items-center gap-2">
-              Waiter & Floor Staff Panel
-              <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 font-mono">
-                LIVE FLOOR & PAYMENTS
-              </span>
-            </h2>
-            <p className="text-xs text-slate-400">
-              Confirm table orders with customers, route drinks to Bar & food to Kitchen KOT, serve items, and collect Cash / UPI payments.
-            </p>
+
+          <button
+            onClick={() => setActiveTab('customer')}
+            className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-black px-3.5 py-1.5 rounded-lg transition shadow flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" /> New Order
+          </button>
+        </div>
+
+        {/* Search Inputs */}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            <input
+              type="text"
+              placeholder="Q Bill No"
+              value={searchBillNo}
+              onChange={(e) => setSearchBillNo(e.target.value)}
+              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-lg pl-8 pr-2.5 py-1.5 w-28 focus:outline-none focus:border-rose-500"
+            />
+          </div>
+
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            <input
+              type="text"
+              placeholder="Q KOT No"
+              value={searchKotNo}
+              onChange={(e) => setSearchKotNo(e.target.value)}
+              className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-lg pl-8 pr-2.5 py-1.5 w-28 focus:outline-none focus:border-rose-500"
+            />
           </div>
         </div>
 
-        {/* Zone Filters */}
-        <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800 overflow-x-auto">
-          <button
-            onClick={() => setSelectedZoneFilter('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-              selectedZoneFilter === 'ALL' ? 'bg-blue-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            All Zones ({tables.length})
+        {/* Action Toolbar Icons */}
+        <div className="flex items-center gap-3 text-xs text-slate-300">
+          <button onClick={() => window.location.reload()} className="flex items-center gap-1 hover:text-slate-100 transition">
+            <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden md:inline">Refresh</span>
           </button>
-          {zones.map((z) => (
-            <button
-              key={z.id}
-              onClick={() => setSelectedZoneFilter(z.id.toString())}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                selectedZoneFilter === z.id.toString() ? 'bg-blue-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {z.display_name}
+
+          <button onClick={() => setActiveTab('staff')} className="flex items-center gap-1 hover:text-slate-100 transition">
+            <Layers className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden md:inline">Live View</span>
+          </button>
+
+          {readyItemsForPickup.length > 0 && (
+            <div className="flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-lg text-xs font-bold animate-pulse">
+              <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <span>{readyItemsForPickup.length} Ready</span>
+            </div>
+          )}
+
+          {logoutUser && (
+            <button onClick={logoutUser} className="flex items-center gap-1 text-rose-400 hover:text-rose-300 transition">
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Logout</span>
             </button>
-          ))}
+          )}
+
+          <div className="bg-rose-950/60 border border-rose-500/30 text-rose-300 text-[11px] font-bold px-2.5 py-1 rounded-lg">
+            Help 07969 223344
+          </div>
         </div>
       </div>
 
-      {/* Customer QR Order Requests Awaiting Waiter Confirmation */}
-      {pendingCustomerOrderRequests.length > 0 && (
-        <div className="bg-gradient-to-r from-amber-950/80 via-slate-900 to-amber-950/80 border-2 border-amber-500/80 p-5 rounded-2xl shadow-2xl space-y-4">
-          <div className="flex items-center justify-between border-b border-amber-500/30 pb-3">
-            <div className="flex items-center gap-2 font-black text-amber-300 text-sm uppercase tracking-wider">
-              <Check className="w-5 h-5 text-amber-400" />
-              <span>📩 {pendingCustomerOrderRequests.length} Customer QR Order Requests Awaiting Waiter Confirmation</span>
+      <div className="px-4 sm:px-6 space-y-5">
+        {/* Customer QR Order Requests Awaiting Waiter Confirmation */}
+        {pendingCustomerOrderRequests.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-950/80 via-slate-900 to-amber-950/80 border border-amber-500/60 p-4 rounded-xl shadow-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
+              <div className="flex items-center gap-2 font-black text-amber-300 text-xs uppercase tracking-wider">
+                <Check className="w-4 h-4 text-amber-400" />
+                <span>📩 {pendingCustomerOrderRequests.length} Customer QR Orders Awaiting Confirmation</span>
+              </div>
             </div>
-            <span className="text-xs bg-amber-500/20 text-amber-300 font-mono px-3 py-1 rounded-full border border-amber-500/40">
-              Review & Confirm at Table
-            </span>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingCustomerOrderRequests.map((ord) => (
-              <div key={ord.id} className="bg-slate-950 border border-amber-500/40 p-4 rounded-xl space-y-3 shadow-lg">
-                <div className="flex items-center justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {pendingCustomerOrderRequests.map((ord) => (
+                <div key={ord.id} className="bg-slate-950 border border-amber-500/40 p-3 rounded-lg space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-amber-400 font-mono font-bold">{ord.order_number}</span>
+                      <h4 className="font-black text-slate-100 text-sm">Table {ord.table?.table_number || 'ST-01'}</h4>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-black text-amber-400 text-sm">₹{ord.total_amount}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingOrderForWaiter(ord);
+                        setItemsToAdd([]);
+                      }}
+                      className="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                    >
+                      <Edit2 className="w-3 h-3" /> Edit
+                    </button>
+
+                    <button
+                      disabled={confirmingOrderId === ord.id}
+                      onClick={() => handleConfirmOrder(ord.id)}
+                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center justify-center gap-1"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      {confirmingOrderId === ord.id ? 'Routing...' : 'Confirm Order'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Live Pickup Alert Banner for Waiters */}
+        {readyItemsForPickup.length > 0 && (
+          <div className="bg-amber-950/40 border border-amber-500/60 p-3.5 rounded-xl shadow-lg space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-amber-400 text-xs uppercase">
+                <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
+                <span>🔔 {readyItemsForPickup.length} Items Ready for Pickup!</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+              {readyItemsForPickup.map(({ item, order, tableNumber }) => (
+                <div key={item.id} className="bg-slate-950 border border-slate-800 p-2.5 rounded-lg flex items-center justify-between text-xs">
                   <div>
-                    <span className="text-xs text-amber-400 font-mono font-bold uppercase">{ord.order_number}</span>
-                    <h4 className="text-lg font-black text-slate-100">Table {ord.table?.table_number || 'ST-01'}</h4>
-                    <p className="text-xs text-slate-400">Customer: <span className="text-slate-200 font-bold">{ord.customer_name}</span></p>
+                    <div className="font-black text-slate-100">Table {tableNumber}</div>
+                    <div className="text-[11px] text-slate-300">{item.quantity}x {item.product?.name || `Item #${item.product_id}`}</div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-base font-black text-amber-400">₹{ord.total_amount}</div>
-                    <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
-                      Awaiting Waiter
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900 p-2.5 rounded-lg space-y-1 text-xs">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Requested Items:</div>
-                  {ord.items.map((it) => (
-                    <div key={it.id} className="flex items-center justify-between text-slate-200">
-                      <span>{it.quantity}x {it.product?.name || `Item #${it.product_id}`}</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                        it.target_dept === 'BAR' ? 'bg-purple-950 text-purple-300' : 'bg-emerald-950 text-emerald-300'
-                      }`}>
-                        {it.target_dept === 'BAR' ? '🍸 Bar' : '🍳 Kitchen'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
                   <button
-                    onClick={() => {
-                      setEditingOrderForWaiter(ord);
-                      setItemsToAdd([]);
-                    }}
-                    className="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow"
-                    title="Add extra drinks/food or remove items"
+                    onClick={() => updateItemStatus(item.id, 'SERVED')}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1"
                   >
-                    <Edit2 className="w-3.5 h-3.5" /> Edit / Add Items
-                  </button>
-
-                  <button
-                    disabled={confirmingOrderId === ord.id}
-                    onClick={() => handleConfirmOrder(ord.id)}
-                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/20"
-                  >
-                    <Check className="w-4 h-4" />
-                    {confirmingOrderId === ord.id ? 'Routing to Bar & Kitchen...' : 'Confirm & Route Order to Bar/Kitchen'}
+                    <Check className="w-3.5 h-3.5" /> Served
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Live Pickup Alert Banner for Waiters */}
-      {readyItemsForPickup.length > 0 && (
-        <div className="bg-amber-950/40 border-2 border-amber-500/60 p-5 rounded-2xl shadow-2xl space-y-3 animate-pulse">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-black text-amber-400 text-sm uppercase tracking-wider">
-              <Bell className="w-5 h-5 text-amber-400 animate-bounce" />
-              <span>🔔 {readyItemsForPickup.length} Items Prepared & Ready for Pickup!</span>
+              ))}
             </div>
-            <span className="text-xs text-slate-400 font-mono">Notify Waiter</span>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {readyItemsForPickup.map(({ item, order, tableNumber }) => (
-              <div key={item.id} className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
-                <div>
-                  <div className="font-extrabold text-slate-100 text-sm">
-                    Table {tableNumber}
-                  </div>
-                  <div className="text-xs text-slate-300 font-medium">
-                    {item.quantity}x {item.product?.name || `Item #${item.product_id}`}
-                  </div>
-                  <span className={`text-[10px] font-bold font-mono px-1.5 py-0.2 rounded mt-1 inline-block ${
-                    item.target_dept === 'BAR' ? 'bg-purple-950 text-purple-300' : 'bg-emerald-950 text-emerald-300'
-                  }`}>
-                    {item.target_dept === 'BAR' ? '🍸 Bar Ready' : '🍳 Kitchen Ready'}
-                  </span>
-                </div>
+        {/* STACKED POS FLOOR SECTIONS (PETPOOJA POS STYLE GRID) */}
+        <div className="space-y-6">
+          {groupedSections.map(({ zone, tables: sectionTables }) => {
+            const filteredSectionTables = sectionTables.filter(isTableMatchingSearch);
+            if (filteredSectionTables.length === 0) return null;
 
-                <button
-                  onClick={() => updateItemStatus(item.id, 'SERVED')}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1 shadow-md"
-                >
-                  <Check className="w-4 h-4" /> Served
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Tables Grid categorized by Zone */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filteredTables.map((table) => {
-          const activeOrder = getTableActiveOrder(table.id);
-          const isOccupied = !!activeOrder;
-          const barItems = activeOrder ? activeOrder.items.filter(i => i.target_dept === 'BAR') : [];
-          const kitchenItems = activeOrder ? activeOrder.items.filter(i => i.target_dept === 'KITCHEN') : [];
-          const statusStyle = getTableStatusStyle(table, activeOrder);
-
-          return (
-            <div
-              key={table.id}
-              className={`border rounded-2xl p-5 shadow-xl transition flex flex-col justify-between relative overflow-hidden ${statusStyle.cardClass}`}
-            >
-              <div>
-                {/* Zone Tag & Custom Color Status Pill */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-                    {table.zone?.display_name || 'Zone'}
-                  </span>
-                  <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${statusStyle.badgeClass}`}>
-                    {statusStyle.label}
-                  </span>
-                </div>
-
-                <div className="mb-3">
-                  <h3 className="text-2xl font-black text-slate-100">
-                    Table {table.table_number}
+            return (
+              <div key={zone.id} className="space-y-2.5">
+                {/* Clean Section Header */}
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5">
+                  <h3 className="font-extrabold text-sm text-slate-200 tracking-wide">
+                    {zone.display_name}
                   </h3>
-                  <div className="text-xs text-slate-400 font-mono mt-0.5">
-                    Capacity: {table.capacity} Persons
-                  </div>
+                  <span className="text-xs font-mono text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+                    {filteredSectionTables.length} Tables
+                  </span>
                 </div>
 
-                {/* Active Order Summary & Department Routing Breakdown */}
-                {activeOrder ? (
-                  <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-2 mb-4">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-mono">#{activeOrder.order_number}</span>
-                      <span className="font-extrabold text-amber-400 text-sm">₹{activeOrder.total_amount}</span>
-                    </div>
+                {/* Dense Uniform POS Table Grid */}
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2">
+                  {filteredSectionTables.map((table) => {
+                    const activeOrder = getTableActiveOrder(table.id);
+                    const statusStyle = getTableStatusStyle(table, activeOrder);
+                    const tableLabel = formatTableLabel(table.table_number);
 
-                    <div className="space-y-1 border-t border-slate-800/80 pt-2 text-[11px]">
-                      <div className="flex justify-between items-center text-purple-400">
-                        <span className="flex items-center gap-1 font-semibold">
-                          <Wine className="w-3 h-3" /> Bar ({barItems.length}):
-                        </span>
-                        <span className="font-mono font-bold">
-                          {barItems.filter(i => i.status === 'READY' || i.status === 'SERVED').length}/{barItems.length} Ready
-                        </span>
+                    // 1. VACANT TABLE CARD
+                    if (statusStyle.type === 'VACANT') {
+                      return (
+                        <div
+                          key={table.id}
+                          onClick={() => {
+                            setSelectedTable(table);
+                            setActiveTab('customer');
+                          }}
+                          className={`h-16 rounded-xl flex items-center justify-center transition cursor-pointer select-none shadow-sm ${statusStyle.cardClass}`}
+                          title={`Open menu for table ${table.table_number}`}
+                        >
+                          <span className="text-lg font-black text-slate-800 tracking-tight">
+                            {tableLabel}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    // 2. OCCUPIED TABLE CARD (RUNNING / PRINTED / PAID)
+                    const elapsedTime = activeOrder ? getElapsedTimeStr(activeOrder.created_at) : '0 Min';
+                    const amountStr = activeOrder ? `₹${activeOrder.total_amount}` : '₹0';
+
+                    return (
+                      <div
+                        key={table.id}
+                        className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
+                      >
+                        {/* Top Row: Duration */}
+                        <div className="flex items-center justify-between text-[9px] font-mono leading-none">
+                          <span className="opacity-90 font-semibold">{elapsedTime}</span>
+                        </div>
+
+                        {/* Middle: Table Number & Amount */}
+                        <div className="text-center my-0.5">
+                          <div className="text-base font-black leading-tight tracking-tight">
+                            {tableLabel}
+                          </div>
+                          <div className="text-[11px] font-extrabold leading-none opacity-95">
+                            {amountStr}
+                          </div>
+                        </div>
+
+                        {/* Bottom Row: Quick Action Icons */}
+                        <div className="flex items-center justify-center gap-1.5 pt-0.5 border-t border-black/10">
+                          {/* Print Icon Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActivePrintOrder(activeOrder);
+                            }}
+                            className="p-1 rounded bg-black/20 hover:bg-black/40 transition text-white"
+                            title="Print KOT / Bill Receipt"
+                          >
+                            <Printer className="w-3 h-3" />
+                          </button>
+
+                          {/* View/Edit Icon Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeOrder) {
+                                setEditingOrderForWaiter(activeOrder);
+                                setItemsToAdd([]);
+                              }
+                            }}
+                            className="p-1 rounded bg-black/20 hover:bg-black/40 transition text-white"
+                            title="View / Edit Order Items"
+                          >
+                            <Eye className="w-3 h-3" />
+                          </button>
+
+                          {/* Pay / Collect Icon Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeOrder) {
+                                setActivePaymentOrder(activeOrder);
+                                setAmountCollected(activeOrder.total_amount.toString());
+                              }
+                            }}
+                            className="p-1 rounded bg-black/20 hover:bg-black/40 transition text-white"
+                            title="Collect Payment"
+                          >
+                            <DollarSign className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-
-                      <div className="flex justify-between items-center text-emerald-400">
-                        <span className="flex items-center gap-1 font-semibold">
-                          <Utensils className="w-3 h-3" /> Kitchen ({kitchenItems.length}):
-                        </span>
-                        <span className="font-mono font-bold">
-                          {kitchenItems.filter(i => i.status === 'READY' || i.status === 'SERVED').length}/{kitchenItems.length} Ready
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-500 italic mb-4 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
-                    Ready for next guest scan.
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="space-y-2">
-                {isOccupied ? (
-                  <button
-                    onClick={() => {
-                      setActivePaymentOrder(activeOrder);
-                      setAmountCollected(activeOrder.total_amount.toString());
-                    }}
-                    className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 text-xs font-black py-2.5 rounded-xl shadow-lg transition flex items-center justify-center gap-1.5"
-                  >
-                    <DollarSign className="w-4 h-4" /> Collect Cash / Payment
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setSelectedTable(table);
-                      setActiveTab('customer');
-                    }}
-                    className="w-full bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-400 text-xs font-extrabold py-2 rounded-xl border border-slate-700 transition flex items-center justify-center gap-1"
-                  >
-                    <QrCode className="w-3.5 h-3.5" /> Open Menu
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {/* Collect Payment & Clear Table Modal */}
@@ -395,7 +486,7 @@ export default function StaffPanel() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div>
                 <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-emerald-400" /> Collect Payment & Settle Table
+                  <DollarSign className="w-5 h-5 text-amber-400" /> Collect Payment & Clear Table
                 </h3>
                 <p className="text-xs text-slate-400">Order #{activePaymentOrder.order_number}</p>
               </div>
@@ -425,7 +516,7 @@ export default function StaffPanel() {
                         : 'bg-slate-950 border-slate-800 text-slate-400'
                     }`}
                   >
-                    <DollarSign className="w-4 h-4" /> Cash 💵
+                    💵 Cash
                   </button>
 
                   <button
@@ -437,7 +528,7 @@ export default function StaffPanel() {
                         : 'bg-slate-950 border-slate-800 text-slate-400'
                     }`}
                   >
-                    <Smartphone className="w-4 h-4" /> UPI 📱
+                    📱 UPI
                   </button>
 
                   <button
@@ -449,7 +540,7 @@ export default function StaffPanel() {
                         : 'bg-slate-950 border-slate-800 text-slate-400'
                     }`}
                   >
-                    <CreditCard className="w-4 h-4" /> Card 💳
+                    💳 Card
                   </button>
                 </div>
               </div>
@@ -461,7 +552,7 @@ export default function StaffPanel() {
                   step="0.01"
                   value={amountCollected}
                   onChange={(e) => setAmountCollected(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-base font-extrabold text-emerald-400 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-base font-extrabold text-amber-400 focus:outline-none focus:border-amber-500"
                   required
                 />
               </div>
@@ -473,7 +564,7 @@ export default function StaffPanel() {
                   value={waiterName}
                   onChange={(e) => setWaiterName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none"
-                  placeholder="e.g. Waiter Alex"
+                  placeholder="e.g. Staff"
                 />
               </div>
 
@@ -489,12 +580,75 @@ export default function StaffPanel() {
                 <button
                   type="submit"
                   disabled={isSubmittingPayment}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 py-3 rounded-xl font-black shadow-lg"
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl font-black shadow-lg"
                 >
-                  {isSubmittingPayment ? 'Saving Payment...' : 'Confirm Paid & Reset Table'}
+                  {isSubmittingPayment ? 'Saving...' : 'Confirm Paid & Reset Table'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Print KOT / Receipt Preview Modal */}
+      {activePrintOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <h3 className="font-extrabold text-base text-slate-100 flex items-center gap-2">
+                <Printer className="w-5 h-5 text-amber-400" /> KOT / Bill Receipt
+              </h3>
+              <button
+                onClick={() => setActivePrintOrder(null)}
+                className="w-7 h-7 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Printable Receipt Preview */}
+            <div className="bg-white text-slate-950 p-4 rounded-xl font-mono text-xs space-y-2 shadow-inner">
+              <div className="text-center border-b border-slate-300 pb-2">
+                <div className="font-black text-sm">THE BERMUDA COCKTAIL</div>
+                <div className="text-[10px] text-slate-600">Table: {formatTableLabel(activePrintOrder.table?.table_number || 'T-01')}</div>
+                <div className="text-[10px] text-slate-500">Bill #: {activePrintOrder.order_number}</div>
+              </div>
+
+              <div className="space-y-1 py-1">
+                {activePrintOrder.items?.map((it) => (
+                  <div key={it.id} className="flex justify-between items-center text-[11px]">
+                    <span>{it.quantity}x {it.product?.name || `Item #${it.product_id}`}</span>
+                    <span className="font-bold">₹{it.unit_price * it.quantity}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-slate-300 pt-2 flex justify-between font-black text-sm">
+                <span>Total Amount:</span>
+                <span>₹{activePrintOrder.total_amount}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setActivePrintOrder(null)}
+                className="w-full bg-slate-800 text-slate-300 py-2.5 rounded-xl font-bold text-xs"
+              >
+                Close
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.print();
+                  setActivePrintOrder(null);
+                }}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 py-2.5 rounded-xl font-black text-xs shadow-lg flex items-center justify-center gap-1.5"
+              >
+                <Printer className="w-4 h-4" /> Print Receipt
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -516,7 +670,7 @@ export default function StaffPanel() {
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-100 flex items-center gap-2">
-                  Edit & Add Items — Table {editingOrderForWaiter.table?.table_number || 'DN-01'}
+                  Edit & Add Items — Table {formatTableLabel(editingOrderForWaiter.table?.table_number || 'D1')}
                 </h3>
                 <p className="text-xs text-slate-400">Add extra drinks/dishes requested by customer at table before confirming.</p>
               </div>
