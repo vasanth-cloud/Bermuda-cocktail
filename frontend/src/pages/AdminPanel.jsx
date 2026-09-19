@@ -326,12 +326,16 @@ export default function AdminPanel() {
       return;
     }
 
+    const terms = newUserData.allowed_terminals || [];
+    const autoRole = terms.includes('admin') ? 'ADMIN' : 'WAITER';
+
     setIsSubmittingUser(true);
     setUserError('');
     setUserSuccess('');
     const result = await createStaffAccount({
       ...newUserData,
-      allowed_terminals: (newUserData.allowed_terminals || []).join(',')
+      role: autoRole,
+      allowed_terminals: terms.join(',')
     });
     setIsSubmittingUser(false);
 
@@ -365,12 +369,15 @@ export default function AdminPanel() {
       return;
     }
 
+    const terms = editingUserData.allowed_terminals || [];
+    const autoRole = terms.includes('admin') ? 'ADMIN' : 'WAITER';
+
     setIsSubmittingUser(true);
     const payload = {
       name: editingUserData.name,
       email: editingUserData.email,
-      role: editingUserData.role,
-      allowed_terminals: (editingUserData.allowed_terminals || []).join(',')
+      role: autoRole,
+      allowed_terminals: terms.join(',')
     };
     if (editingUserData.password && editingUserData.password.trim()) {
       payload.password = editingUserData.password.trim();
@@ -1035,19 +1042,6 @@ export default function AdminPanel() {
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Assigned Role Category *</label>
-                <select
-                  value={newUserData.role}
-                  onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none cursor-pointer"
-                >
-                  <option value="WAITER" className="bg-slate-900 text-blue-300">🚶 WAITER (Floor Table Orders & QR Confirmation)</option>
-                  <option value="BAR_KITCHEN" className="bg-slate-900 text-purple-300">🍸🍳 BAR_KITCHEN (Unified Drinks, Food KDS & Reception Billing)</option>
-                  <option value="ADMIN" className="bg-slate-900 text-amber-300">👑 ADMIN (Full System Access)</option>
-                </select>
-              </div>
-
-              <div>
                 <label className="font-bold text-slate-300 block mb-1">
                   Granular Page Access (Select Permitted Terminals) *
                 </label>
@@ -1158,19 +1152,6 @@ export default function AdminPanel() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">Assigned Role Category *</label>
-                <select
-                  value={editingUserData.role}
-                  onChange={(e) => setEditingUserData({ ...editingUserData, role: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-blue-300 font-bold focus:outline-none cursor-pointer"
-                >
-                  <option value="WAITER" className="bg-slate-900 text-blue-300">🚶 WAITER (Floor Table Orders & QR Confirmation)</option>
-                  <option value="BAR_KITCHEN" className="bg-slate-900 text-purple-300">🍸🍳 BAR_KITCHEN (Unified Drinks, Food KDS & Reception Billing)</option>
-                  <option value="ADMIN" className="bg-slate-900 text-amber-300">👑 ADMIN (Full System Access)</option>
-                </select>
               </div>
 
               <div>

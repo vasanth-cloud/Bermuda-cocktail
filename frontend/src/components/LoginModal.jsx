@@ -105,39 +105,6 @@ export default function LoginModal({ isOpen, onClose }) {
             {isSubmitting ? 'Authenticating...' : 'Sign In to Panel'}
           </button>
         </form>
-
-        {/* Demo Quick Fill Badges */}
-        <div className="pt-3 border-t border-slate-800 space-y-2">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-400" /> Quick Account Selector:
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-[11px]">
-            <button
-              onClick={() => handleQuickFill('avasanth081@gmail.com', 'Vasanth@123')}
-              className="bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/30 text-amber-300 p-2 rounded-xl text-left font-bold transition"
-            >
-              👑 Admin
-              <span className="block text-[9px] font-normal text-amber-400/70 font-mono">Master System</span>
-            </button>
-
-            <button
-              onClick={() => handleQuickFill('waiter@bermuda.pub', 'Waiter@123')}
-              className="bg-blue-950/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-300 p-2 rounded-xl text-left font-bold transition"
-            >
-              🚶 Waiter
-              <span className="block text-[9px] font-normal text-blue-400/70 font-mono">Floor Tables</span>
-            </button>
-
-            <button
-              onClick={() => handleQuickFill('bar@bermuda.pub', 'Bar@123')}
-              className="bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-300 p-2 rounded-xl text-left font-bold transition"
-            >
-              🍸🍳 Bar & Kitchen
-              <span className="block text-[9px] font-normal text-purple-400/70 font-mono">KDS & Billing</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
