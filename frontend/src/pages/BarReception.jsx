@@ -239,14 +239,16 @@ export default function BarReception() {
                           </div>
 
                           <button
-                            onClick={() => updateItemStatus(item.id, item.status === 'READY' ? 'SERVED' : 'READY')}
+                            onClick={() => updateItemStatus(item.id, item.status === 'READY' ? 'PENDING' : 'READY')}
                             className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition ${
-                              item.status === 'READY' || item.status === 'SERVED'
-                                ? 'bg-purple-950 text-purple-300 border border-purple-500/40'
+                              item.status === 'SERVED'
+                                ? 'bg-purple-950/60 text-purple-300 border border-purple-800'
+                                : item.status === 'READY'
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
                                 : 'bg-purple-600 hover:bg-purple-500 text-slate-100 shadow-md'
                             }`}
                           >
-                            {item.status === 'READY' || item.status === 'SERVED' ? '✓ Drink Ready' : 'Mark Drink Ready'}
+                            {item.status === 'SERVED' ? '🍽️ Served at Table' : item.status === 'READY' ? '✓ Drink Ready (Notify Waiter)' : 'Mark Drink Ready'}
                           </button>
                         </div>
                       ))}
@@ -274,14 +276,16 @@ export default function BarReception() {
                           </div>
 
                           <button
-                            onClick={() => updateItemStatus(item.id, item.status === 'READY' ? 'SERVED' : 'READY')}
+                            onClick={() => updateItemStatus(item.id, item.status === 'READY' ? 'PENDING' : 'READY')}
                             className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition ${
-                              item.status === 'READY' || item.status === 'SERVED'
+                              item.status === 'SERVED'
+                                ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800'
+                                : item.status === 'READY'
                                 ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
                                 : 'bg-emerald-600 hover:bg-emerald-500 text-slate-950 shadow-md'
                             }`}
                           >
-                            {item.status === 'READY' || item.status === 'SERVED' ? '✓ Food Ready' : 'Mark Food Ready'}
+                            {item.status === 'SERVED' ? '🍽️ Served at Table' : item.status === 'READY' ? '✓ Food Ready (Notify Waiter)' : 'Mark Food Ready'}
                           </button>
                         </div>
                       ))}
@@ -289,22 +293,22 @@ export default function BarReception() {
                   )}
                 </div>
 
-                {/* Total & Reception Bill Settlement Footer */}
+                {/* Total & KDS Preparation Status Footer */}
                 <div className="pt-3 border-t border-slate-800 space-y-2">
                   <div className="flex items-center justify-between font-black text-slate-100">
                     <span className="text-xs text-slate-400 uppercase tracking-wider">Total Table Bill:</span>
                     <span className="text-amber-400 text-lg">₹{order.total_amount}</span>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setActivePaymentOrder(order);
-                      setAmountCollected(order.total_amount.toString());
-                    }}
-                    className="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-emerald-600 hover:opacity-90 text-slate-100 text-xs font-extrabold py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition"
-                  >
-                    <Receipt className="w-4 h-4" /> Collect Cash & Settle Bill
-                  </button>
+                  {order.items && order.items.every(i => i.status === 'READY' || i.status === 'SERVED') ? (
+                    <div className="w-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5 shadow">
+                      ✓ All Items Ready — Waiting for Waiter Pickup & Serving
+                    </div>
+                  ) : (
+                    <div className="w-full bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5">
+                      ⏳ Preparing Items at Bar / Kitchen...
+                    </div>
+                  )}
                 </div>
               </div>
             );
