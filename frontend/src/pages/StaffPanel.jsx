@@ -819,29 +819,56 @@ export default function StaffPanel() {
               </div>
             </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            {/* Modal Actions - Option 1: Edit/Save Items, Option 2: Confirm & Send to Bar/Kitchen */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800">
               <button
+                type="button"
                 onClick={() => setEditingOrderForWaiter(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-slate-100 text-xs font-bold"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-slate-100 text-xs font-bold"
               >
                 Close
               </button>
-              <button
-                disabled={isSavingEdit}
-                onClick={async () => {
-                  setIsSavingEdit(true);
-                  if (itemsToAdd.length > 0) {
-                    await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, waiterName);
-                  }
-                  await confirmOrderAsWaiter(editingOrderForWaiter.id, waiterName);
-                  setIsSavingEdit(false);
-                  setEditingOrderForWaiter(null);
-                }}
-                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
-              >
-                <Check className="w-4 h-4" /> Save & Confirm to Bar/Kitchen
-              </button>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                {/* OPTION 1: EDIT ORDER (Save Items Added/Removed) */}
+                <button
+                  type="button"
+                  disabled={isSavingEdit}
+                  onClick={async () => {
+                    setIsSavingEdit(true);
+                    if (itemsToAdd.length > 0) {
+                      await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, currentUser?.name || waiterName || 'Waiter');
+                      setItemsToAdd([]);
+                    }
+                    setIsSavingEdit(false);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1.5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  {isSavingEdit ? 'Saving...' : '✏️ 1. Edit / Add Items'}
+                </button>
+
+                {/* OPTION 2: CONFIRM ORDER & SEND TO BAR / KITCHEN */}
+                <button
+                  type="button"
+                  disabled={isSavingEdit}
+                  onClick={async () => {
+                    setIsSavingEdit(true);
+                    const claimingWaiter = currentUser?.name || waiterName || 'Waiter';
+                    if (itemsToAdd.length > 0) {
+                      await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, claimingWaiter);
+                      setItemsToAdd([]);
+                    }
+                    await confirmOrderAsWaiter(editingOrderForWaiter.id, claimingWaiter);
+                    setIsSavingEdit(false);
+                    setEditingOrderForWaiter(null);
+                  }}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                >
+                  <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
+                  ⚡ 2. Confirm Order & Send to Bar/Kitchen ({currentUser?.name || waiterName || 'Waiter'})
+                </button>
+              </div>
             </div>
           </div>
         </div>
