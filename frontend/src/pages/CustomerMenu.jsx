@@ -27,7 +27,12 @@ export default function CustomerMenu() {
     addToCart,
     updateCartQuantity,
     submitOrder,
-    activeCustomerOrder
+    activeCustomerOrder,
+    allOrders,
+    confirmOrderAsWaiter,
+    setActiveTab,
+    currentUser,
+    isCustomerQrMode
   } = useOrder();
 
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -36,6 +41,8 @@ export default function CustomerMenu() {
   const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(true);
   const [customerName, setCustomerName] = useState('Guest');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const tableActiveOrder = allOrders?.find(o => o.table_id === selectedTable?.id && o.status !== 'BILLED');
 
   const filteredProducts = products.filter((p) => {
     const matchesCat = selectedCategory === 'ALL' || p.category_id === Number(selectedCategory);
@@ -59,6 +66,71 @@ export default function CustomerMenu() {
 
   return (
     <div className="pb-28 w-full px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4 font-sans text-slate-100 bg-slate-950 min-h-screen">
+      {/* WAITER POS CONTROL BAR WITH 2 OPTIONS (WHEN WAITER OPENS MENU PAGE) */}
+      {!isCustomerQrMode && currentUser && (
+        <div className="bg-gradient-to-r from-slate-900 via-amber-950/90 to-slate-900 border-2 border-amber-500/70 p-3.5 rounded-2xl mb-3.5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-3 text-xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🍸</span>
+            <div>
+              <div className="font-black text-amber-300 flex items-center gap-2 text-sm">
+                <span>Table {selectedTable?.table_number || 'DN-01'} — Menu View</span>
+                {tableActiveOrder && (
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold uppercase border border-amber-500/40">
+                    Order Status: {tableActiveOrder.status}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-300 font-medium">
+                Logged in Waiter: <strong className="text-white font-extrabold">{currentUser.name}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            {/* OPTION 1: EDIT / ADD ITEMS TO CART */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="flex-1 md:flex-initial bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/50 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow"
+            >
+              <ShoppingBag className="w-4 h-4 text-amber-400" />
+              <span>✏️ 1. Edit / Add Items ({cartCount})</span>
+            </button>
+
+            {/* OPTION 2: CONFIRM ORDER & SEND TO BAR/KITCHEN */}
+            <button
+              disabled={isSubmitting}
+              onClick={async () => {
+                setIsSubmitting(true);
+                const claimingWaiter = currentUser?.name || 'Waiter';
+                // 1. Submit cart items if waiter added extra items
+                if (cart.length > 0) {
+                  await submitOrder(claimingWaiter);
+                }
+                // 2. Confirm pending customer order if present
+                if (tableActiveOrder && (tableActiveOrder.status === 'PENDING' || tableActiveOrder.status === 'PENDING_WAITER')) {
+                  await confirmOrderAsWaiter(tableActiveOrder.id, claimingWaiter);
+                }
+                setIsSubmitting(false);
+                setActiveTab('staff');
+              }}
+              className="flex-1 md:flex-initial bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+            >
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>⚡ 2. Confirm Order & Send to Bar/Kitchen ({currentUser?.name || 'Waiter'})</span>
+            </button>
+
+            {/* RETURN TO FLOOR MAP */}
+            <button
+              onClick={() => setActiveTab('staff')}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center"
+              title="Return to Waiter Floor Map"
+            >
+              🔙 Floor
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MOBILE COMPACT HEADER BANNER */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-5 mb-3 shadow-lg flex items-center justify-between">
         <div className="flex items-center gap-3">
