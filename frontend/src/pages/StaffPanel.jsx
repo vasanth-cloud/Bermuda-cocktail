@@ -63,6 +63,14 @@ export default function StaffPanel() {
     }
     
     if (activeOrder) {
+      if (activeOrder.status === 'PENDING' || activeOrder.status === 'PENDING_WAITER') {
+        return {
+          label: 'PENDING ACCEPT',
+          type: 'PENDING_WAITER',
+          cardClass: 'bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 border-4 border-amber-200 shadow-xl shadow-amber-500/60 animate-pulse font-black'
+        };
+      }
+
       if (activeOrder.status === 'BILLED' || activeOrder.payment_status === 'COLLECTED') {
         return {
           label: 'PAID TABLE',
@@ -200,49 +208,63 @@ export default function StaffPanel() {
       <div className="px-4 sm:px-6 space-y-5">
         {/* Customer QR Order Requests Awaiting Waiter Confirmation */}
         {pendingCustomerOrderRequests.length > 0 && (
-          <div className="bg-gradient-to-r from-amber-950/80 via-slate-900 to-amber-950/80 border border-amber-500/60 p-4 rounded-xl shadow-xl space-y-3">
-            <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
+          <div className="bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500 p-4 rounded-xl shadow-2xl space-y-3 animate-pulse">
+            <div className="flex items-center justify-between border-b border-amber-500/40 pb-2">
               <div className="flex items-center gap-2 font-black text-amber-300 text-xs uppercase tracking-wider">
-                <Check className="w-4 h-4 text-amber-400" />
-                <span>📩 {pendingCustomerOrderRequests.length} Customer QR Orders Awaiting Confirmation</span>
+                <Bell className="w-5 h-5 text-amber-400 animate-bounce" />
+                <span>📩 {pendingCustomerOrderRequests.length} Customer QR Order(s) Awaiting Waiter Acceptance</span>
               </div>
+              <span className="text-[11px] font-bold text-amber-200 bg-amber-900/60 px-2.5 py-1 rounded-full border border-amber-500/50">
+                Logged in Waiter: <strong className="text-white font-extrabold">{currentUser?.name || waiterName || 'Waiter'}</strong>
+              </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {pendingCustomerOrderRequests.map((ord) => (
-                <div key={ord.id} className="bg-slate-950 border border-amber-500/40 p-3 rounded-lg space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-amber-400 font-mono font-bold">{ord.order_number}</span>
-                      <h4 className="font-black text-slate-100 text-sm">Table {ord.table?.table_number || 'ST-01'}</h4>
+              {pendingCustomerOrderRequests.map((ord) => {
+                const itemsSummary = ord.items ? ord.items.map(i => `${i.quantity}x ${i.product?.name || i.product_name || 'Item'}`).join(', ') : '';
+                return (
+                  <div key={ord.id} className="bg-slate-950 border-2 border-amber-400 p-3.5 rounded-xl space-y-2.5 text-xs shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-amber-400 font-mono font-bold">{ord.order_number}</span>
+                        <h4 className="font-black text-slate-100 text-base">Table {ord.table?.table_number || 'ST-01'}</h4>
+                        <span className="text-[11px] text-slate-300">Customer: <strong>{ord.customer_name || 'Guest'}</strong></span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-black text-amber-400 text-base">₹{ord.total_amount}</div>
+                        <span className="text-[10px] text-amber-300/80 font-mono">{getElapsedTimeStr(ord.created_at)} ago</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-black text-amber-400 text-sm">₹{ord.total_amount}</div>
+
+                    {itemsSummary && (
+                      <div className="bg-slate-900 border border-slate-800 p-2 rounded text-[11px] text-slate-200 line-clamp-2">
+                        <strong>Items:</strong> {itemsSummary}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingOrderForWaiter(ord);
+                          setItemsToAdd([]);
+                        }}
+                        className="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Edit
+                      </button>
+
+                      <button
+                        disabled={confirmingOrderId === ord.id}
+                        onClick={() => handleConfirmOrder(ord.id)}
+                        className="flex-1 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 px-3 py-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md"
+                      >
+                        <Check className="w-4 h-4 text-slate-950" />
+                        {confirmingOrderId === ord.id ? 'Routing...' : `⚡ ACCEPT ORDER (${currentUser?.name || waiterName || 'Waiter'})`}
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingOrderForWaiter(ord);
-                        setItemsToAdd([]);
-                      }}
-                      className="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"
-                    >
-                      <Edit2 className="w-3 h-3" /> Edit
-                    </button>
-
-                    <button
-                      disabled={confirmingOrderId === ord.id}
-                      onClick={() => handleConfirmOrder(ord.id)}
-                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center justify-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      {confirmingOrderId === ord.id ? 'Routing...' : 'Confirm Order'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -263,6 +285,7 @@ export default function StaffPanel() {
                   <div>
                     <div className="font-black text-slate-100">Table {tableNumber}</div>
                     <div className="text-[11px] text-slate-300">{item.quantity}x {item.product?.name || `Item #${item.product_id}`}</div>
+                    <div className="text-[10px] text-amber-400 font-mono">Waiter: {order.waiter_name || order.collected_by || 'Staff'}</div>
                   </div>
                   <button
                     onClick={() => updateItemStatus(item.id, 'SERVED')}
@@ -322,7 +345,53 @@ export default function StaffPanel() {
                       );
                     }
 
-                    // 2. OCCUPIED TABLE CARD (RUNNING / PRINTED / PAID)
+                    // 2. PENDING ACCEPTANCE TABLE CARD (GLOWING AMBER)
+                    if (statusStyle.type === 'PENDING_WAITER') {
+                      return (
+                        <div
+                          key={table.id}
+                          onClick={() => {
+                            if (activeOrder) {
+                              setEditingOrderForWaiter(activeOrder);
+                              setItemsToAdd([]);
+                            }
+                          }}
+                          className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
+                          title={`Customer order awaiting acceptance at Table ${table.table_number}`}
+                        >
+                          <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
+                            <span className="font-extrabold text-slate-950">{getElapsedTimeStr(activeOrder.created_at)}</span>
+                            <span className="font-black bg-slate-950 text-amber-300 px-1 py-0.5 rounded text-[8px] uppercase">
+                              📩 ACCEPT
+                            </span>
+                          </div>
+
+                          <div className="text-center my-0.5">
+                            <div className="text-base font-black leading-tight tracking-tight text-slate-950">
+                              {tableLabel}
+                            </div>
+                            <div className="text-[11px] font-extrabold leading-none text-slate-900">
+                              ₹{activeOrder?.total_amount || 0}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={confirmingOrderId === activeOrder?.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (activeOrder) handleConfirmOrder(activeOrder.id);
+                            }}
+                            className="w-full bg-slate-950 hover:bg-slate-900 text-amber-400 py-1 rounded text-[10px] font-black transition flex items-center justify-center gap-1 shadow"
+                          >
+                            <Check className="w-3 h-3 text-amber-400" />
+                            {confirmingOrderId === activeOrder?.id ? 'Routing...' : 'ACCEPT'}
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    // 3. OCCUPIED TABLE CARD (RUNNING / PRINTED / PAID)
                     const elapsedTime = activeOrder ? getElapsedTimeStr(activeOrder.created_at) : '0 Min';
                     const amountStr = activeOrder ? `₹${activeOrder.total_amount}` : '₹0';
 
@@ -334,8 +403,8 @@ export default function StaffPanel() {
                         {/* Top Row: Duration & Claimed Waiter Name */}
                         <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
                           <span className="opacity-90 font-semibold">{elapsedTime}</span>
-                          <span className="truncate max-w-[55px] font-bold opacity-90" title={`Handled by ${activeOrder?.waiter_name || activeOrder?.collected_by || 'Waiter'}`}>
-                            👤 {activeOrder?.waiter_name || activeOrder?.collected_by || 'Waiter'}
+                          <span className="truncate max-w-[55px] font-bold opacity-90" title={`Handled by ${activeOrder?.waiter_name || activeOrder?.collected_by || currentUser?.name || 'Waiter'}`}>
+                            👤 {activeOrder?.waiter_name || activeOrder?.collected_by || currentUser?.name || 'Waiter'}
                           </span>
                         </div>
 

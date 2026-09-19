@@ -297,6 +297,39 @@ export const OrderProvider = ({ children }) => {
     fetchOrders();
   }, []);
 
+  const playNotificationChime = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.15, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.25);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1320, now + 0.15);
+      gain2.gain.setValueAtTime(0.2, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.5);
+    } catch (e) {
+      console.warn("Audio chime error:", e);
+    }
+  };
+
   // Setup WebSocket connection safely with auto-reconnect
   useEffect(() => {
     let ws = null;
@@ -316,7 +349,10 @@ export const OrderProvider = ({ children }) => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED'].includes(data.event)) {
+            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER'].includes(data.event)) {
+              if (data.event === 'NEW_ORDER' || data.event === 'ITEM_STATUS_UPDATED') {
+                playNotificationChime();
+              }
               fetchOrders();
               fetchData();
             }

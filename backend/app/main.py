@@ -480,6 +480,8 @@ def get_orders(
     if target_dept:
         filtered_orders = []
         for ord in orders:
+            if ord.status in ["PENDING", "PENDING_WAITER"]:
+                continue
             dept_items = [it for it in ord.items if it.target_dept == target_dept]
             if dept_items:
                 # Clone order object with filtered items for response
