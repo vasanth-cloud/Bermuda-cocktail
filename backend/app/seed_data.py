@@ -43,14 +43,29 @@ def seed_initial_data(db: Session):
         db.add_all([admin_user, waiter_user, bar_user, kitchen_user])
         db.commit()
 
-    # 1. Seed Table Zones
+    # 1. Seed & Update Table Zones
     if db.query(TableZone).count() == 0:
         zones = [
-            TableZone(name="standing", display_name="Standing Counter Tables", prefix="ST", description="Single standing tables near counter area"),
-            TableZone(name="dining_4p", display_name="4-Seater Dining Tables", prefix="DN", description="4-member dining tables inside main hall"),
-            TableZone(name="smoking_zone", display_name="Smoking Zone Tables", prefix="SZ", description="Outdoor & semi-covered smoking zone seating")
+            TableZone(name="standing", display_name="Pub Rounding", prefix="C", description="Pub Rounding Tables C1 to C10"),
+            TableZone(name="dining_4p", display_name="Dining", prefix="DN", description="Dining Tables DN-1 to DN-29"),
+            TableZone(name="smoking_zone", display_name="Smoking area", prefix="SZ", description="Smoking Zone Tables SZ-1 to SZ-10")
         ]
         db.add_all(zones)
+        db.commit()
+    else:
+        # Update zone display names if they exist
+        standing_z = db.query(TableZone).filter_by(name="standing").first()
+        if standing_z:
+            standing_z.display_name = "Pub Rounding"
+            standing_z.prefix = "C"
+        dining_z = db.query(TableZone).filter_by(name="dining_4p").first()
+        if dining_z:
+            dining_z.display_name = "Dining"
+            dining_z.prefix = "DN"
+        smoking_z = db.query(TableZone).filter_by(name="smoking_zone").first()
+        if smoking_z:
+            smoking_z.display_name = "Smoking area"
+            smoking_z.prefix = "SZ"
         db.commit()
 
     # Fetch zones
@@ -58,51 +73,55 @@ def seed_initial_data(db: Session):
     dining_zone = db.query(TableZone).filter_by(name="dining_4p").first()
     smoking_zone = db.query(TableZone).filter_by(name="smoking_zone").first()
 
-    # 2. Seed Pub Tables
-    existing_count = db.query(PubTable).count()
-    if existing_count < 49:
-        existing_numbers = set(t.table_number for t in db.query(PubTable).all())
-        tables_to_add = []
+    # 2. Cleanup Legacy Tables & Seed Exact 49 Pub Tables
+    valid_numbers = set([f"C{i}" for i in range(1, 11)] + [f"DN-{i}" for i in range(1, 30)] + [f"SZ-{i}" for i in range(1, 11)])
+    
+    # Delete legacy tables not in the 49 valid pub table numbers
+    db.query(PubTable).filter(~PubTable.table_number.in_(valid_numbers)).delete(synchronize_session=False)
+    db.commit()
 
-        # Pub Rounding Counter Tables C1 to C10
-        for i in range(1, 11):
-            t_num = f"C{i}"
-            if t_num not in existing_numbers:
-                tables_to_add.append(PubTable(
-                    table_number=t_num,
-                    zone_id=standing_zone.id,
-                    capacity=2,
-                    qr_token=f"TOKEN_{t_num}",
-                    current_status="VACANT"
-                ))
+    existing_numbers = set(t.table_number for t in db.query(PubTable).all())
+    tables_to_add = []
 
-        # Dining Tables DN-1 to DN-29
-        for i in range(1, 30):
-            t_num = f"DN-{i}"
-            if t_num not in existing_numbers:
-                tables_to_add.append(PubTable(
-                    table_number=t_num,
-                    zone_id=dining_zone.id,
-                    capacity=4,
-                    qr_token=f"TOKEN_DN_{i}",
-                    current_status="VACANT"
-                ))
+    # Pub Rounding Counter Tables C1 to C10
+    for i in range(1, 11):
+        t_num = f"C{i}"
+        if t_num not in existing_numbers:
+            tables_to_add.append(PubTable(
+                table_number=t_num,
+                zone_id=standing_zone.id if standing_zone else None,
+                capacity=2,
+                qr_token=f"TOKEN_{t_num}",
+                current_status="VACANT"
+            ))
 
-        # Smoking Zone Tables SZ-1 to SZ-10
-        for i in range(1, 11):
-            t_num = f"SZ-{i}"
-            if t_num not in existing_numbers:
-                tables_to_add.append(PubTable(
-                    table_number=t_num,
-                    zone_id=smoking_zone.id,
-                    capacity=4,
-                    qr_token=f"TOKEN_SZ_{i}",
-                    current_status="VACANT"
-                ))
+    # Dining Tables DN-1 to DN-29
+    for i in range(1, 30):
+        t_num = f"DN-{i}"
+        if t_num not in existing_numbers:
+            tables_to_add.append(PubTable(
+                table_number=t_num,
+                zone_id=dining_zone.id if dining_zone else None,
+                capacity=4,
+                qr_token=f"TOKEN_DN_{i}",
+                current_status="VACANT"
+            ))
 
-        if tables_to_add:
-            db.add_all(tables_to_add)
-            db.commit()
+    # Smoking Zone Tables SZ-1 to SZ-10
+    for i in range(1, 11):
+        t_num = f"SZ-{i}"
+        if t_num not in existing_numbers:
+            tables_to_add.append(PubTable(
+                table_number=t_num,
+                zone_id=smoking_zone.id if smoking_zone else None,
+                capacity=4,
+                qr_token=f"TOKEN_SZ_{i}",
+                current_status="VACANT"
+            ))
+
+    if tables_to_add:
+        db.add_all(tables_to_add)
+        db.commit()
 
     # 3. Seed Categories
     if db.query(Category).count() == 0:

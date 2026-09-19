@@ -926,6 +926,7 @@ export default function AdminPanel() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {tables
             .filter((t) => adminTableZoneFilter === 'ALL' || t.zone_id === Number(adminTableZoneFilter))
+            .sort((a, b) => a.table_number.localeCompare(b.table_number, undefined, { numeric: true, sensitivity: 'base' }))
             .map((t) => {
               const statusStyle = getTableStatusStyle(t);
               return (

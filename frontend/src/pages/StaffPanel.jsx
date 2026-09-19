@@ -358,7 +358,9 @@ export default function StaffPanel() {
         {/* STACKED POS FLOOR SECTIONS (PETPOOJA POS STYLE GRID) */}
         <div className="space-y-6">
           {groupedSections.map(({ zone, tables: sectionTables }) => {
-            const filteredSectionTables = sectionTables.filter(isTableMatchingSearch);
+            const filteredSectionTables = sectionTables
+              .filter(isTableMatchingSearch)
+              .sort((a, b) => a.table_number.localeCompare(b.table_number, undefined, { numeric: true, sensitivity: 'base' }));
             if (filteredSectionTables.length === 0) return null;
 
             return (
