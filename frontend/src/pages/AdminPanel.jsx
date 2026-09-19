@@ -38,7 +38,12 @@ export default function AdminPanel() {
   const { 
     products, 
     categories, 
-    tables, 
+    tables,
+    zones,
+    addPubTable,
+    updatePubTable,
+    deletePubTable,
+    allOrders,
     syncStatus, 
     triggerSync, 
     addProduct, 
@@ -128,6 +133,155 @@ export default function AdminPanel() {
 
   // Digital Member VIP Card Modal State
   const [cardPreviewMember, setCardPreviewMember] = useState(null);
+
+  // Pub Table Layout Management State
+  const [adminTableZoneFilter, setAdminTableZoneFilter] = useState('ALL');
+  const [isCreateTableOpen, setIsCreateTableOpen] = useState(false);
+  const [newTableData, setNewTableData] = useState({
+    table_number: '',
+    zone_id: zones[0]?.id || 1,
+    capacity: 4,
+    current_status: 'VACANT'
+  });
+  const [editingTable, setEditingTable] = useState(null);
+  const [editingTableData, setEditingTableData] = useState({
+    table_number: '',
+    zone_id: 1,
+    capacity: 4,
+    current_status: 'VACANT'
+  });
+  const [tableError, setTableError] = useState('');
+  const [tableSuccess, setTableSuccess] = useState('');
+
+  const getTableStatusStyle = (table) => {
+    const activeOrder = (allOrders || []).find(o => o.table_id === table.id && o.status !== 'BILLED');
+    
+    if (!activeOrder && (table.current_status === 'VACANT' || !table.current_status)) {
+      return {
+        label: 'VACANT',
+        badgeClass: 'bg-white text-slate-950 font-black shadow border border-slate-300',
+        colorName: 'white'
+      };
+    }
+
+    if (activeOrder) {
+      if (activeOrder.status === 'BILLED' || activeOrder.payment_status === 'COLLECTED') {
+        return {
+          label: 'PAID TABLE',
+          badgeClass: 'bg-amber-400 text-slate-950 font-black shadow border border-amber-300',
+          colorName: 'yellow'
+        };
+      }
+      
+      const allItemsReadyOrServed = activeOrder.items && activeOrder.items.length > 0 &&
+        activeOrder.items.every(it => it.status === 'READY' || it.status === 'SERVED');
+
+      if (allItemsReadyOrServed || activeOrder.status === 'SERVED' || activeOrder.status === 'PRINTED') {
+        return {
+          label: 'PRINTED / FINISHED',
+          badgeClass: 'bg-emerald-500 text-slate-950 font-black shadow border border-emerald-400',
+          colorName: 'green'
+        };
+      }
+
+      return {
+        label: 'RUNNING TABLE',
+        badgeClass: 'bg-blue-600 text-white font-black shadow border border-blue-400',
+        colorName: 'blue'
+      };
+    }
+
+    if (table.current_status === 'BILLED' || table.current_status === 'PAID') {
+      return {
+        label: 'PAID TABLE',
+        badgeClass: 'bg-amber-400 text-slate-950 font-black shadow border border-amber-300',
+        colorName: 'yellow'
+      };
+    }
+
+    if (table.current_status === 'PRINTED' || table.current_status === 'FINISHED' || table.current_status === 'SERVED') {
+      return {
+        label: 'PRINTED / FINISHED',
+        badgeClass: 'bg-emerald-500 text-slate-950 font-black shadow border border-emerald-400',
+        colorName: 'green'
+      };
+    }
+
+    if (table.current_status === 'OCCUPIED' || table.current_status === 'RUNNING') {
+      return {
+        label: 'RUNNING TABLE',
+        badgeClass: 'bg-blue-600 text-white font-black shadow border border-blue-400',
+        colorName: 'blue'
+      };
+    }
+
+    return {
+      label: 'VACANT',
+      badgeClass: 'bg-white text-slate-950 font-black shadow border border-slate-300',
+      colorName: 'white'
+    };
+  };
+
+  const handleCreatePubTable = async (e) => {
+    e.preventDefault();
+    if (!newTableData.table_number) {
+      setTableError('Table number is required');
+      return;
+    }
+
+    setTableError('');
+    setTableSuccess('');
+    const result = await addPubTable({
+      ...newTableData,
+      zone_id: Number(newTableData.zone_id),
+      capacity: Number(newTableData.capacity)
+    });
+
+    if (result.success) {
+      setTableSuccess(`Table ${newTableData.table_number.toUpperCase()} created successfully!`);
+      setNewTableData({ table_number: '', zone_id: zones[0]?.id || 1, capacity: 4, current_status: 'VACANT' });
+      setIsCreateTableOpen(false);
+    } else {
+      setTableError(result.error || 'Failed to create table');
+    }
+  };
+
+  const handleOpenEditTable = (table) => {
+    setEditingTable(table);
+    setEditingTableData({
+      table_number: table.table_number,
+      zone_id: table.zone_id,
+      capacity: table.capacity,
+      current_status: table.current_status || 'VACANT'
+    });
+  };
+
+  const handleSaveEditPubTable = async (e) => {
+    e.preventDefault();
+    if (!editingTableData.table_number) {
+      alert('Table number is required');
+      return;
+    }
+
+    const result = await updatePubTable(editingTable.id, {
+      ...editingTableData,
+      zone_id: Number(editingTableData.zone_id),
+      capacity: Number(editingTableData.capacity)
+    });
+
+    if (result.success) {
+      setTableSuccess(`Updated Table ${editingTableData.table_number.toUpperCase()}!`);
+      setEditingTable(null);
+    } else {
+      alert(result.error || 'Failed to update table');
+    }
+  };
+
+  const handleDeletePubTableItem = async (table) => {
+    if (window.confirm(`Are you sure you want to delete Table "${table.table_number}"?`)) {
+      await deletePubTable(table.id);
+    }
+  };
 
   // Edit Product Modal State
   const [editingProduct, setEditingProduct] = useState(null);
@@ -702,6 +856,114 @@ export default function AdminPanel() {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Pub Tables Layout Management Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div>
+            <h3 className="font-black text-xl text-slate-100 flex items-center gap-2">
+              <QrCode className="w-6 h-6 text-amber-400" /> Pub Tables Layout Management ({tables.length} Tables)
+            </h3>
+            <p className="text-xs text-slate-400">
+              Manage Pub Rounding (C1-C10), Dining (DN-1..DN-29), and Smoking Zone (SZ-1..SZ-10) tables with live occupancy status tracking.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+            {/* Table Zone Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setAdminTableZoneFilter('ALL')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  adminTableZoneFilter === 'ALL' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                All ({tables.length})
+              </button>
+              {zones.map((z) => (
+                <button
+                  key={z.id}
+                  type="button"
+                  onClick={() => setAdminTableZoneFilter(z.id.toString())}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    adminTableZoneFilter === z.id.toString() ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {z.display_name}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setIsCreateTableOpen(true)}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2 text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" /> Add New Table
+            </button>
+          </div>
+        </div>
+
+        {tableSuccess && (
+          <div className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 p-3 rounded-xl text-xs flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{tableSuccess}</span>
+          </div>
+        )}
+
+        {/* Legend Indicator Bar */}
+        <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-950 p-3 rounded-xl border border-slate-800">
+          <span className="font-extrabold text-slate-400 text-[10px] uppercase tracking-wider">Live Status Key:</span>
+          <span className="bg-white text-slate-950 font-black text-[10px] px-2.5 py-1 rounded-full border border-slate-300">⚪ VACANT (White)</span>
+          <span className="bg-blue-600 text-white font-black text-[10px] px-2.5 py-1 rounded-full border border-blue-400">🔵 RUNNING TABLE (Blue)</span>
+          <span className="bg-emerald-500 text-slate-950 font-black text-[10px] px-2.5 py-1 rounded-full border border-emerald-400">🟢 PRINTED / FINISHED (Green)</span>
+          <span className="bg-amber-400 text-slate-950 font-black text-[10px] px-2.5 py-1 rounded-full border border-amber-300">🟡 PAID TABLE (Yellow)</span>
+        </div>
+
+        {/* Tables Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {tables
+            .filter((t) => adminTableZoneFilter === 'ALL' || t.zone_id === Number(adminTableZoneFilter))
+            .map((t) => {
+              const statusStyle = getTableStatusStyle(t);
+              return (
+                <div key={t.id} className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex flex-col justify-between hover:border-slate-700 transition">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-bold text-slate-400 font-mono">
+                      {t.zone?.prefix || 'TBL'} ({t.capacity}p)
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditTable(t)}
+                        className="p-1 text-slate-400 hover:text-amber-400 transition"
+                        title="Edit Table"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeletePubTableItem(t)}
+                        className="p-1 text-slate-400 hover:text-rose-400 transition"
+                        title="Delete Table"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-center my-1">
+                    <h4 className="text-lg font-black text-slate-100">{t.table_number}</h4>
+                  </div>
+
+                  <div className="mt-2 text-center">
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full block uppercase ${statusStyle.badgeClass}`}>
+                      {statusStyle.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
         </div>
       </div>
 
@@ -1806,6 +2068,197 @@ export default function AdminPanel() {
                 🖨️ Print Member Card & QR
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Table Modal */}
+      {isCreateTableOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-amber-400" /> Add New Pub Table
+              </h3>
+              <button
+                onClick={() => setIsCreateTableOpen(false)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            {tableError && (
+              <div className="bg-rose-950/60 border border-rose-500/40 text-rose-300 p-3 rounded-xl text-xs">
+                {tableError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreatePubTable} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Table Number * (e.g. C11, DN-30, SZ-11)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. C11 or DN-30"
+                  value={newTableData.table_number}
+                  onChange={(e) => setNewTableData({ ...newTableData, table_number: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-bold focus:outline-none focus:border-amber-500 uppercase"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Zone Area</label>
+                  <select
+                    value={newTableData.zone_id}
+                    onChange={(e) => setNewTableData({ ...newTableData, zone_id: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none"
+                  >
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.id} className="bg-slate-900">
+                        {z.display_name} ({z.prefix})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Seating Capacity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newTableData.capacity}
+                    onChange={(e) => setNewTableData({ ...newTableData, capacity: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-bold focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Initial Table Status</label>
+                <select
+                  value={newTableData.current_status}
+                  onChange={(e) => setNewTableData({ ...newTableData, current_status: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none"
+                >
+                  <option value="VACANT" className="bg-slate-900 text-white">⚪ VACANT (White)</option>
+                  <option value="OCCUPIED" className="bg-slate-900 text-blue-300">🔵 RUNNING TABLE (Blue)</option>
+                  <option value="PRINTED" className="bg-slate-900 text-emerald-300">🟢 PRINTED / FINISHED (Green)</option>
+                  <option value="BILLED" className="bg-slate-900 text-amber-300">🟡 PAID TABLE (Yellow)</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTableOpen(false)}
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg"
+                >
+                  Save Table
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Table Modal */}
+      {editingTable && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-amber-400" /> Edit Pub Table Details
+              </h3>
+              <button
+                onClick={() => setEditingTable(null)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPubTable} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Table Number *</label>
+                <input
+                  type="text"
+                  value={editingTableData.table_number}
+                  onChange={(e) => setEditingTableData({ ...editingTableData, table_number: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-bold focus:outline-none focus:border-amber-500 uppercase"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Zone Area</label>
+                  <select
+                    value={editingTableData.zone_id}
+                    onChange={(e) => setEditingTableData({ ...editingTableData, zone_id: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none"
+                  >
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.id} className="bg-slate-900">
+                        {z.display_name} ({z.prefix})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">Seating Capacity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editingTableData.capacity}
+                    onChange={(e) => setEditingTableData({ ...editingTableData, capacity: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 font-bold focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Current Occupancy Status</label>
+                <select
+                  value={editingTableData.current_status}
+                  onChange={(e) => setEditingTableData({ ...editingTableData, current_status: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none"
+                >
+                  <option value="VACANT" className="bg-slate-900 text-white">⚪ VACANT (White)</option>
+                  <option value="OCCUPIED" className="bg-slate-900 text-blue-300">🔵 RUNNING TABLE (Blue)</option>
+                  <option value="PRINTED" className="bg-slate-900 text-emerald-300">🟢 PRINTED / FINISHED (Green)</option>
+                  <option value="BILLED" className="bg-slate-900 text-amber-300">🟡 PAID TABLE (Yellow)</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTable(null)}
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg"
+                >
+                  Update Table
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

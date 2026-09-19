@@ -229,6 +229,63 @@ def get_table_by_id(table_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Table not found")
     return table
 
+@app.post("/api/tables", response_model=schemas.PubTableSchema)
+async def create_table(table_data: schemas.PubTableCreate, db: Session = Depends(get_db)):
+    t_num = table_data.table_number.strip().upper()
+    existing = db.query(models.PubTable).filter(models.PubTable.table_number == t_num).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Table '{t_num}' already exists")
+
+    qr = f"TOKEN_{t_num.replace('-', '_')}"
+    new_table = models.PubTable(
+        table_number=t_num,
+        zone_id=table_data.zone_id,
+        capacity=table_data.capacity or 4,
+        qr_token=qr,
+        current_status=table_data.current_status or "VACANT",
+        is_active=True
+    )
+    db.add(new_table)
+    db.commit()
+    db.refresh(new_table)
+
+    await manager.broadcast_all({"event": "TABLE_STATUS_UPDATED", "table_id": new_table.id, "current_status": new_table.current_status})
+    return new_table
+
+@app.put("/api/tables/{table_id}", response_model=schemas.PubTableSchema)
+async def update_table(table_id: int, table_update: schemas.PubTableUpdate, db: Session = Depends(get_db)):
+    table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    if table_update.table_number is not None:
+        table.table_number = table_update.table_number.strip().upper()
+    if table_update.zone_id is not None:
+        table.zone_id = table_update.zone_id
+    if table_update.capacity is not None:
+        table.capacity = table_update.capacity
+    if table_update.current_status is not None:
+        table.current_status = table_update.current_status
+    if table_update.is_active is not None:
+        table.is_active = table_update.is_active
+
+    db.commit()
+    db.refresh(table)
+
+    await manager.broadcast_all({"event": "TABLE_STATUS_UPDATED", "table_id": table.id, "current_status": table.current_status})
+    return table
+
+@app.delete("/api/tables/{table_id}")
+async def delete_table(table_id: int, db: Session = Depends(get_db)):
+    table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    db.delete(table)
+    db.commit()
+    await manager.broadcast_all({"event": "TABLE_STATUS_UPDATED", "table_id": table_id, "deleted": True})
+    return {"message": "Table deleted successfully"}
+
 # --- Menu Endpoints ---
 @app.get("/api/categories", response_model=List[schemas.CategorySchema])
 def get_categories(db: Session = Depends(get_db)):

@@ -21,6 +21,65 @@ export default function StaffPanel() {
   const [itemsToAdd, setItemsToAdd] = useState([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  const getTableStatusStyle = (table, activeOrder) => {
+    if (!activeOrder && (table.current_status === 'VACANT' || !table.current_status)) {
+      return {
+        label: 'VACANT',
+        badgeClass: 'bg-white text-slate-950 font-black shadow border border-slate-200',
+        cardClass: 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+      };
+    }
+    
+    if (activeOrder) {
+      if (activeOrder.status === 'BILLED' || activeOrder.payment_status === 'COLLECTED') {
+        return {
+          label: 'PAID TABLE',
+          badgeClass: 'bg-amber-400 text-slate-950 font-black shadow border border-amber-300',
+          cardClass: 'border-amber-500/60 bg-amber-950/20 hover:border-amber-400'
+        };
+      }
+      
+      const allItemsReadyOrServed = activeOrder.items && activeOrder.items.length > 0 &&
+        activeOrder.items.every(it => it.status === 'READY' || it.status === 'SERVED');
+
+      if (allItemsReadyOrServed || activeOrder.status === 'SERVED' || activeOrder.status === 'PRINTED') {
+        return {
+          label: 'PRINTED / FINISHED',
+          badgeClass: 'bg-emerald-500 text-slate-950 font-black shadow border border-emerald-400',
+          cardClass: 'border-emerald-500/60 bg-emerald-950/20 hover:border-emerald-400'
+        };
+      }
+
+      return {
+        label: 'RUNNING TABLE',
+        badgeClass: 'bg-blue-600 text-white font-black shadow border border-blue-400',
+        cardClass: 'border-blue-500/60 bg-blue-950/20 hover:border-blue-400'
+      };
+    }
+
+    if (table.current_status === 'BILLED' || table.current_status === 'PAID') {
+      return {
+        label: 'PAID TABLE',
+        badgeClass: 'bg-amber-400 text-slate-950 font-black shadow border border-amber-300',
+        cardClass: 'border-amber-500/60 bg-amber-950/20'
+      };
+    }
+
+    if (table.current_status === 'OCCUPIED') {
+      return {
+        label: 'RUNNING TABLE',
+        badgeClass: 'bg-blue-600 text-white font-black shadow border border-blue-400',
+        cardClass: 'border-blue-500/60 bg-blue-950/20'
+      };
+    }
+
+    return {
+      label: 'VACANT',
+      badgeClass: 'bg-white text-slate-950 font-black shadow border border-slate-200',
+      cardClass: 'border-slate-800 bg-slate-900/80'
+    };
+  };
+
   const filteredTables = tables.filter((t) => {
     return selectedZoneFilter === 'ALL' || t.zone_id === Number(selectedZoneFilter);
   });
@@ -238,26 +297,21 @@ export default function StaffPanel() {
           const isOccupied = !!activeOrder;
           const barItems = activeOrder ? activeOrder.items.filter(i => i.target_dept === 'BAR') : [];
           const kitchenItems = activeOrder ? activeOrder.items.filter(i => i.target_dept === 'KITCHEN') : [];
+          const statusStyle = getTableStatusStyle(table, activeOrder);
 
           return (
             <div
               key={table.id}
-              className={`bg-slate-900 border rounded-2xl p-5 shadow-xl transition flex flex-col justify-between relative overflow-hidden ${
-                isOccupied
-                  ? 'border-amber-500/40 bg-gradient-to-b from-slate-900 to-amber-950/20'
-                  : 'border-slate-800 hover:border-slate-700'
-              }`}
+              className={`border rounded-2xl p-5 shadow-xl transition flex flex-col justify-between relative overflow-hidden ${statusStyle.cardClass}`}
             >
               <div>
-                {/* Zone Tag & Status Pill */}
+                {/* Zone Tag & Custom Color Status Pill */}
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
                     {table.zone?.display_name || 'Zone'}
                   </span>
-                  <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                    isOccupied ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}>
-                    {isOccupied ? 'Active Order' : 'Vacant'}
+                  <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${statusStyle.badgeClass}`}>
+                    {statusStyle.label}
                   </span>
                 </div>
 

@@ -25,6 +25,19 @@ class PubTableSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class PubTableCreate(BaseModel):
+    table_number: str
+    zone_id: int
+    capacity: Optional[int] = 4
+    current_status: Optional[str] = "VACANT"
+
+class PubTableUpdate(BaseModel):
+    table_number: Optional[str] = None
+    zone_id: Optional[int] = None
+    capacity: Optional[int] = None
+    current_status: Optional[str] = None
+    is_active: Optional[bool] = None
+
 class CategorySchema(BaseModel):
     id: int
     name: str

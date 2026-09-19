@@ -155,6 +155,67 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  const fetchTables = async () => {
+    try {
+      const res = await fetch('/api/tables');
+      if (res.ok) {
+        const data = await res.json();
+        setTables(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error("fetchTables error:", e);
+    }
+  };
+
+  const addPubTable = async (tableData) => {
+    try {
+      const res = await fetch('/api/tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tableData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchTables();
+        return { success: true };
+      }
+      return { success: false, error: data.detail || 'Failed to add table' };
+    } catch (err) {
+      return { success: false, error: 'Server connection failed' };
+    }
+  };
+
+  const updatePubTable = async (tableId, tableData) => {
+    try {
+      const res = await fetch(`/api/tables/${tableId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tableData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchTables();
+        return { success: true };
+      }
+      return { success: false, error: data.detail || 'Failed to update table' };
+    } catch (err) {
+      return { success: false, error: 'Server connection failed' };
+    }
+  };
+
+  const deletePubTable = async (tableId) => {
+    try {
+      const res = await fetch(`/api/tables/${tableId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchTables();
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
+
   // Fetch initial metadata
   const fetchData = async () => {
     try {
@@ -251,7 +312,7 @@ export const OrderProvider = ({ children }) => {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.event === 'NEW_ORDER' || data.event === 'ORDER_STATUS_UPDATED' || data.event === 'ITEM_STATUS_UPDATED' || data.event === 'TABLE_SETTLED' || data.event === 'MENU_UPDATED') {
+          if (data.event === 'NEW_ORDER' || data.event === 'ORDER_STATUS_UPDATED' || data.event === 'ITEM_STATUS_UPDATED' || data.event === 'TABLE_SETTLED' || data.event === 'MENU_UPDATED' || data.event === 'TABLE_STATUS_UPDATED' || data.event === 'PAYMENT_COLLECTED') {
             fetchOrders();
             fetchData();
           }
@@ -661,6 +722,10 @@ export const OrderProvider = ({ children }) => {
         clearCart,
         submitOrder,
         activeCustomerOrder,
+        fetchTables,
+        addPubTable,
+        updatePubTable,
+        deletePubTable,
         barOrders,
         kitchenOrders,
         allOrders,
