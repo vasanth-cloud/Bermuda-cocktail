@@ -126,6 +126,7 @@ class UserSchema(BaseModel):
     name: str
     email: str
     role: str
+    allowed_terminals: Optional[str] = None
     is_active: bool
     created_at: datetime
 
@@ -137,6 +138,15 @@ class UserCreate(BaseModel):
     email: str
     password: str
     role: str = "WAITER"  # ADMIN, WAITER, BAR_RECEPTION, KITCHEN_CHEF
+    allowed_terminals: Optional[str] = "customer,staff"
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[str] = None
+    allowed_terminals: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class UserLogin(BaseModel):
     email: str

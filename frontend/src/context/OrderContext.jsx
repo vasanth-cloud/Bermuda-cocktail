@@ -75,10 +75,18 @@ export const OrderProvider = ({ children }) => {
       if (res.ok && data.user) {
         setCurrentUser(data.user);
         localStorage.setItem('bermuda_user', JSON.stringify(data.user));
-        if (data.user.role === 'WAITER') setActiveTab('staff');
-        else if (data.user.role === 'BAR_RECEPTION') setActiveTab('bar');
-        else if (data.user.role === 'KITCHEN_CHEF') setActiveTab('kitchen');
-        else if (data.user.role === 'ADMIN') setActiveTab('admin');
+        
+        const allowedStr = data.user.allowed_terminals || '';
+        const allowedList = allowedStr.split(',').map(s => s.trim()).filter(Boolean);
+        
+        if (allowedList.includes('admin') || data.user.role === 'ADMIN') setActiveTab('admin');
+        else if (allowedList.includes('bar')) setActiveTab('bar');
+        else if (allowedList.includes('staff')) setActiveTab('staff');
+        else if (allowedList.includes('entry_scanner')) setActiveTab('entry_scanner');
+        else if (allowedList.includes('members')) setActiveTab('members');
+        else if (allowedList.length > 0) setActiveTab(allowedList[0]);
+        else setActiveTab('customer');
+
         return { success: true };
       }
       return { success: false, error: data.detail || 'Login failed' };
@@ -106,6 +114,29 @@ export const OrderProvider = ({ children }) => {
         return { success: true };
       }
       return { success: false, error: data.detail || 'Failed to create user' };
+    } catch (err) {
+      return { success: false, error: 'Server error' };
+    }
+  };
+
+  const updateStaffAccount = async (userId, userData) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchStaffUsers();
+        if (currentUser && currentUser.id === userId) {
+          const updatedUser = { ...currentUser, ...data };
+          setCurrentUser(updatedUser);
+          localStorage.setItem('bermuda_user', JSON.stringify(updatedUser));
+        }
+        return { success: true };
+      }
+      return { success: false, error: data.detail || 'Failed to update user' };
     } catch (err) {
       return { success: false, error: 'Server error' };
     }
@@ -660,6 +691,7 @@ export const OrderProvider = ({ children }) => {
         staffUsers,
         fetchStaffUsers,
         createStaffAccount,
+        updateStaffAccount,
         deleteStaffAccount,
         members,
         fetchMembers,

@@ -99,7 +99,7 @@ export default function Navbar() {
     },
   ];
 
-  // Filter terminal navigation items based on currentUser role
+  // Filter terminal navigation items based on currentUser allowed_terminals
   const getVisibleNavItems = () => {
     if (!currentUser) {
       if (isCustomerQrMode && !showStaffNav) {
@@ -108,9 +108,15 @@ export default function Navbar() {
       return navItems.filter(item => item.id !== 'admin');
     }
 
-    if (currentUser.role === 'ADMIN') {
+    if (currentUser.role === 'ADMIN' || currentUser.email === 'avasanth081@gmail.com') {
       return navItems; // Master Admin gets all terminals
     }
+
+    if (currentUser.allowed_terminals) {
+      const allowed = currentUser.allowed_terminals.split(',').map(s => s.trim().toLowerCase());
+      return navItems.filter(item => allowed.includes(item.id.toLowerCase()));
+    }
+
     if (currentUser.role === 'WAITER') {
       return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'members');
     }
@@ -118,7 +124,7 @@ export default function Navbar() {
       return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'bar' || item.id === 'members');
     }
 
-    // Default: Hide Cloud Admin from all staff users
+    // Default fallback
     return navItems.filter(item => item.id !== 'admin');
   };
 

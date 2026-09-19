@@ -106,6 +106,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     role = Column(String, default="WAITER")  # ADMIN, WAITER, BAR_RECEPTION, KITCHEN_CHEF
+    allowed_terminals = Column(String, default="customer,staff")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

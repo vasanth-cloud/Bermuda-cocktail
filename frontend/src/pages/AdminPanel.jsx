@@ -51,6 +51,7 @@ export default function AdminPanel() {
     staffUsers,
     fetchStaffUsers,
     createStaffAccount,
+    updateStaffAccount,
     deleteStaffAccount,
     currentUser,
     members,
@@ -60,6 +61,15 @@ export default function AdminPanel() {
     deleteMember,
     recordMemberVisit
   } = useOrder();
+
+  const ALL_TERMINALS = [
+    { id: 'customer', label: 'Customer Menu', desc: 'Digital QR Ordering' },
+    { id: 'entry_scanner', label: 'Member QR Scanner', desc: 'Entrance Scan & Audit Logs' },
+    { id: 'bar', label: 'Bar & Kitchen KDS', desc: 'Drinks, Food & Reception Billing' },
+    { id: 'staff', label: 'Waiter Staff', desc: 'Floor Tables & Pickup Alerts' },
+    { id: 'members', label: 'VIP Member Cards', desc: 'Bermuda VIP Cards & Directory' },
+    { id: 'admin', label: 'Cloud Admin', desc: 'Master Menu & Staff Accounts' }
+  ];
 
   const [selectedTableForQr, setSelectedTableForQr] = useState(tables[0] || null);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -73,8 +83,19 @@ export default function AdminPanel() {
     name: '',
     email: '',
     password: '',
-    role: 'WAITER'
+    role: 'WAITER',
+    allowed_terminals: ['customer', 'staff']
   });
+
+  const [editingUser, setEditingUser] = useState(null);
+  const [editingUserData, setEditingUserData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'WAITER',
+    allowed_terminals: ['customer', 'staff']
+  });
+
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
@@ -308,15 +329,61 @@ export default function AdminPanel() {
     setIsSubmittingUser(true);
     setUserError('');
     setUserSuccess('');
-    const result = await createStaffAccount(newUserData);
+    const result = await createStaffAccount({
+      ...newUserData,
+      allowed_terminals: (newUserData.allowed_terminals || []).join(',')
+    });
     setIsSubmittingUser(false);
 
     if (result.success) {
-      setUserSuccess(`Created account for ${newUserData.name} (${newUserData.role})!`);
-      setNewUserData({ name: '', email: '', password: '', role: 'WAITER' });
+      setUserSuccess(`Created account for ${newUserData.name}!`);
+      setNewUserData({ name: '', email: '', password: '', role: 'WAITER', allowed_terminals: ['customer', 'staff'] });
       setIsCreateUserOpen(false);
     } else {
       setUserError(result.error || 'Failed to create user account');
+    }
+  };
+
+  const handleOpenEditUser = (user) => {
+    setEditingUser(user);
+    const terminals = user.allowed_terminals
+      ? user.allowed_terminals.split(',').map(s => s.trim()).filter(Boolean)
+      : ['customer', 'staff'];
+    setEditingUserData({
+      name: user.name,
+      email: user.email,
+      password: '',
+      role: user.role || 'WAITER',
+      allowed_terminals: terminals
+    });
+  };
+
+  const handleSaveEditUser = async (e) => {
+    e.preventDefault();
+    if (!editingUserData.name || !editingUserData.email) {
+      alert('Name and Email are required');
+      return;
+    }
+
+    setIsSubmittingUser(true);
+    const payload = {
+      name: editingUserData.name,
+      email: editingUserData.email,
+      role: editingUserData.role,
+      allowed_terminals: (editingUserData.allowed_terminals || []).join(',')
+    };
+    if (editingUserData.password && editingUserData.password.trim()) {
+      payload.password = editingUserData.password.trim();
+    }
+
+    const result = await updateStaffAccount(editingUser.id, payload);
+    setIsSubmittingUser(false);
+
+    if (result.success) {
+      setUserSuccess(`Updated account for ${editingUserData.name}!`);
+      setEditingUser(null);
+    } else {
+      alert(result.error || 'Failed to update user account');
     }
   };
 
@@ -665,7 +732,7 @@ export default function AdminPanel() {
               <tr>
                 <th className="p-3 rounded-l-xl">User Staff Name</th>
                 <th className="p-3">Email Address</th>
-                <th className="p-3">Assigned Role</th>
+                <th className="p-3">Permitted Page Terminals</th>
                 <th className="p-3">Account Status</th>
                 <th className="p-3 text-right rounded-r-xl">Action</th>
               </tr>
@@ -678,36 +745,68 @@ export default function AdminPanel() {
                   </td>
                 </tr>
               ) : (
-                staffUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-800/50 transition">
-                    <td className="p-3 font-bold text-slate-100 flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-xs">
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                      <span>{user.name}</span>
-                    </td>
-                    <td className="p-3 text-slate-400 font-mono">{user.email}</td>
-                    <td className="p-3">{getRoleBadge(user.role)}</td>
-                    <td className="p-3">
-                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                        Active
-                      </span>
-                    </td>
-                    <td className="p-3 text-right">
-                      {user.email === 'avasanth081@gmail.com' ? (
-                        <span className="text-[10px] text-amber-400/60 font-semibold italic">Primary Master Admin</span>
-                      ) : (
-                        <button
-                          onClick={() => handleDeleteUser(user)}
-                          className="p-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/30 text-rose-300 rounded-lg transition"
-                          title="Delete User Account"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                staffUsers.map((user) => {
+                  const allowedList = (user.allowed_terminals || '')
+                    .split(',')
+                    .map(s => s.trim().toLowerCase())
+                    .filter(Boolean);
+
+                  return (
+                    <tr key={user.id} className="hover:bg-slate-800/50 transition">
+                      <td className="p-3 font-bold text-slate-100 flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-xs">
+                          {user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span>{user.name}</span>
+                      </td>
+                      <td className="p-3 text-slate-400 font-mono">{user.email}</td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {user.role === 'ADMIN' || user.email === 'avasanth081@gmail.com' ? (
+                            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-extrabold px-2 py-0.5 rounded-md">
+                              ALL TERMINALS (ADMIN)
+                            </span>
+                          ) : allowedList.length === 0 ? (
+                            <span className="text-[10px] text-slate-500 italic">Default Staff Access</span>
+                          ) : (
+                            ALL_TERMINALS.filter(t => allowedList.includes(t.id)).map(t => (
+                              <span key={t.id} className="bg-slate-950 border border-slate-800 text-slate-300 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                {t.label}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                          Active
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        {user.email === 'avasanth081@gmail.com' ? (
+                          <span className="text-[10px] text-amber-400/60 font-semibold italic">Primary Master Admin</span>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenEditUser(user)}
+                              className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg transition"
+                              title="Edit User Details & Page Permissions"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              className="p-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/30 text-rose-300 rounded-lg transition"
+                              title="Delete User Account"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -870,10 +969,10 @@ export default function AdminPanel() {
       {/* Create Staff Account Modal */}
       {isCreateUserOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 relative overflow-hidden">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-amber-400" /> Create Staff / Waiter Account
+                <UserPlus className="w-5 h-5 text-amber-400" /> Create Staff Account
               </h3>
               <button
                 onClick={() => setIsCreateUserOpen(false)}
@@ -911,7 +1010,7 @@ export default function AdminPanel() {
                   <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                   <input
                     type="email"
-                    placeholder="waiter1@bermuda.pub"
+                    placeholder="example@gmail.com"
                     value={newUserData.email}
                     onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
@@ -936,7 +1035,7 @@ export default function AdminPanel() {
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Assigned Terminal Role *</label>
+                <label className="font-bold text-slate-300 block mb-1">Assigned Role Category *</label>
                 <select
                   value={newUserData.role}
                   onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
@@ -946,6 +1045,38 @@ export default function AdminPanel() {
                   <option value="BAR_KITCHEN" className="bg-slate-900 text-purple-300">🍸🍳 BAR_KITCHEN (Unified Drinks, Food KDS & Reception Billing)</option>
                   <option value="ADMIN" className="bg-slate-900 text-amber-300">👑 ADMIN (Full System Access)</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">
+                  Granular Page Access (Select Permitted Terminals) *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  {ALL_TERMINALS.map((term) => {
+                    const isChecked = (newUserData.allowed_terminals || []).includes(term.id);
+                    return (
+                      <label key={term.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 cursor-pointer hover:border-amber-500/40 transition">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const current = newUserData.allowed_terminals || [];
+                            if (e.target.checked) {
+                              setNewUserData({ ...newUserData, allowed_terminals: [...current, term.id] });
+                            } else {
+                              setNewUserData({ ...newUserData, allowed_terminals: current.filter(t => t !== term.id) });
+                            }
+                          }}
+                          className="mt-0.5 rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-amber-500"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-slate-100">{term.label}</div>
+                          <div className="text-[10px] text-slate-400">{term.desc}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="pt-2 flex gap-2">
@@ -963,6 +1094,132 @@ export default function AdminPanel() {
                   className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 py-3 rounded-xl font-black shadow-lg"
                 >
                   {isSubmittingUser ? 'Creating...' : 'Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Staff Account & Page Permissions Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-blue-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-400" /> Edit Staff Account & Access Permissions
+              </h3>
+              <button
+                onClick={() => setEditingUser(null)}
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditUser} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Staff Member Name *</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    value={editingUserData.name}
+                    onChange={(e) => setEditingUserData({ ...editingUserData, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Email / Login ID *</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                  <input
+                    type="email"
+                    value={editingUserData.email}
+                    onChange={(e) => setEditingUserData({ ...editingUserData, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">New Password (Leave blank to keep unchanged)</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={editingUserData.password}
+                    onChange={(e) => setEditingUserData({ ...editingUserData, password: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Assigned Role Category *</label>
+                <select
+                  value={editingUserData.role}
+                  onChange={(e) => setEditingUserData({ ...editingUserData, role: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-blue-300 font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="WAITER" className="bg-slate-900 text-blue-300">🚶 WAITER (Floor Table Orders & QR Confirmation)</option>
+                  <option value="BAR_KITCHEN" className="bg-slate-900 text-purple-300">🍸🍳 BAR_KITCHEN (Unified Drinks, Food KDS & Reception Billing)</option>
+                  <option value="ADMIN" className="bg-slate-900 text-amber-300">👑 ADMIN (Full System Access)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">
+                  Granular Page Access (Select Permitted Terminals) *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  {ALL_TERMINALS.map((term) => {
+                    const isChecked = (editingUserData.allowed_terminals || []).includes(term.id);
+                    return (
+                      <label key={term.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 cursor-pointer hover:border-blue-500/40 transition">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const current = editingUserData.allowed_terminals || [];
+                            if (e.target.checked) {
+                              setEditingUserData({ ...editingUserData, allowed_terminals: [...current, term.id] });
+                            } else {
+                              setEditingUserData({ ...editingUserData, allowed_terminals: current.filter(t => t !== term.id) });
+                            }
+                          }}
+                          className="mt-0.5 rounded border-slate-700 bg-slate-950 text-blue-500 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-slate-100">{term.label}</div>
+                          <div className="text-[10px] text-slate-400">{term.desc}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingUser}
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-black shadow-lg"
+                >
+                  {isSubmittingUser ? 'Saving...' : 'Save User Permissions'}
                 </button>
               </div>
             </form>

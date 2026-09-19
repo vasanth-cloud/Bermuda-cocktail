@@ -13,6 +13,7 @@ def seed_initial_data(db: Session):
             email="avasanth081@gmail.com",
             password_hash=hash_password("Vasanth@123"),
             role="ADMIN",
+            allowed_terminals="customer,entry_scanner,bar,staff,members,admin",
             is_active=True
         )
         waiter_user = User(
@@ -20,6 +21,7 @@ def seed_initial_data(db: Session):
             email="waiter@bermuda.pub",
             password_hash=hash_password("Waiter@123"),
             role="WAITER",
+            allowed_terminals="customer,entry_scanner,staff,members",
             is_active=True
         )
         bar_user = User(
@@ -27,6 +29,7 @@ def seed_initial_data(db: Session):
             email="bar@bermuda.pub",
             password_hash=hash_password("Bar@123"),
             role="BAR_KITCHEN",
+            allowed_terminals="customer,entry_scanner,bar,members",
             is_active=True
         )
         kitchen_user = User(
@@ -34,6 +37,7 @@ def seed_initial_data(db: Session):
             email="kitchen@bermuda.pub",
             password_hash=hash_password("Kitchen@123"),
             role="BAR_KITCHEN",
+            allowed_terminals="customer,entry_scanner,bar,members",
             is_active=True
         )
         db.add_all([admin_user, waiter_user, bar_user, kitchen_user])

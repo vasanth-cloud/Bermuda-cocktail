@@ -42,7 +42,8 @@ def startup_event():
             "ALTER TABLE orders ADD COLUMN payment_status VARCHAR DEFAULT 'PENDING'",
             "ALTER TABLE orders ADD COLUMN payment_mode VARCHAR",
             "ALTER TABLE orders ADD COLUMN amount_collected FLOAT DEFAULT 0.0",
-            "ALTER TABLE orders ADD COLUMN collected_by VARCHAR"
+            "ALTER TABLE orders ADD COLUMN collected_by VARCHAR",
+            "ALTER TABLE users ADD COLUMN allowed_terminals VARCHAR DEFAULT 'customer,staff'"
         ]:
             try:
                 conn.execute(text(col_cmd))
@@ -106,13 +107,23 @@ def login_user(creds: schemas.UserLogin, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
 
+    allowed = user.allowed_terminals
+    if not allowed:
+        if user.role == "ADMIN" or user.email == "avasanth081@gmail.com":
+            allowed = "customer,entry_scanner,bar,staff,members,admin"
+        elif user.role in ["BAR_RECEPTION", "KITCHEN_CHEF", "BAR_KITCHEN"]:
+            allowed = "customer,entry_scanner,bar,members"
+        else:
+            allowed = "customer,entry_scanner,staff,members"
+
     return {
         "message": "Login successful",
         "user": {
             "id": user.id,
             "name": user.name,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            "allowed_terminals": allowed
         }
     }
 
@@ -126,17 +137,52 @@ def create_staff_user(user_data: schemas.UserCreate, db: Session = Depends(get_d
     if existing:
         raise HTTPException(status_code=400, detail="User with this email already exists")
 
+    terminals = user_data.allowed_terminals
+    if not terminals:
+        if user_data.role.upper() == "ADMIN":
+            terminals = "customer,entry_scanner,bar,staff,members,admin"
+        else:
+            terminals = "customer,staff"
+
     new_user = models.User(
         name=user_data.name,
         email=user_data.email,
         password_hash=hash_password(user_data.password),
         role=user_data.role.upper(),
+        allowed_terminals=terminals,
         is_active=True
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return new_user
+
+@app.put("/api/users/{user_id}", response_model=schemas.UserSchema)
+def update_staff_user(user_id: int, user_data: schemas.UserUpdate, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user_data.name is not None:
+        user.name = user_data.name
+    if user_data.email is not None and user_data.email.strip():
+        if user_data.email != user.email:
+            existing = db.query(models.User).filter(models.User.email == user_data.email).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="User with this email already exists")
+            user.email = user_data.email
+    if user_data.password is not None and user_data.password.strip():
+        user.password_hash = hash_password(user_data.password)
+    if user_data.role is not None:
+        user.role = user_data.role.upper()
+    if user_data.allowed_terminals is not None:
+        user.allowed_terminals = user_data.allowed_terminals
+    if user_data.is_active is not None:
+        user.is_active = user_data.is_active
+
+    db.commit()
+    db.refresh(user)
+    return user
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):
