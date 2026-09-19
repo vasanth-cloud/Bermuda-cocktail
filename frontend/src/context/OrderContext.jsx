@@ -297,42 +297,54 @@ export const OrderProvider = ({ children }) => {
     fetchOrders();
   }, []);
 
-  // Setup WebSocket connection safely
+  // Setup WebSocket connection safely with auto-reconnect
   useEffect(() => {
     let ws = null;
-    try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws-api/${activeTab}`;
-      ws = new WebSocket(wsUrl);
+    let reconnectTimer = null;
+    let isDisposed = false;
 
-      ws.onopen = () => {
-        setWsConnected(true);
-      };
+    const connectWs = () => {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws-api/${activeTab}`;
+        ws = new WebSocket(wsUrl);
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.event === 'NEW_ORDER' || data.event === 'ORDER_STATUS_UPDATED' || data.event === 'ITEM_STATUS_UPDATED' || data.event === 'TABLE_SETTLED' || data.event === 'MENU_UPDATED' || data.event === 'TABLE_STATUS_UPDATED' || data.event === 'PAYMENT_COLLECTED') {
-            fetchOrders();
-            fetchData();
+        ws.onopen = () => {
+          if (!isDisposed) setWsConnected(true);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED'].includes(data.event)) {
+              fetchOrders();
+              fetchData();
+            }
+          } catch (e) {
+            // Ignore non-JSON frames
           }
-        } catch (e) {
-          // Ignore non-JSON frames
-        }
-      };
+        };
 
-      ws.onerror = () => {
-        setWsConnected(false);
-      };
+        ws.onerror = () => {
+          if (!isDisposed) setWsConnected(false);
+        };
 
-      ws.onclose = () => {
-        setWsConnected(false);
-      };
-    } catch (err) {
-      console.warn("WebSocket init error:", err);
-    }
+        ws.onclose = () => {
+          if (!isDisposed) {
+            setWsConnected(false);
+            reconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+      } catch (err) {
+        console.warn("WebSocket init error:", err);
+      }
+    };
+
+    connectWs();
 
     return () => {
+      isDisposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (ws) ws.close();
     };
   }, [activeTab]);
@@ -392,8 +404,8 @@ export const OrderProvider = ({ children }) => {
       const createdOrder = await res.json();
       setActiveCustomerOrder(createdOrder);
       clearCart();
-      fetchOrders();
-      fetchData();
+      // Background async sync without blocking UI modal return
+      Promise.all([fetchOrders(), fetchData()]).catch(console.error);
       return createdOrder;
     } catch (err) {
       console.error(err);
