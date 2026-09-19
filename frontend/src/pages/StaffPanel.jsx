@@ -135,7 +135,8 @@ export default function StaffPanel() {
 
   const handleConfirmOrder = async (orderId) => {
     setConfirmingOrderId(orderId);
-    await confirmOrderAsWaiter(orderId, waiterName || 'Waiter');
+    const claimingWaiter = currentUser?.name || waiterName || 'Waiter';
+    await confirmOrderAsWaiter(orderId, claimingWaiter);
     setConfirmingOrderId(null);
   };
 
@@ -407,9 +408,12 @@ export default function StaffPanel() {
                         key={table.id}
                         className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
                       >
-                        {/* Top Row: Duration */}
-                        <div className="flex items-center justify-between text-[9px] font-mono leading-none">
+                        {/* Top Row: Duration & Claimed Waiter Name */}
+                        <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
                           <span className="opacity-90 font-semibold">{elapsedTime}</span>
+                          <span className="truncate max-w-[55px] font-bold opacity-90" title={`Handled by ${activeOrder?.waiter_name || activeOrder?.collected_by || 'Waiter'}`}>
+                            👤 {activeOrder?.waiter_name || activeOrder?.collected_by || 'Waiter'}
+                          </span>
                         </div>
 
                         {/* Middle: Table Number & Amount */}
@@ -612,6 +616,7 @@ export default function StaffPanel() {
                 <div className="font-black text-sm">THE BERMUDA COCKTAIL</div>
                 <div className="text-[10px] text-slate-600">Table: {formatTableLabel(activePrintOrder.table?.table_number || 'T-01')}</div>
                 <div className="text-[10px] text-slate-500">Bill #: {activePrintOrder.order_number}</div>
+                <div className="text-[10px] text-amber-700 font-bold">Waiter: {activePrintOrder.waiter_name || activePrintOrder.collected_by || 'Staff'}</div>
               </div>
 
               <div className="space-y-1 py-1">

@@ -201,13 +201,18 @@ export default function BarReception() {
                 <div>
                   {/* Card Header */}
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-2xl font-black text-slate-100">
                         Table {order.table?.table_number || 'DN-01'}
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-mono uppercase">
                         {order.table?.zone?.display_name || 'Main Zone'}
                       </span>
+                      {(order.waiter_name || order.collected_by) && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                          👤 Waiter: {order.waiter_name || order.collected_by}
+                        </span>
+                      )}
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-mono text-slate-400 block">#{order.order_number}</span>

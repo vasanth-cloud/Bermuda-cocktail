@@ -53,7 +53,8 @@ def startup_event():
                 "payment_status": "ALTER TABLE orders ADD COLUMN payment_status VARCHAR DEFAULT 'PENDING'",
                 "payment_mode": "ALTER TABLE orders ADD COLUMN payment_mode VARCHAR",
                 "amount_collected": "ALTER TABLE orders ADD COLUMN amount_collected FLOAT DEFAULT 0.0",
-                "collected_by": "ALTER TABLE orders ADD COLUMN collected_by VARCHAR"
+                "collected_by": "ALTER TABLE orders ADD COLUMN collected_by VARCHAR",
+                "waiter_name": "ALTER TABLE orders ADD COLUMN waiter_name VARCHAR"
             }
             for col_name, col_cmd in col_definitions.items():
                 if col_name not in order_cols:
@@ -513,6 +514,10 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
         raise HTTPException(status_code=404, detail="Order not found")
 
     order.status = "CONFIRMED"
+    order.waiter_name = waiter_name
+    if not order.collected_by:
+        order.collected_by = waiter_name
+
     for item in order.items:
         if item.status == "PENDING":
             item.status = "CONFIRMED"
@@ -533,6 +538,7 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
         "total_amount": order.total_amount,
         "status": order.status,
         "confirmed_by": waiter_name,
+        "waiter_name": waiter_name,
         "bar_items_count": bar_items_count,
         "kitchen_items_count": kitchen_items_count,
         "items": [

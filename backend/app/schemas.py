@@ -111,6 +111,7 @@ class OrderSchema(BaseModel):
     payment_mode: Optional[str] = None
     amount_collected: Optional[float] = 0.0
     collected_by: Optional[str] = None
+    waiter_name: Optional[str] = None
     sync_status: str
     created_at: datetime
     table: Optional[PubTableSchema] = None
