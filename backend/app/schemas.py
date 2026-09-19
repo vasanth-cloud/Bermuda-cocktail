@@ -102,9 +102,9 @@ class OrderItemSchema(BaseModel):
 
 class OrderSchema(BaseModel):
     id: int
-    table_id: int
+    table_id: Optional[int] = None
     order_number: str
-    customer_name: str
+    customer_name: Optional[str] = "Guest"
     status: str
     total_amount: float
     payment_status: Optional[str] = "PENDING"
@@ -112,7 +112,7 @@ class OrderSchema(BaseModel):
     amount_collected: Optional[float] = 0.0
     collected_by: Optional[str] = None
     waiter_name: Optional[str] = None
-    sync_status: str
+    sync_status: Optional[str] = "PENDING_SYNC"
     created_at: datetime
     table: Optional[PubTableSchema] = None
     items: List[OrderItemSchema] = []
