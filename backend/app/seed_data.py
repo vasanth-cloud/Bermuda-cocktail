@@ -1,6 +1,6 @@
 import hashlib
 from sqlalchemy.orm import Session
-from app.models import TableZone, PubTable, Category, Product, User
+from app.models import TableZone, PubTable, Category, Product, User, Order
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -76,9 +76,23 @@ def seed_initial_data(db: Session):
     # 2. Cleanup Legacy Tables & Seed Exact 49 Pub Tables
     valid_numbers = set([f"C{i}" for i in range(1, 11)] + [f"DN-{i}" for i in range(1, 30)] + [f"SZ-{i}" for i in range(1, 11)])
     
-    # Delete legacy tables not in the 49 valid pub table numbers
-    db.query(PubTable).filter(~PubTable.table_number.in_(valid_numbers)).delete(synchronize_session=False)
-    db.commit()
+    # Delete legacy tables not in the 49 valid pub table numbers safely
+    try:
+        legacy_tables = db.query(PubTable).filter(~PubTable.table_number.in_(valid_numbers)).all()
+        if legacy_tables:
+            fallback_table = db.query(PubTable).filter(PubTable.table_number.in_(valid_numbers)).first()
+            for leg_table in legacy_tables:
+                orders_for_table = db.query(Order).filter(Order.table_id == leg_table.id).all()
+                for ord_obj in orders_for_table:
+                    if fallback_table:
+                        ord_obj.table_id = fallback_table.id
+                    else:
+                        db.delete(ord_obj)
+                db.delete(leg_table)
+            db.commit()
+    except Exception as err:
+        db.rollback()
+        print(f"[seed_data] Warning: Legacy table cleanup handled: {err}")
 
     existing_numbers = set(t.table_number for t in db.query(PubTable).all())
     tables_to_add = []
