@@ -93,8 +93,8 @@ function AppContent() {
   const { currentUser, isCustomerQrMode, setActiveTab } = useOrder();
   const [guestBypass, setGuestBypass] = useState(false);
 
-  // Pure Customer QR Scan Mode (e.g. ?table=DN-01) - Dedicated mobile view
-  if (isCustomerQrMode) {
+  // Pure Customer QR Scan Mode (e.g. ?table=DN-01) - Dedicated mobile view when NO staff user is logged in
+  if (isCustomerQrMode && !currentUser) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative overflow-x-hidden pub-ambient-bg">
         <div className="pub-spotlight spotlight-left pointer-events-none" />
