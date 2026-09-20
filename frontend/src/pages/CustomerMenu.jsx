@@ -360,6 +360,12 @@ export default function CustomerMenu() {
                   alt={product.name}
                   className={`w-full h-full object-cover ${!isAvailable ? 'grayscale opacity-50' : ''}`}
                   loading="lazy"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = isBar 
+                      ? 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80'
+                      : 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=300&q=80';
+                  }}
                 />
               </div>
 

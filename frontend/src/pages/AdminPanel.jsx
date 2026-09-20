@@ -810,8 +810,20 @@ export default function AdminPanel() {
               <tbody className="divide-y divide-slate-800">
                 {products.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-800/50 transition">
-                    <td className="p-3 font-bold text-slate-100 flex items-center gap-2">
-                      {item.name}
+                    <td className="p-3 font-bold text-slate-100 flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shrink-0 flex items-center justify-center">
+                        {item.image_url ? (
+                          <img 
+                            src={item.image_url} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-500">📷</span>
+                        )}
+                      </div>
+                      <span>{item.name}</span>
                     </td>
 
                     <td className="p-3 text-slate-400">
@@ -1600,7 +1612,15 @@ export default function AdminPanel() {
                 <div className="flex items-center gap-3">
                   <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shrink-0 relative flex items-center justify-center">
                     {newItemData.image_url ? (
-                      <img src={newItemData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                      <img 
+                        src={newItemData.image_url} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80';
+                        }}
+                      />
                     ) : (
                       <span className="text-xl text-slate-600">📷</span>
                     )}
@@ -1796,7 +1816,15 @@ export default function AdminPanel() {
                 <div className="flex items-center gap-3">
                   <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shrink-0 relative flex items-center justify-center">
                     {editingProductData.image_url ? (
-                      <img src={editingProductData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                      <img 
+                        src={editingProductData.image_url} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80';
+                        }}
+                      />
                     ) : (
                       <span className="text-xl text-slate-600">📷</span>
                     )}
