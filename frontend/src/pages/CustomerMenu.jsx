@@ -108,7 +108,7 @@ export default function CustomerMenu() {
   return (
     <div className="pb-28 w-full px-3 sm:px-6 lg:px-8 pt-2 sm:pt-4 font-sans text-slate-100 bg-slate-950 min-h-screen">
       {/* WAITER POS CONTROL BAR WITH 2 OPTIONS (WHEN WAITER OPENS MENU PAGE) */}
-      {!isCustomerQrMode && currentUser && (
+      {currentUser && (
         <div className="bg-gradient-to-r from-slate-900 via-amber-950/90 to-slate-900 border-2 border-amber-500/70 p-3.5 rounded-2xl mb-3.5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-3 text-xs animate-in fade-in">
           <div className="flex items-center gap-2.5">
             <span className="text-xl">🍸</span>
