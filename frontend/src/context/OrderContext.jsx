@@ -659,6 +659,19 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  const importExcelMenu = async () => {
+    try {
+      const res = await fetch('/api/menu/import-excel', { method: 'POST' });
+      if (res.ok) {
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error importing Excel menu:", err);
+    }
+    return false;
+  };
+
   const updateProduct = async (productId, productData) => {
     try {
       const res = await fetch(`/api/products/${productId}`, {
@@ -862,7 +875,8 @@ export const OrderProvider = ({ children }) => {
         bulkImportMembers,
         deleteSinglePaymentLog,
         clearAllPaymentLogs,
-        clearMemberEntryLogs
+        clearMemberEntryLogs,
+        importExcelMenu
       }}
     >
       {children}

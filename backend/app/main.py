@@ -360,6 +360,16 @@ async def delete_product(product_id: int, db: Session = Depends(get_db)):
     await manager.broadcast_all({"event": "MENU_UPDATED"})
     return {"message": "Product deleted successfully"}
 
+@app.post("/api/menu/import-excel")
+async def trigger_excel_menu_import(db: Session = Depends(get_db)):
+    from app.excel_importer import import_excel_menu
+    success = import_excel_menu(db)
+    if success:
+        await manager.broadcast_all({"event": "MENU_UPDATED"})
+        return {"message": "Menu successfully re-imported and updated from Excel price list!"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to import menu from Excel file.")
+
 # --- Order & Split Routing Endpoints ---
 @app.post("/api/orders", response_model=schemas.OrderSchema)
 async def create_order(order_data: schemas.OrderCreate, db: Session = Depends(get_db)):

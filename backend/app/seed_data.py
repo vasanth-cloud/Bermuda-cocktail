@@ -137,51 +137,7 @@ def seed_initial_data(db: Session):
         db.add_all(tables_to_add)
         db.commit()
 
-    # 3. Seed Categories
-    if db.query(Category).count() == 0:
-        categories = [
-            Category(name="Signature Cocktails", target_dept="BAR", icon="🍸"),
-            Category(name="Mocktails & Coolers", target_dept="BAR", icon="🍹"),
-            Category(name="Beers & Spirits", target_dept="BAR", icon="🍺"),
-            Category(name="Bar Snacks & Finger Food", target_dept="KITCHEN", icon="🍟"),
-            Category(name="Kitchen Starters & Mains", target_dept="KITCHEN", icon="🍔")
-        ]
-        db.add_all(categories)
-        db.commit()
-
-    # Fetch categories
-    cocktails_cat = db.query(Category).filter_by(name="Signature Cocktails").first()
-    mocktails_cat = db.query(Category).filter_by(name="Mocktails & Coolers").first()
-    beers_cat = db.query(Category).filter_by(name="Beers & Spirits").first()
-    snacks_cat = db.query(Category).filter_by(name="Bar Snacks & Finger Food").first()
-    mains_cat = db.query(Category).filter_by(name="Kitchen Starters & Mains").first()
-
-    # 4. Seed Products
-    if db.query(Product).count() == 0:
-        products = [
-            # Bar - Cocktails
-            Product(name="Bermuda Blue Lagoon", category_id=cocktails_cat.id, price=450.0, description="Blue Curacao, Vodka, Lemonade, Mint", target_dept="BAR"),
-            Product(name="Smoked Old Fashioned", category_id=cocktails_cat.id, price=550.0, description="Bourbon, Angostura bitters, Orange peel", target_dept="BAR"),
-            Product(name="Classic Mojito", category_id=cocktails_cat.id, price=380.0, description="White rum, fresh lime, mint leaves, soda", target_dept="BAR"),
-            Product(name="Long Island Iced Tea (LIIT)", category_id=cocktails_cat.id, price=650.0, description="5 Spirits blend, Lemon juice, Cola", target_dept="BAR"),
-            
-            # Bar - Mocktails
-            Product(name="Virgin Pina Colada", category_id=mocktails_cat.id, price=260.0, description="Pineapple juice, coconut cream, crushed ice", target_dept="BAR"),
-            Product(name="Watermelon Mint Splash", category_id=mocktails_cat.id, price=240.0, description="Fresh watermelon, mint, lemon soda", target_dept="BAR"),
-
-            # Bar - Beers & Spirits
-            Product(name="Corona Extra (Bucket 330ml)", category_id=beers_cat.id, price=350.0, description="Chilled Mexican lager beer", target_dept="BAR"),
-            Product(name="Draft Craft Beer (Pint)", category_id=beers_cat.id, price=290.0, description="Freshly brewed wheat beer on tap", target_dept="BAR"),
-
-            # Kitchen - Bar Snacks
-            Product(name="Loaded Cheese Nachos", category_id=snacks_cat.id, price=320.0, description="Crispy corn tortilla, melted cheddar, jalapenos & salsa", target_dept="KITCHEN"),
-            Product(name="Crispy Chicken Wings (6pcs)", category_id=snacks_cat.id, price=390.0, description="Spicy BBQ glazed wings served with ranch", target_dept="KITCHEN"),
-            Product(name="Truffle Parmesan Fries", category_id=snacks_cat.id, price=280.0, description="Skin-on fries tossed in white truffle oil & parmesan", target_dept="KITCHEN"),
-
-            # Kitchen - Starters & Mains
-            Product(name="Bermuda Club Burger", category_id=mains_cat.id, price=450.0, description="Smoked patty, caramelized onion, cheddar & house sauce", target_dept="KITCHEN"),
-            Product(name="Peri-Peri Grilled Paneer Skewers", category_id=mains_cat.id, price=360.0, description="Cottage cheese cubes marinated in peri-peri glaze", target_dept="KITCHEN"),
-            Product(name="Wood-fired Pepperoni Pizza", category_id=mains_cat.id, price=520.0, description="Mozzarella, spicy pepperoni, basil leaves", target_dept="KITCHEN")
-        ]
-        db.add_all(products)
-        db.commit()
+    # 3. Seed Categories & Products from Excel Price List
+    if db.query(Category).count() == 0 or db.query(Product).count() == 0:
+        from app.excel_importer import import_excel_menu
+        import_excel_menu(db)

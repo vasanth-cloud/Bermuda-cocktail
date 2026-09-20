@@ -64,7 +64,8 @@ export default function AdminPanel() {
     createMember,
     updateMember,
     deleteMember,
-    recordMemberVisit
+    recordMemberVisit,
+    importExcelMenu
   } = useOrder();
 
   const ALL_TERMINALS = [
@@ -622,8 +623,23 @@ export default function AdminPanel() {
             </div>
           </div>
 
-        {/* Top-Right Controls: Audit Log Button */}
+        {/* Top-Right Controls: Sync Excel Menu & Audit Log Buttons */}
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={async () => {
+              if (window.confirm("Import menu items from Bermuda Excel Price List file? This will replace all existing menu items with 235 items from the Excel sheet.")) {
+                const ok = await importExcelMenu();
+                if (ok) alert("Successfully imported 235 menu items & 32 categories from Excel!");
+                else alert("Failed to import Excel menu.");
+              }
+            }}
+            className="bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+            title="Import 235 items & 32 categories from Excel spreadsheet"
+          >
+            <FileText className="w-4 h-4 text-amber-400" />
+            <span>📊 Sync Excel Menu</span>
+          </button>
+
           <button
             onClick={() => setIsLogModalOpen(true)}
             className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
