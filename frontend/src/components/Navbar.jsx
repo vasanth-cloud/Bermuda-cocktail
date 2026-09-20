@@ -22,7 +22,8 @@ import {
   Crown,
   CreditCard,
   Scan,
-  BarChart3
+  BarChart3,
+  MapPin
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -91,6 +92,22 @@ export default function Navbar() {
       bg: 'bg-amber-500/10 border-amber-500/20' 
     },
     { 
+      id: 'tables', 
+      label: 'Pub Layout & Tables', 
+      desc: 'Zones & Table Numbering', 
+      icon: MapPin, 
+      color: 'text-cyan-400', 
+      bg: 'bg-cyan-500/10 border-cyan-500/20' 
+    },
+    { 
+      id: 'staff_accounts', 
+      label: 'Staff Accounts', 
+      desc: 'Roles & Terminal Permissions', 
+      icon: Shield, 
+      color: 'text-indigo-400', 
+      bg: 'bg-indigo-500/10 border-indigo-500/20' 
+    },
+    { 
       id: 'members', 
       label: 'VIP Member Cards', 
       desc: 'Bermuda VIP Cards & Directory', 
@@ -101,7 +118,7 @@ export default function Navbar() {
     { 
       id: 'admin', 
       label: 'Cloud Admin', 
-      desc: 'Master Menu & Staff Accounts', 
+      desc: 'Master Menu & Price Config', 
       icon: LayoutDashboard, 
       color: 'text-rose-400', 
       bg: 'bg-rose-500/10 border-rose-500/20' 
@@ -114,7 +131,7 @@ export default function Navbar() {
       if (isCustomerQrMode && !showStaffNav) {
         return navItems.filter(item => item.id === 'customer');
       }
-      return navItems.filter(item => item.id !== 'admin');
+      return navItems.filter(item => item.id !== 'admin' && item.id !== 'staff_accounts');
     }
 
     if (currentUser.role === 'ADMIN' || currentUser.email === 'avasanth081@gmail.com') {
@@ -127,14 +144,14 @@ export default function Navbar() {
     }
 
     if (currentUser.role === 'WAITER') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'reports' || item.id === 'members');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'reports' || item.id === 'members' || item.id === 'tables');
     }
     if (currentUser.role === 'BAR_KITCHEN' || currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
       return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'bar' || item.id === 'reports' || item.id === 'members');
     }
 
     // Default fallback
-    return navItems.filter(item => item.id !== 'admin');
+    return navItems.filter(item => item.id !== 'admin' && item.id !== 'staff_accounts');
   };
 
   const visibleNavItems = getVisibleNavItems();
