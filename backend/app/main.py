@@ -835,6 +835,94 @@ async def settle_table_bill(table_id: int, db: Session = Depends(get_db)):
     })
     return {"message": f"Table {table.table_number} settled successfully"}
 
+# --- Category & Payment Sales Report Endpoint ---
+@app.get("/api/reports/category-summary")
+def get_category_sales_report(db: Session = Depends(get_db)):
+    collected_orders = db.query(models.Order).filter(models.Order.payment_status == "COLLECTED").all()
+
+    total_cash = 0.0
+    total_upi = 0.0
+    total_card = 0.0
+    grand_total_collected = 0.0
+    total_discounts = 0.0
+
+    dept_breakdown = {
+        "KITCHEN": {"items_sold": 0, "gross_sales": 0.0, "name": "Food & Kitchen"},
+        "BAR": {"items_sold": 0, "gross_sales": 0.0, "name": "Bar Drinks & Liquor"}
+    }
+
+    category_sales = {}
+    platform_sales = {}
+
+    for ord in collected_orders:
+        amt = ord.amount_collected or ord.final_amount or ord.total_amount or 0.0
+        mode = ord.payment_mode or "CASH"
+        platform = ord.booking_platform or "Direct / Walk-in"
+        disc = ord.discount_amount or 0.0
+
+        if mode == "CASH":
+            total_cash += amt
+        elif mode == "UPI":
+            total_upi += amt
+        elif mode == "CARD":
+            total_card += amt
+
+        grand_total_collected += amt
+        total_discounts += disc
+
+        # Platform summary
+        if platform not in platform_sales:
+            platform_sales[platform] = {"count": 0, "collected_amount": 0.0, "discount_amount": 0.0}
+        platform_sales[platform]["count"] += 1
+        platform_sales[platform]["collected_amount"] += amt
+        platform_sales[platform]["discount_amount"] += disc
+
+        # Items category breakdown
+        for item in ord.items:
+            qty = item.quantity or 1
+            item_total = qty * (item.unit_price or 0.0)
+            dept = (item.target_dept or "KITCHEN").upper()
+
+            if dept in dept_breakdown:
+                dept_breakdown[dept]["items_sold"] += qty
+                dept_breakdown[dept]["gross_sales"] += item_total
+
+            cat_name = "Uncategorized"
+            cat_dept = dept
+            cat_id = 0
+
+            if item.product and item.product.category:
+                cat_name = item.product.category.name
+                cat_dept = (item.product.category.target_dept or dept).upper()
+                cat_id = item.product.category.id
+
+            if cat_name not in category_sales:
+                category_sales[cat_name] = {
+                    "category_id": cat_id,
+                    "category_name": cat_name,
+                    "target_dept": cat_dept,
+                    "items_sold": 0,
+                    "total_revenue": 0.0
+                }
+            category_sales[cat_name]["items_sold"] += qty
+            category_sales[cat_name]["total_revenue"] += item_total
+
+    sorted_category_list = sorted(category_sales.values(), key=lambda x: x["total_revenue"], reverse=True)
+
+    return {
+        "payment_summary": {
+            "total_cash": total_cash,
+            "total_upi": total_upi,
+            "total_card": total_card,
+            "grand_total": grand_total_collected,
+            "total_discounts": total_discounts,
+            "total_orders": len(collected_orders)
+        },
+        "department_summary": dept_breakdown,
+        "category_sales": sorted_category_list,
+        "platform_sales": platform_sales
+    }
+
 # --- Sync Simulation Endpoints ---
 @app.get("/api/sync/status")
 def get_sync_status(db: Session = Depends(get_db)):

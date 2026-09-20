@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
+import CategorySalesReportModal from '../components/CategorySalesReportModal';
 import { 
   Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, 
   ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check, Edit2, 
-  Trash2, Search, X, Printer, Eye, LogOut, HelpCircle, RefreshCw, Layers
+  Trash2, Search, X, Printer, Eye, LogOut, HelpCircle, RefreshCw, Layers, BarChart3
 } from 'lucide-react';
 
 export default function StaffPanel() {
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const { 
     tables, zones, setSelectedTable, setActiveTab, allOrders, 
     collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter, 
@@ -215,6 +217,33 @@ export default function StaffPanel() {
       {/* Main Floor Container */}
 
       <div className="px-4 sm:px-6 space-y-5">
+        {/* Top Staff Utility Header */}
+        <div className="flex items-center justify-between bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 shadow-lg flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-100 flex items-center gap-2">
+                Waiter Floor Terminal
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono font-bold">
+                  👤 {currentUser?.name || waiterName || 'Waiter'}
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-400">Live POS Table Grid, Order Routing & Quick Payment Settlement</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsReportModalOpen(true)}
+            className="bg-purple-950/90 hover:bg-purple-900 border border-purple-500/50 text-purple-300 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+            title="Open Category-Wise Sales & Payment Report"
+          >
+            <BarChart3 className="w-4 h-4 text-amber-400" />
+            <span>Category & Sales Reports</span>
+          </button>
+        </div>
+
         {/* Customer QR Order Requests Awaiting Waiter Confirmation */}
         {pendingCustomerOrderRequests.length > 0 && (
           <div className="bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500 p-4 rounded-xl shadow-2xl space-y-3 animate-pulse">
@@ -1015,6 +1044,12 @@ export default function StaffPanel() {
           </div>
         </div>
       )}
+
+      {/* Category Sales & Department Revenue Report Modal */}
+      <CategorySalesReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+      />
     </div>
   );
 }

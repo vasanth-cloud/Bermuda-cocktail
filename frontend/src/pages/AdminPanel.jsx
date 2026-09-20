@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
 import PaymentAuditLogModal from '../components/PaymentAuditLogModal';
+import CategorySalesReportModal from '../components/CategorySalesReportModal';
 import { 
   LayoutDashboard, 
   QrCode, 
@@ -30,7 +31,8 @@ import {
   MapPin,
   Award,
   Sparkles,
-  Search
+  Search,
+  BarChart3
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -93,6 +95,7 @@ export default function AdminPanel() {
 
   const [selectedTableForQr, setSelectedTableForQr] = useState(tables[0] || null);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Local IP state for mobile QR scanning
   const [localIpHost, setLocalIpHost] = useState(window.location.host);
@@ -661,6 +664,15 @@ export default function AdminPanel() {
 
         {/* Top-Right Controls: Sync Excel Menu & Audit Log Buttons */}
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => setIsReportModalOpen(true)}
+            className="bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-purple-300 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+            title="Open Category-Wise Sales & Revenue Report"
+          >
+            <BarChart3 className="w-4 h-4 text-amber-400" />
+            <span>Category & Sales Reports</span>
+          </button>
+
           <button
             onClick={async () => {
               if (window.confirm("Import menu items from Bermuda Excel Price List file? This will replace all existing menu items with 235 items from the Excel sheet.")) {
@@ -2488,6 +2500,12 @@ export default function AdminPanel() {
       <PaymentAuditLogModal
         isOpen={isLogModalOpen}
         onClose={() => setIsLogModalOpen(false)}
+      />
+
+      {/* Category Sales & Department Revenue Report Modal */}
+      <CategorySalesReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
       />
     </div>
   );

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
 import PaymentAuditLogModal from '../components/PaymentAuditLogModal';
-import { Wine, Utensils, CheckCircle2, Clock, DollarSign, Receipt, RefreshCw, AlertCircle, Smartphone, CreditCard, Flame, Sparkles, Filter } from 'lucide-react';
+import CategorySalesReportModal from '../components/CategorySalesReportModal';
+import { Wine, Utensils, CheckCircle2, Clock, DollarSign, Receipt, RefreshCw, AlertCircle, Smartphone, CreditCard, Flame, Sparkles, Filter, BarChart3 } from 'lucide-react';
 
 export default function BarReception() {
   const { allOrders, updateOrderStatus, updateItemStatus, collectPayment, settleTableBill, tables, paymentLogs, paymentSummary } = useOrder();
@@ -9,6 +10,7 @@ export default function BarReception() {
   const [stationFilter, setStationFilter] = useState('ALL'); // ALL, BAR, KITCHEN
   const [selectedTableFilter, setSelectedTableFilter] = useState('ALL');
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Payment Modal State
   const [activePaymentOrder, setActivePaymentOrder] = useState(null);
@@ -104,6 +106,15 @@ export default function BarReception() {
 
           {/* Top-Right Utility Bar */}
           <div className="flex items-center gap-3 flex-wrap self-end md:self-auto">
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-purple-300 font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+              title="Open Category-Wise & Payment Sales Report"
+            >
+              <BarChart3 className="w-4 h-4 text-amber-400" />
+              <span>Category & Sales Reports</span>
+            </button>
+
             <button
               onClick={() => setIsLogModalOpen(true)}
               className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
@@ -607,6 +618,12 @@ export default function BarReception() {
       <PaymentAuditLogModal
         isOpen={isLogModalOpen}
         onClose={() => setIsLogModalOpen(false)}
+      />
+
+      {/* Category Sales & Department Revenue Report Modal */}
+      <CategorySalesReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
       />
     </div>
   );

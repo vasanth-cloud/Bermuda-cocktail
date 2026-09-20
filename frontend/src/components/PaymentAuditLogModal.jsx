@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
-import { Receipt, X, ShieldCheck, Download, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react';
+import { Receipt, X, ShieldCheck, Download, FileSpreadsheet, Trash2, AlertTriangle, BarChart3 } from 'lucide-react';
+import CategorySalesReportModal from './CategorySalesReportModal';
 
 export default function PaymentAuditLogModal({ isOpen, onClose }) {
   const { paymentLogs, paymentSummary, deleteSinglePaymentLog, clearAllPaymentLogs, currentUser } = useOrder();
+
+  // Category Sales Report Modal state
+  const [isCategoryReportOpen, setIsCategoryReportOpen] = useState(false);
 
   // Delete Confirmation Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -128,6 +132,15 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCategoryReportOpen(true)}
+              className="bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-purple-300 font-extrabold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition"
+              title="View Category Sales & Department Revenue Breakdown"
+            >
+              <BarChart3 className="w-4 h-4 text-amber-400" />
+              <span>Category & Sales Report</span>
+            </button>
+
             {paymentLogs.length > 0 && (
               <button
                 onClick={() => handleOpenDelete(null)}
@@ -335,6 +348,12 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
             </div>
           </div>
         )}
+
+        {/* Category Sales & Department Revenue Report Modal */}
+        <CategorySalesReportModal
+          isOpen={isCategoryReportOpen}
+          onClose={() => setIsCategoryReportOpen(false)}
+        />
       </div>
     </div>
   );
