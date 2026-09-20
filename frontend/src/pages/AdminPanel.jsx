@@ -32,7 +32,9 @@ import {
   Award,
   Sparkles,
   Search,
-  BarChart3
+  BarChart3,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -96,6 +98,13 @@ export default function AdminPanel() {
   const [selectedTableForQr, setSelectedTableForQr] = useState(tables[0] || null);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+  // Master Menu Search, Filter & Pagination State
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState('ALL');
+  const [menuDeptFilter, setMenuDeptFilter] = useState('ALL');
+  const [menuCurrentPage, setMenuCurrentPage] = useState(1);
+  const [menuItemsPerPage, setMenuItemsPerPage] = useState(10);
 
   // Local IP state for mobile QR scanning
   const [localIpHost, setLocalIpHost] = useState(window.location.host);
@@ -619,6 +628,23 @@ export default function AdminPanel() {
     }
   };
 
+  // Master Menu Filter & Pagination Calculations
+  const filteredProducts = products.filter((item) => {
+    const matchesSearch = !menuSearchQuery || 
+      item.name.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(menuSearchQuery.toLowerCase()));
+    const matchesCategory = menuCategoryFilter === 'ALL' || 
+      String(item.category_id) === String(menuCategoryFilter);
+    const matchesDept = menuDeptFilter === 'ALL' || 
+      item.target_dept === menuDeptFilter;
+    return matchesSearch && matchesCategory && matchesDept;
+  });
+
+  const menuTotalPages = Math.ceil(filteredProducts.length / menuItemsPerPage) || 1;
+  const menuValidPage = Math.min(Math.max(menuCurrentPage, 1), menuTotalPages);
+  const menuStartIndex = (menuValidPage - 1) * menuItemsPerPage;
+  const paginatedProducts = filteredProducts.slice(menuStartIndex, menuStartIndex + menuItemsPerPage);
+
   // Access Control Guard: Only Master Admin (ADMIN role) can view Admin Panel
   if (currentUser?.role !== 'ADMIN') {
     return (
@@ -741,147 +767,282 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        {/* Master Menu List & Price Editor */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-            <div>
-              <h3 className="font-extrabold text-lg text-slate-100">Master Menu & Price Config</h3>
-              <p className="text-xs text-slate-400">Set item prices and split destination (`BAR` vs `KITCHEN`).</p>
+        {/* Master Menu List & Price Editor with Pagination */}
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+          <div>
+            {/* Top Bar Header & Action */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                  Master Menu & Price Config
+                  <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full font-mono font-bold">
+                    {filteredProducts.length} Items
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400">Set item prices, availability, and split destination (`BAR` vs `KITCHEN`).</p>
+              </div>
+
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Add New Item
+              </button>
             </div>
 
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition"
-            >
-              <Plus className="w-4 h-4" /> Add New Item
-            </button>
-          </div>
+            {/* Filter & Search Toolbar */}
+            <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 mb-4 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+              {/* Search Box */}
+              <div className="sm:col-span-5 relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={menuSearchQuery}
+                  onChange={(e) => {
+                    setMenuSearchQuery(e.target.value);
+                    setMenuCurrentPage(1);
+                  }}
+                  placeholder="Search item name..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                />
+              </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider">
-                <tr>
-                  <th className="p-3 rounded-l-xl">Item Name</th>
-                  <th className="p-3">Category</th>
-                  <th className="p-3">Route Dept</th>
-                  <th className="p-3">Price (₹)</th>
-                  <th className="p-3 text-center">Status</th>
-                  <th className="p-3 text-right rounded-r-xl">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {products.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-800/50 transition">
-                    <td className="p-3 font-bold text-slate-100 flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shrink-0 flex items-center justify-center">
-                        {item.image_url ? (
-                          <img 
-                            src={item.image_url} 
-                            alt="" 
-                            className="w-full h-full object-cover" 
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                        ) : (
-                          <span className="text-xs text-slate-500">📷</span>
-                        )}
-                      </div>
-                      <span>{item.name}</span>
-                    </td>
+              {/* Category Filter */}
+              <div className="sm:col-span-3">
+                <select
+                  value={menuCategoryFilter}
+                  onChange={(e) => {
+                    setMenuCategoryFilter(e.target.value);
+                    setMenuCurrentPage(1);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-2 text-xs text-amber-300 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">All Categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                    <td className="p-3 text-slate-400">
-                      {categories.find(c => c.id === item.category_id)?.name || 'General'}
-                    </td>
+              {/* Dept Filter */}
+              <div className="sm:col-span-2">
+                <select
+                  value={menuDeptFilter}
+                  onChange={(e) => {
+                    setMenuDeptFilter(e.target.value);
+                    setMenuCurrentPage(1);
+                  }}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-slate-300 focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">All Depts</option>
+                  <option value="BAR">BAR</option>
+                  <option value="KITCHEN">KITCHEN</option>
+                </select>
+              </div>
 
-                    <td className="p-3">
-                      {item.target_dept === 'BAR' ? (
-                        <span className="bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-md font-extrabold text-[10px] flex items-center gap-1 w-fit">
-                          <Wine className="w-3 h-3" /> BAR
-                        </span>
-                      ) : (
-                        <span className="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-md font-extrabold text-[10px] flex items-center gap-1 w-fit">
-                          <Utensils className="w-3 h-3" /> KITCHEN
-                        </span>
-                      )}
-                    </td>
+              {/* Items per page */}
+              <div className="sm:col-span-2 flex items-center justify-end gap-1">
+                <span className="text-[10px] text-slate-400 font-semibold">Show:</span>
+                <select
+                  value={menuItemsPerPage}
+                  onChange={(e) => {
+                    setMenuItemsPerPage(Number(e.target.value));
+                    setMenuCurrentPage(1);
+                  }}
+                  className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-2 text-xs text-amber-400 font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
 
-                    <td className="p-3 font-mono font-bold text-amber-400">
-                      {editingPriceId === item.id ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            value={editingPriceValue}
-                            onChange={(e) => setEditingPriceValue(e.target.value)}
-                            className="w-20 bg-slate-950 border border-amber-500 rounded px-1.5 py-0.5 text-xs text-amber-300 font-bold focus:outline-none"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleSavePrice(item.id)}
-                            className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-500"
-                            title="Save Price"
-                          >
-                            <Save className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => setEditingPriceId(null)}
-                            className="p-1 bg-slate-800 text-slate-400 rounded hover:text-slate-200"
-                            title="Cancel"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 group">
-                          <span>₹{item.price}</span>
-                          <button
-                            onClick={() => {
-                              setEditingPriceId(item.id);
-                              setEditingPriceValue(item.price);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-amber-400"
-                            title="Edit Price Quick"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="p-3 text-center">
-                      <button
-                        onClick={() => toggleProductAvailability(item.id, !item.is_available)}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold transition ${
-                          item.is_available
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/30'
-                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30'
-                        }`}
-                      >
-                        {item.is_available ? 'Available' : 'Sold Out'}
-                      </button>
-                    </td>
-
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleOpenEditModal(item)}
-                          className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-lg transition"
-                          title="Edit Item Details"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProductItem(item)}
-                          className="p-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/30 text-rose-300 rounded-lg transition"
-                          title="Delete Item"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+            {/* Menu Items Table */}
+            <div className="overflow-x-auto rounded-xl border border-slate-800">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-800">
+                  <tr>
+                    <th className="p-3">Item Name</th>
+                    <th className="p-3">Category</th>
+                    <th className="p-3">Route Dept</th>
+                    <th className="p-3">Price (₹)</th>
+                    <th className="p-3 text-center">Status</th>
+                    <th className="p-3 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-800/80 bg-slate-900/60">
+                  {paginatedProducts.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="text-center py-10 text-slate-500">
+                        No menu items found matching your filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedProducts.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-800/60 transition">
+                        <td className="p-3 font-bold text-slate-100 flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shrink-0 flex items-center justify-center">
+                            {item.image_url ? (
+                              <img 
+                                src={item.image_url} 
+                                alt="" 
+                                className="w-full h-full object-cover" 
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <span className="text-xs text-slate-500">📷</span>
+                            )}
+                          </div>
+                          <span>{item.name}</span>
+                        </td>
+
+                        <td className="p-3 text-slate-400">
+                          {categories.find(c => c.id === item.category_id)?.name || 'General'}
+                        </td>
+
+                        <td className="p-3">
+                          {item.target_dept === 'BAR' ? (
+                            <span className="bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-md font-extrabold text-[10px] flex items-center gap-1 w-fit">
+                              <Wine className="w-3 h-3" /> BAR
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-md font-extrabold text-[10px] flex items-center gap-1 w-fit">
+                              <Utensils className="w-3 h-3" /> KITCHEN
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 font-mono font-bold text-amber-400">
+                          {editingPriceId === item.id ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={editingPriceValue}
+                                onChange={(e) => setEditingPriceValue(e.target.value)}
+                                className="w-20 bg-slate-950 border border-amber-500 rounded px-1.5 py-0.5 text-xs text-amber-300 font-bold focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleSavePrice(item.id)}
+                                className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-500"
+                                title="Save Price"
+                              >
+                                <Save className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingPriceId(null)}
+                                className="p-1 bg-slate-800 text-slate-400 rounded hover:text-slate-200"
+                                title="Cancel"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 group">
+                              <span>₹{item.price}</span>
+                              <button
+                                onClick={() => {
+                                  setEditingPriceId(item.id);
+                                  setEditingPriceValue(item.price);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-amber-400"
+                                title="Edit Price Quick"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => toggleProductAvailability(item.id, !item.is_available)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold transition ${
+                              item.is_available
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/30'
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-emerald-500/20 hover:text-emerald-400 hover:border-emerald-500/30'
+                            }`}
+                          >
+                            {item.is_available ? 'Available' : 'Sold Out'}
+                          </button>
+                        </td>
+
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenEditModal(item)}
+                              className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-lg transition"
+                              title="Edit Item Details"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProductItem(item)}
+                              className="p-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/30 text-rose-300 rounded-lg transition"
+                              title="Delete Item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {/* Page-wise Pagination Controls */}
+          {filteredProducts.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="text-slate-400 font-medium">
+                Showing <span className="font-bold text-slate-200">{menuStartIndex + 1}</span> to{' '}
+                <span className="font-bold text-slate-200">{Math.min(menuStartIndex + menuItemsPerPage, filteredProducts.length)}</span> of{' '}
+                <span className="font-bold text-amber-400">{filteredProducts.length}</span> items
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={menuValidPage === 1}
+                  onClick={() => setMenuCurrentPage(p => Math.max(p - 1, 1))}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Previous
+                </button>
+
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: menuTotalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      onClick={() => setMenuCurrentPage(pageNum)}
+                      className={`w-7 h-7 rounded-lg text-xs font-black transition flex items-center justify-center ${
+                        pageNum === menuValidPage
+                          ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                          : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  disabled={menuValidPage >= menuTotalPages}
+                  onClick={() => setMenuCurrentPage(p => Math.min(p + 1, menuTotalPages))}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition"
+                >
+                  Next <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

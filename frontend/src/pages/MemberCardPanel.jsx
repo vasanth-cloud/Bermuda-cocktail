@@ -25,7 +25,9 @@ import {
   Printer,
   Upload,
   FileSpreadsheet,
-  Download
+  Download,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -41,6 +43,10 @@ export default function MemberCardPanel() {
   } = useOrder();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [memberCurrentPage, setMemberCurrentPage] = useState(1);
+  const [memberItemsPerPage, setMemberItemsPerPage] = useState(10);
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -279,6 +285,17 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
   const vipCount = members.filter(m => m.status === 'VIP').length;
   const totalVisits = members.reduce((acc, m) => acc + (m.visit_count || 0), 0);
 
+  // Pagination & Filtering Calculations
+  const filteredMembersList = members.filter((m) => {
+    const matchesStatus = statusFilter === 'ALL' || m.status === statusFilter;
+    return matchesStatus;
+  });
+
+  const memberTotalPages = Math.ceil(filteredMembersList.length / memberItemsPerPage) || 1;
+  const memberValidPage = Math.min(Math.max(memberCurrentPage, 1), memberTotalPages);
+  const memberStartIndex = (memberValidPage - 1) * memberItemsPerPage;
+  const paginatedMembers = filteredMembersList.slice(memberStartIndex, memberStartIndex + memberItemsPerPage);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header Banner */}
@@ -383,28 +400,66 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
 
       {/* Search & Action Bar */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={handleSearch}
-            placeholder="Search by Name, Phone, Card Code or Aadhar..."
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
-          />
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-1">
+          <div className="relative w-full sm:w-96">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                handleSearch(e);
+                setMemberCurrentPage(1);
+              }}
+              placeholder="Search by Name, Phone, Card Code or Aadhar..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+            />
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setMemberCurrentPage(1);
+            }}
+            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-amber-300 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="VIP">VIP</option>
+            <option value="INACTIVE">INACTIVE</option>
+          </select>
         </div>
 
-        <button
-          onClick={() => fetchMembers(searchQuery)}
-          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 self-end sm:self-auto"
-        >
-          <RefreshCw className="w-4 h-4" /> Refresh Directory
-        </button>
+        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <span>Show:</span>
+            <select
+              value={memberItemsPerPage}
+              onChange={(e) => {
+                setMemberItemsPerPage(Number(e.target.value));
+                setMemberCurrentPage(1);
+              }}
+              className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-amber-400 font-bold focus:outline-none cursor-pointer"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+
+          <button
+            onClick={() => fetchMembers(searchQuery)}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" /> Refresh Directory
+          </button>
+        </div>
       </div>
 
       {/* Members Directory Table */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl p-4 space-y-4">
+        <div className="overflow-x-auto rounded-lg border border-slate-800">
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-slate-950 text-slate-400 uppercase text-[11px] font-black tracking-wider border-b border-slate-800">
               <tr>
@@ -418,7 +473,7 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-200">
-              {members.length === 0 ? (
+              {paginatedMembers.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="text-center py-12 text-slate-500">
                     <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
@@ -426,7 +481,7 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
                   </td>
                 </tr>
               ) : (
-                members.map((m) => (
+                paginatedMembers.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-800/40 transition">
                     <td className="py-3.5 px-4">
                       <div className="font-extrabold text-slate-100 flex items-center gap-2">
@@ -518,6 +573,51 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
             </tbody>
           </table>
         </div>
+
+        {/* Page-wise Pagination Controls Footer */}
+        {filteredMembersList.length > 0 && (
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="text-slate-400 font-medium">
+              Showing <span className="font-bold text-slate-200">{memberStartIndex + 1}</span> to{' '}
+              <span className="font-bold text-slate-200">{Math.min(memberStartIndex + memberItemsPerPage, filteredMembersList.length)}</span> of{' '}
+              <span className="font-bold text-amber-400">{filteredMembersList.length}</span> member cards
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                disabled={memberValidPage === 1}
+                onClick={() => setMemberCurrentPage(p => Math.max(p - 1, 1))}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> Previous
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                {Array.from({ length: memberTotalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    onClick={() => setMemberCurrentPage(pageNum)}
+                    className={`w-7 h-7 rounded-lg text-xs font-black transition flex items-center justify-center ${
+                      pageNum === memberValidPage
+                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                        : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                disabled={memberValidPage >= memberTotalPages}
+                onClick={() => setMemberCurrentPage(p => Math.min(p + 1, memberTotalPages))}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition"
+              >
+                Next <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MODAL: Bulk Import Members (1000 Database CSV Upload) */}
