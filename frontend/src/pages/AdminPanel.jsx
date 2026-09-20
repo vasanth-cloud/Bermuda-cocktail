@@ -662,32 +662,8 @@ export default function AdminPanel() {
             </div>
           </div>
 
-        {/* Top-Right Controls: Sync Excel Menu & Audit Log Buttons */}
+        {/* Top-Right Controls: Audit Log Button */}
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-purple-300 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
-            title="Open Category-Wise Sales & Revenue Report"
-          >
-            <BarChart3 className="w-4 h-4 text-amber-400" />
-            <span>Category & Sales Reports</span>
-          </button>
-
-          <button
-            onClick={async () => {
-              if (window.confirm("Import menu items from Bermuda Excel Price List file? This will replace all existing menu items with 235 items from the Excel sheet.")) {
-                const ok = await importExcelMenu();
-                if (ok) alert("Successfully imported 235 menu items & 32 categories from Excel!");
-                else alert("Failed to import Excel menu.");
-              }
-            }}
-            className="bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
-            title="Import 235 items & 32 categories from Excel spreadsheet"
-          >
-            <FileText className="w-4 h-4 text-amber-400" />
-            <span>📊 Sync Excel Menu</span>
-          </button>
-
           <button
             onClick={() => setIsLogModalOpen(true)}
             className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
@@ -717,7 +693,7 @@ export default function AdminPanel() {
               Select any table to render a live, scannable QR Code URL for table ordering.
             </p>
 
-            <div className="mb-3">
+            <div className="mb-4">
               <label className="text-xs font-bold text-slate-300 block mb-1">Select Table:</label>
               <select
                 value={selectedTableForQr?.id || tables[0]?.id || ''}
@@ -733,18 +709,6 @@ export default function AdminPanel() {
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-xs font-bold text-slate-300 block mb-1">Live Domain / Host URL (for QR Stickers):</label>
-              <input
-                type="text"
-                value={localIpHost}
-                onChange={(e) => setLocalIpHost(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none"
-                placeholder="thebermudapub.com or 192.168.1.50:3000"
-              />
-              <span className="text-[10px] text-slate-400 block mt-0.5">Enter custom domain (e.g. thebermudapub.com) or local IP for QR code generation.</span>
             </div>
 
             {/* Live Rendered Scannable QR Sticker Mockup */}
