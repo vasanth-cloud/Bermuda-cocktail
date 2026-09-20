@@ -729,20 +729,6 @@ export default function AdminPanel() {
                     includeMargin={false}
                   />
                 </div>
-
-                <div className="text-center space-y-1">
-                  <p className="text-[11px] text-slate-400 font-mono break-all px-2 bg-slate-950/60 py-1 rounded border border-slate-800">
-                    {activeQrUrl}
-                  </p>
-                  <a
-                    href={activeQrUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-block text-[11px] font-bold bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-950 px-3 py-1 rounded-lg border border-amber-500/30 transition mt-1"
-                  >
-                    🔗 Test Open Table Link
-                  </a>
-                </div>
               </div>
             )}
           </div>
