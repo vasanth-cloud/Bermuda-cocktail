@@ -490,7 +490,16 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
-  const collectPayment = async (orderId, paymentMode, amount, collectedBy = "Waiter") => {
+  const collectPayment = async (
+    orderId, 
+    paymentMode, 
+    amount, 
+    collectedBy = "Waiter",
+    bookingPlatform = "Direct / Walk-in",
+    discountPercentage = 0.0,
+    discountAmount = 0.0,
+    finalAmount = 0.0
+  ) => {
     try {
       const res = await fetch(`/api/orders/${orderId}/collect-payment`, {
         method: 'POST',
@@ -498,7 +507,11 @@ export const OrderProvider = ({ children }) => {
         body: JSON.stringify({
           payment_mode: paymentMode,
           amount_collected: parseFloat(amount),
-          collected_by: collectedBy
+          collected_by: collectedBy,
+          booking_platform: bookingPlatform,
+          discount_percentage: parseFloat(discountPercentage || 0),
+          discount_amount: parseFloat(discountAmount || 0),
+          final_amount: parseFloat(finalAmount || amount)
         })
       });
       if (!res.ok) throw new Error("Payment collection failed");

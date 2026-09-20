@@ -14,6 +14,7 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   const grandTotal = (paymentSummary.total_cash || 0) + (paymentSummary.total_upi || 0) + (paymentSummary.total_card || 0);
+  const totalDiscounts = paymentLogs.reduce((acc, log) => acc + (parseFloat(log.discount_amount) || 0), 0);
 
   // Excel / CSV Export Function
   const exportToExcel = () => {
@@ -22,14 +23,17 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
       return;
     }
 
-    const headers = ["Timestamp", "Order Number", "Table", "Payment Mode", "Staff (Collected By)", "Amount (INR)"];
+    const headers = ["Timestamp", "Order Number", "Table", "Booking Platform", "Original Subtotal (INR)", "Discount Amount (INR)", "Net Payable Collected (INR)", "Payment Mode", "Staff (Collected By)"];
     const rows = paymentLogs.map(log => [
       `"${log.timestamp || ''}"`,
       `"#${log.order_number || ''}"`,
       `"${log.table_number || ''}"`,
+      `"${log.booking_platform || 'Direct / Walk-in'}"`,
+      `"${log.subtotal_amount || log.total_amount || log.amount_collected || 0}"`,
+      `"${log.discount_amount || 0}"`,
+      `"${log.amount_collected || log.final_amount || 0}"`,
       `"${log.payment_mode || ''}"`,
-      `"${log.collected_by || ''}"`,
-      `"${log.amount_collected || 0}"`
+      `"${log.collected_by || ''}"`
     ]);
 
     const csvString = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -77,9 +81,33 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
 
   const isDeleteConfirmed = confirmText.trim().toUpperCase() === 'DELETE';
 
+  const getPlatformBadge = (plat, pct, disc) => {
+    let icon = '🚶';
+    let badgeClass = 'bg-slate-800 text-slate-300 border-slate-700';
+    const platformName = plat || 'Direct / Walk-in';
+    if (platformName.includes('Swiggy')) { icon = '🧡'; badgeClass = 'bg-orange-950/80 text-orange-300 border-orange-800'; }
+    else if (platformName.includes('District')) { icon = '📱'; badgeClass = 'bg-purple-950/80 text-purple-300 border-purple-800'; }
+    else if (platformName.includes('Zomato')) { icon = '🔴'; badgeClass = 'bg-rose-950/80 text-rose-300 border-rose-800'; }
+    else if (platformName.includes('EazyDiner')) { icon = '🍽️'; badgeClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-800'; }
+    else if (platformName.includes('Other')) { icon = '🏷️'; badgeClass = 'bg-amber-950/80 text-amber-300 border-amber-800'; }
+
+    return (
+      <div className="space-y-0.5">
+        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border inline-flex items-center gap-1 ${badgeClass}`}>
+          <span>{icon}</span> {platformName}
+        </span>
+        {(pct > 0 || disc > 0) && (
+          <div className="text-[10px] font-mono text-rose-400 font-extrabold">
+            🏷️ {pct > 0 ? `${pct}% OFF` : `₹${disc} OFF`}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -94,7 +122,7 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Detailed record of all staff cash & payment collections for today.
+                Detailed record of all staff cash, platform dining offers & payment collections today.
               </p>
             </div>
           </div>
@@ -139,10 +167,15 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
             <span className="bg-purple-950 text-purple-300 border border-purple-800 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
               💳 Card: ₹{paymentSummary.total_card || 0}
             </span>
+            {totalDiscounts > 0 && (
+              <span className="bg-rose-950 text-rose-300 border border-rose-800 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
+                🏷️ Total Offers Discounted: -₹{totalDiscounts.toFixed(2)}
+              </span>
+            )}
           </div>
 
           <div className="bg-amber-500 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs shadow-md">
-            💰 Grand Total: ₹{grandTotal}
+            💰 Net Collected Grand Total: ₹{grandTotal}
           </div>
         </div>
 
@@ -167,39 +200,54 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
                     <th className="p-3">Time</th>
                     <th className="p-3">Order #</th>
                     <th className="p-3">Table</th>
+                    <th className="p-3">Platform & Offer</th>
                     <th className="p-3">Payment Mode</th>
                     <th className="p-3">Collected By (Staff)</th>
-                    <th className="p-3 text-right">Amount (₹)</th>
+                    <th className="p-3 text-right">Breakdown & Net (₹)</th>
                     <th className="p-3 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-medium bg-slate-900/30">
-                  {paymentLogs.map((log, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/50 transition">
-                      <td className="p-3 font-mono text-slate-400">{log.timestamp}</td>
-                      <td className="p-3 font-mono text-slate-400">#{log.order_number}</td>
-                      <td className="p-3 font-extrabold text-slate-100">{log.table_number}</td>
-                      <td className="p-3">
-                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold font-mono uppercase inline-flex items-center gap-1 ${
-                          log.payment_mode === 'CASH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
-                          log.payment_mode === 'UPI' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-purple-950 text-purple-300 border border-purple-800'
-                        }`}>
-                          {log.payment_mode === 'CASH' ? '💵 Cash' : log.payment_mode === 'UPI' ? '📱 UPI' : '💳 Card'}
-                        </span>
-                      </td>
-                      <td className="p-3 font-bold text-amber-400">{log.collected_by}</td>
-                      <td className="p-3 font-black text-emerald-400 text-sm text-right">₹{log.amount_collected}</td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => handleOpenDelete(log)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition"
-                          title={`Delete audit log for #${log.order_number}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {paymentLogs.map((log, idx) => {
+                    const subtotal = parseFloat(log.subtotal_amount || log.total_amount || log.amount_collected || 0);
+                    const disc = parseFloat(log.discount_amount || 0);
+                    const netCollected = parseFloat(log.amount_collected || log.final_amount || 0);
+
+                    return (
+                      <tr key={idx} className="hover:bg-slate-800/50 transition">
+                        <td className="p-3 font-mono text-slate-400">{log.timestamp}</td>
+                        <td className="p-3 font-mono text-slate-400">#{log.order_number}</td>
+                        <td className="p-3 font-extrabold text-slate-100">{log.table_number}</td>
+                        <td className="p-3">{getPlatformBadge(log.booking_platform, log.discount_percentage, disc)}</td>
+                        <td className="p-3">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold font-mono uppercase inline-flex items-center gap-1 ${
+                            log.payment_mode === 'CASH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
+                            log.payment_mode === 'UPI' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-purple-950 text-purple-300 border border-purple-800'
+                          }`}>
+                            {log.payment_mode === 'CASH' ? '💵 Cash' : log.payment_mode === 'UPI' ? '📱 UPI' : '💳 Card'}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-amber-400">{log.collected_by}</td>
+                        <td className="p-3 font-mono text-right">
+                          {disc > 0 && (
+                            <div className="text-[10px] text-slate-400">
+                              Subtotal: <span className="line-through">₹{subtotal}</span> (-₹{disc})
+                            </div>
+                          )}
+                          <div className="font-black text-emerald-400 text-sm">₹{netCollected}</div>
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => handleOpenDelete(log)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition"
+                            title={`Delete audit log for #${log.order_number}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

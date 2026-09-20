@@ -57,7 +57,11 @@ def startup_event():
                 "payment_mode": "ALTER TABLE orders ADD COLUMN payment_mode VARCHAR",
                 "amount_collected": "ALTER TABLE orders ADD COLUMN amount_collected FLOAT DEFAULT 0.0",
                 "collected_by": "ALTER TABLE orders ADD COLUMN collected_by VARCHAR",
-                "waiter_name": "ALTER TABLE orders ADD COLUMN waiter_name VARCHAR"
+                "waiter_name": "ALTER TABLE orders ADD COLUMN waiter_name VARCHAR",
+                "booking_platform": "ALTER TABLE orders ADD COLUMN booking_platform VARCHAR DEFAULT 'Direct / Walk-in'",
+                "discount_percentage": "ALTER TABLE orders ADD COLUMN discount_percentage FLOAT DEFAULT 0.0",
+                "discount_amount": "ALTER TABLE orders ADD COLUMN discount_amount FLOAT DEFAULT 0.0",
+                "final_amount": "ALTER TABLE orders ADD COLUMN final_amount FLOAT DEFAULT 0.0"
             }
             for col_name, col_cmd in col_definitions.items():
                 if col_name not in order_cols:
@@ -694,6 +698,10 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
     order.payment_mode = req.payment_mode
     order.amount_collected = req.amount_collected
     order.collected_by = req.collected_by or "Waiter"
+    order.booking_platform = req.booking_platform or "Direct / Walk-in"
+    order.discount_percentage = req.discount_percentage or 0.0
+    order.discount_amount = req.discount_amount or 0.0
+    order.final_amount = req.final_amount or req.amount_collected
     order.status = "BILLED"
 
     if order.table:
@@ -708,10 +716,13 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
         "table_number": order.table.table_number if order.table else "ST-01",
         "payment_mode": order.payment_mode,
         "amount_collected": order.amount_collected,
+        "booking_platform": order.booking_platform,
+        "discount_percentage": order.discount_percentage,
+        "discount_amount": order.discount_amount,
         "collected_by": order.collected_by
     }
     await manager.broadcast_all(event_payload)
-    return {"message": f"Payment of ₹{order.amount_collected} collected via {order.payment_mode}", "order_id": order.id}
+    return {"message": f"Payment of ₹{order.amount_collected} collected via {order.payment_mode} ({order.booking_platform})", "order_id": order.id}
 
 @app.get("/api/payments/log")
 def get_payment_logs(db: Session = Depends(get_db)):
@@ -723,10 +734,16 @@ def get_payment_logs(db: Session = Depends(get_db)):
     total_cash = 0.0
     total_upi = 0.0
     total_card = 0.0
+    total_discount_given = 0.0
+    platform_counts = {}
 
     for ord in collected_orders:
-        amt = ord.amount_collected or ord.total_amount
+        amt = ord.amount_collected or ord.final_amount or ord.total_amount
         mode = ord.payment_mode or "CASH"
+        platform = ord.booking_platform or "Direct / Walk-in"
+        disc_pct = ord.discount_percentage or 0.0
+        disc_amt = ord.discount_amount or 0.0
+
         if mode == "CASH":
             total_cash += amt
         elif mode == "UPI":
@@ -734,13 +751,20 @@ def get_payment_logs(db: Session = Depends(get_db)):
         elif mode == "CARD":
             total_card += amt
 
+        total_discount_given += disc_amt
+        platform_counts[platform] = platform_counts.get(platform, 0) + 1
+
         logs.append({
             "order_id": ord.id,
             "order_number": ord.order_number,
             "table_number": ord.table.table_number if ord.table else "ST-01",
             "zone_name": ord.table.zone.display_name if ord.table and ord.table.zone else "Main Zone",
             "amount_collected": amt,
+            "subtotal_amount": ord.total_amount,
             "payment_mode": mode,
+            "booking_platform": platform,
+            "discount_percentage": disc_pct,
+            "discount_amount": disc_amt,
             "collected_by": ord.collected_by or "Staff",
             "timestamp": ord.updated_at.strftime("%d-%m-%Y %H:%M:%S") if ord.updated_at else ord.created_at.strftime("%d-%m-%Y %H:%M:%S")
         })
@@ -751,7 +775,9 @@ def get_payment_logs(db: Session = Depends(get_db)):
             "total_upi": total_upi,
             "total_card": total_card,
             "grand_total": total_cash + total_upi + total_card,
-            "total_transactions": len(logs)
+            "total_discount_given": total_discount_given,
+            "total_transactions": len(logs),
+            "platform_breakdown": platform_counts
         },
         "logs": logs
     }

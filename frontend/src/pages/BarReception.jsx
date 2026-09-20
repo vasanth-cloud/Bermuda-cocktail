@@ -15,6 +15,22 @@ export default function BarReception() {
   const [paymentMode, setPaymentMode] = useState('CASH');
   const [amountCollected, setAmountCollected] = useState('');
   const [cashierName, setCashierName] = useState('Receptionist');
+  const [bookingPlatform, setBookingPlatform] = useState('Direct / Walk-in');
+  const [discountPercentage, setDiscountPercentage] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+
+  const openPaymentModal = (ord) => {
+    setActivePaymentOrder(ord);
+    setPaymentMode('CASH');
+    setBookingPlatform(ord.booking_platform || 'Direct / Walk-in');
+    const pct = ord.discount_percentage || 0;
+    const disc = ord.discount_amount || 0;
+    const sub = ord.total_amount || 0;
+    setDiscountPercentage(pct);
+    setDiscountAmount(disc);
+    const calculatedNet = disc > 0 ? sub - disc : (pct > 0 ? sub - (sub * pct)/100 : sub);
+    setAmountCollected(calculatedNet > 0 ? calculatedNet.toFixed(2) : sub.toString());
+  };
 
   const filteredOrders = allOrders.filter((ord) => {
     const matchesTable = selectedTableFilter === 'ALL' || Number(ord.table_id) === Number(selectedTableFilter);
@@ -36,16 +52,25 @@ export default function BarReception() {
     e.preventDefault();
     if (!activePaymentOrder || !amountCollected) return;
 
+    const finalNetPayable = parseFloat(amountCollected);
+
     const success = await collectPayment(
       activePaymentOrder.id,
       paymentMode,
-      parseFloat(amountCollected),
-      cashierName || 'Receptionist'
+      finalNetPayable,
+      cashierName || 'Receptionist',
+      bookingPlatform,
+      discountPercentage,
+      discountAmount,
+      finalNetPayable
     );
 
     if (success) {
       setActivePaymentOrder(null);
       setAmountCollected('');
+      setDiscountPercentage(0);
+      setDiscountAmount(0);
+      setBookingPlatform('Direct / Walk-in');
     }
   };
 
@@ -307,15 +332,24 @@ export default function BarReception() {
                     <span className="text-amber-400 text-lg">₹{order.total_amount}</span>
                   </div>
 
-                  {order.items && order.items.every(i => i.status === 'READY' || i.status === 'SERVED') ? (
-                    <div className="w-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5 shadow">
-                      ✓ All Items Ready — Waiting for Waiter Pickup & Serving
-                    </div>
-                  ) : (
-                    <div className="w-full bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5">
-                      ⏳ Preparing Items at Bar / Kitchen...
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {order.items && order.items.every(i => i.status === 'READY' || i.status === 'SERVED') ? (
+                      <div className="flex-1 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5 shadow">
+                        ✓ All Ready
+                      </div>
+                    ) : (
+                      <div className="flex-1 bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5">
+                        ⏳ Preparing...
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => openPaymentModal(order)}
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-3 py-2 rounded-xl text-xs flex items-center gap-1 shadow-md transition shrink-0"
+                    >
+                      <DollarSign className="w-4 h-4" /> Settle Bill
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -325,39 +359,167 @@ export default function BarReception() {
 
       {/* Collect Payment Modal */}
       {activePaymentOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 my-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-black text-lg text-slate-100 flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-amber-400" /> Settle Bill & Collect Payment
-              </h3>
+              <div>
+                <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-amber-400" /> Settle Bill & Collect Payment
+                </h3>
+                <p className="text-xs text-slate-400">Order #{activePaymentOrder.order_number} — Table {activePaymentOrder.table?.table_number}</p>
+              </div>
               <button
                 onClick={() => setActivePaymentOrder(null)}
-                className="text-slate-400 hover:text-slate-200 text-xs font-bold"
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
-              <div className="flex justify-between text-slate-400">
-                <span>Table:</span>
-                <span className="font-bold text-slate-200">{activePaymentOrder.table?.table_number}</span>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Order Total:</span>
-                <span className="font-black text-amber-400 text-sm">₹{activePaymentOrder.total_amount}</span>
-              </div>
-            </div>
-
             <form onSubmit={handleRecordPayment} className="space-y-4 text-xs">
+              {/* 1. Booking Platform Selection */}
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Payment Method</label>
+                <label className="font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
+                  <span>Booking Platform / Dining Offer Source:</span>
+                  <span className="text-amber-400 text-[10px] font-mono">{bookingPlatform}</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'Direct / Walk-in', label: 'Walk-in / Direct', icon: '🚶' },
+                    { id: 'District (Zomato District)', label: 'District (Zomato)', icon: '📱' },
+                    { id: 'Swiggy (Swiggy Dineout)', label: 'Swiggy Dineout', icon: '🧡' },
+                    { id: 'Zomato', label: 'Zomato Gold', icon: '🔴' },
+                    { id: 'EazyDiner', label: 'EazyDiner', icon: '🍽️' },
+                    { id: 'Other', label: 'Other Offer', icon: '🏷️' }
+                  ].map((plat) => (
+                    <button
+                      key={plat.id}
+                      type="button"
+                      onClick={() => setBookingPlatform(plat.id)}
+                      className={`py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 border text-[11px] transition ${
+                        bookingPlatform === plat.id
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <span>{plat.icon}</span>
+                      <span className="truncate">{plat.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Quick Offer Discount % Calculator */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-300 text-xs">Dining Offer Discount (% or ₹):</label>
+                  {discountPercentage > 0 && (
+                    <span className="bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                      {discountPercentage}% OFF Applied
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[0, 10, 15, 20, 25, 30, 50].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => {
+                        setDiscountPercentage(pct);
+                        const sub = activePaymentOrder.total_amount || 0;
+                        const disc = (sub * pct) / 100;
+                        setDiscountAmount(disc);
+                        setAmountCollected(Math.max(0, sub - disc).toFixed(2));
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${
+                        discountPercentage === pct
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                      }`}
+                    >
+                      {pct === 0 ? 'No Offer' : `${pct}% OFF`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block mb-1">Custom Offer %:</span>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="100"
+                      placeholder="e.g. 15"
+                      value={discountPercentage || ''}
+                      onChange={(e) => {
+                        const pct = parseFloat(e.target.value) || 0;
+                        setDiscountPercentage(pct);
+                        const sub = activePaymentOrder.total_amount || 0;
+                        const disc = (sub * pct) / 100;
+                        setDiscountAmount(disc);
+                        setAmountCollected(Math.max(0, sub - disc).toFixed(2));
+                      }}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block mb-1">Or Flat Discount (₹):</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 200"
+                      value={discountAmount || ''}
+                      onChange={(e) => {
+                        const disc = parseFloat(e.target.value) || 0;
+                        setDiscountAmount(disc);
+                        const sub = activePaymentOrder.total_amount || 0;
+                        if (sub > 0) {
+                          setDiscountPercentage(Math.round((disc / sub) * 100));
+                        }
+                        setAmountCollected(Math.max(0, sub - disc).toFixed(2));
+                      }}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Real-Time Live Calculation Box */}
+                <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between text-slate-400">
+                    <span>Original Subtotal:</span>
+                    <span>₹{activePaymentOrder.total_amount || 0}</span>
+                  </div>
+
+                  {(discountPercentage > 0 || discountAmount > 0) && (
+                    <div className="flex justify-between text-rose-400 font-bold">
+                      <span>Offer Discount ({discountPercentage}% OFF):</span>
+                      <span>-₹{(discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100)).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-slate-100 font-black text-sm pt-1 border-t border-slate-800">
+                    <span className="text-amber-300">Net Remaining Payable:</span>
+                    <span className="text-amber-400">
+                      ₹{(
+                        (activePaymentOrder.total_amount || 0) -
+                        (discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100))
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Payment Method */}
+              <div>
+                <label className="font-bold text-slate-300 block mb-1.5">Select Payment Mode:</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setPaymentMode('CASH')}
-                    className={`p-2 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    className={`p-2.5 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
                       paymentMode === 'CASH'
                         ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
                         : 'bg-slate-950 border-slate-800 text-slate-400'
@@ -368,7 +530,7 @@ export default function BarReception() {
                   <button
                     type="button"
                     onClick={() => setPaymentMode('UPI')}
-                    className={`p-2 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    className={`p-2.5 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
                       paymentMode === 'UPI'
                         ? 'bg-purple-950 border-purple-500 text-purple-300'
                         : 'bg-slate-950 border-slate-800 text-slate-400'
@@ -379,7 +541,7 @@ export default function BarReception() {
                   <button
                     type="button"
                     onClick={() => setPaymentMode('CARD')}
-                    className={`p-2 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    className={`p-2.5 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
                       paymentMode === 'CARD'
                         ? 'bg-blue-950 border-blue-500 text-blue-300'
                         : 'bg-slate-950 border-slate-800 text-slate-400'
@@ -390,14 +552,34 @@ export default function BarReception() {
                 </div>
               </div>
 
+              {/* 4. Final Amount Collected Input */}
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Amount Collected (₹)</label>
+                <label className="font-bold text-slate-300 block mb-1">Final Net Amount Collected (₹) *</label>
                 <input
                   type="number"
-                  value={amountCollected}
+                  step="0.01"
+                  value={
+                    amountCollected !== ''
+                      ? amountCollected
+                      : (
+                          (activePaymentOrder.total_amount || 0) -
+                          (discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100))
+                        ).toFixed(2)
+                  }
                   onChange={(e) => setAmountCollected(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-400 font-extrabold text-base focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-base font-extrabold text-amber-400 focus:outline-none focus:border-amber-500 font-mono"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Collected By (Staff / Cashier Name)</label>
+                <input
+                  type="text"
+                  value={cashierName}
+                  onChange={(e) => setCashierName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none"
+                  placeholder="e.g. Receptionist"
                 />
               </div>
 

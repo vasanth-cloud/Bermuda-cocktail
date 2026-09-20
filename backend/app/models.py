@@ -66,6 +66,10 @@ class Order(Base):
     amount_collected = Column(Float, nullable=True, default=0.0)
     collected_by = Column(String, nullable=True)  # Staff name or Waiter
     waiter_name = Column(String, nullable=True)  # Waiter who claimed / accepted order
+    booking_platform = Column(String, nullable=True, default="Direct / Walk-in")  # Swiggy, District, Zomato, etc.
+    discount_percentage = Column(Float, nullable=True, default=0.0)
+    discount_amount = Column(Float, nullable=True, default=0.0)
+    final_amount = Column(Float, nullable=True, default=0.0)
     sync_status = Column(String, default="PENDING_SYNC")  # PENDING_SYNC, SYNCED
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

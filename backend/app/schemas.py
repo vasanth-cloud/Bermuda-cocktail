@@ -113,6 +113,10 @@ class OrderSchema(BaseModel):
     amount_collected: Optional[float] = 0.0
     collected_by: Optional[str] = None
     waiter_name: Optional[str] = None
+    booking_platform: Optional[str] = "Direct / Walk-in"
+    discount_percentage: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    final_amount: Optional[float] = 0.0
     sync_status: Optional[str] = "PENDING_SYNC"
     created_at: datetime
     table: Optional[PubTableSchema] = None
@@ -131,6 +135,10 @@ class PaymentCollectRequest(BaseModel):
     payment_mode: str  # CASH, UPI, CARD
     amount_collected: float
     collected_by: Optional[str] = "Waiter / Cashier"
+    booking_platform: Optional[str] = "Direct / Walk-in"
+    discount_percentage: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    final_amount: Optional[float] = 0.0
 
 class AddItemsToOrderRequest(BaseModel):
     items: List[CartItemCreate]
