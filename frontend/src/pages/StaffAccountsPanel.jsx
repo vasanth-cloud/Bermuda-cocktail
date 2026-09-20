@@ -44,7 +44,7 @@ export default function StaffAccountsPanel() {
     email: '',
     password: '',
     role: 'WAITER',
-    allowed_terminals: ['customer', 'staff', 'reports']
+    allowed_terminals: ['staff']
   });
 
   const [editingUser, setEditingUser] = useState(null);
@@ -53,7 +53,7 @@ export default function StaffAccountsPanel() {
     email: '',
     password: '',
     role: 'WAITER',
-    allowed_terminals: ['customer', 'staff', 'reports']
+    allowed_terminals: ['staff']
   });
 
   const [userError, setUserError] = useState('');
@@ -82,7 +82,7 @@ export default function StaffAccountsPanel() {
 
     if (result.success) {
       setUserSuccess(`Created account for ${newUserData.name}!`);
-      setNewUserData({ name: '', email: '', password: '', role: 'WAITER', allowed_terminals: ['customer', 'staff', 'reports'] });
+      setNewUserData({ name: '', email: '', password: '', role: 'WAITER', allowed_terminals: ['staff'] });
       setIsCreateUserOpen(false);
     } else {
       setUserError(result.error || 'Failed to create user account');

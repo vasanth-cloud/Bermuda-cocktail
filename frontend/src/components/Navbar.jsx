@@ -140,14 +140,14 @@ export default function Navbar() {
 
     if (currentUser.allowed_terminals) {
       const allowed = currentUser.allowed_terminals.split(',').map(s => s.trim().toLowerCase());
-      return navItems.filter(item => allowed.includes(item.id.toLowerCase()) || item.id === 'reports');
+      return navItems.filter(item => allowed.includes(item.id.toLowerCase()));
     }
 
     if (currentUser.role === 'WAITER') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'reports' || item.id === 'members' || item.id === 'tables');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'members' || item.id === 'tables');
     }
     if (currentUser.role === 'BAR_KITCHEN' || currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'bar' || item.id === 'reports' || item.id === 'members');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'bar' || item.id === 'members');
     }
 
     // Default fallback
