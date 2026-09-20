@@ -9,6 +9,7 @@ import StaffPanel from './pages/StaffPanel';
 import AdminPanel from './pages/AdminPanel';
 import MemberCardPanel from './pages/MemberCardPanel';
 import MemberEntryScannerPanel from './pages/MemberEntryScannerPanel';
+import CategoryReportsPanel from './pages/CategoryReportsPanel';
 import LoginPage from './pages/LoginPage';
 
 class ErrorBoundary extends React.Component {
@@ -77,6 +78,7 @@ function MainContent() {
       {activeTab === 'entry_scanner' && <MemberEntryScannerPanel />}
       {(activeTab === 'bar' || activeTab === 'kitchen') && <BarReception />}
       {activeTab === 'staff' && <StaffPanel />}
+      {activeTab === 'reports' && <CategoryReportsPanel />}
       {activeTab === 'members' && <MemberCardPanel />}
       {activeTab === 'admin' && <AdminPanel />}
     </main>

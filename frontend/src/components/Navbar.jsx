@@ -21,7 +21,8 @@ import {
   UserCheck,
   Crown,
   CreditCard,
-  Scan
+  Scan,
+  BarChart3
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -82,6 +83,14 @@ export default function Navbar() {
       bg: 'bg-blue-500/10 border-blue-500/20' 
     },
     { 
+      id: 'reports', 
+      label: 'Category Sales & Reports', 
+      desc: 'Food vs Bar, Cash/UPI/Card', 
+      icon: BarChart3, 
+      color: 'text-amber-400', 
+      bg: 'bg-amber-500/10 border-amber-500/20' 
+    },
+    { 
       id: 'members', 
       label: 'VIP Member Cards', 
       desc: 'Bermuda VIP Cards & Directory', 
@@ -114,14 +123,14 @@ export default function Navbar() {
 
     if (currentUser.allowed_terminals) {
       const allowed = currentUser.allowed_terminals.split(',').map(s => s.trim().toLowerCase());
-      return navItems.filter(item => allowed.includes(item.id.toLowerCase()));
+      return navItems.filter(item => allowed.includes(item.id.toLowerCase()) || item.id === 'reports');
     }
 
     if (currentUser.role === 'WAITER') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'members');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'staff' || item.id === 'reports' || item.id === 'members');
     }
     if (currentUser.role === 'BAR_KITCHEN' || currentUser.role === 'BAR_RECEPTION' || currentUser.role === 'KITCHEN_CHEF') {
-      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'bar' || item.id === 'members');
+      return navItems.filter(item => item.id === 'customer' || item.id === 'entry_scanner' || item.id === 'bar' || item.id === 'reports' || item.id === 'members');
     }
 
     // Default fallback
