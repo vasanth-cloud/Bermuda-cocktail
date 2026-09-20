@@ -138,6 +138,6 @@ def seed_initial_data(db: Session):
         db.commit()
 
     # 3. Seed Categories & Products from Excel Price List
-    if db.query(Category).count() == 0 or db.query(Product).count() == 0:
+    if db.query(Category).count() < 30 or db.query(Product).count() < 50:
         from app.excel_importer import import_excel_menu
         import_excel_menu(db)

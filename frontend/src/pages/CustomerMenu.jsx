@@ -18,6 +18,39 @@ const productThumbnails = {
   9: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?auto=format&fit=crop&w=300&q=80', // Nachos
 };
 
+const categoryFallbackImages = {
+  'SOUPS': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=300&q=80',
+  'VEG STARTERS': 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=300&q=80',
+  'NON VEG STARTERS': 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=300&q=80',
+  'PLATTERS': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=300&q=80',
+  'TANDOOR & GRILL': 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&w=300&q=80',
+  'RICE / NOODLES': 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=300&q=80',
+  'INDIAN BREADS': 'https://images.unsplash.com/photo-1626074353765-517a681e40be?auto=format&fit=crop&w=300&q=80',
+  'INDIAN CURRIES & GRAVIES': 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?auto=format&fit=crop&w=300&q=80',
+  'PASTA': 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=300&q=80',
+  'PIZZA': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80',
+  'BIRYANI & PULAO': 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=300&q=80',
+  'DESSERTS': 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80',
+  'CLASSIC COCKTAILS': 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80',
+  'BERMUDA SIGNATURE COCKTAILS': 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=300&q=80',
+  'SHOOTERS': 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=300&q=80',
+  'DOMESTIC BEER': 'https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=300&q=80',
+  'IMPORTED': 'https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=300&q=80',
+  'WINE': 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=300&q=80',
+  'SOFT DRINKS & BEVERAGES': 'https://images.unsplash.com/photo-1553530666-ba11a7da3888?auto=format&fit=crop&w=300&q=80'
+};
+
+const getCategoryFallbackImage = (product, categories) => {
+  const cat = categories ? categories.find(c => c.id === product.category_id) : null;
+  const catName = cat ? cat.name.toUpperCase() : '';
+  if (categoryFallbackImages[catName]) {
+    return categoryFallbackImages[catName];
+  }
+  return (product.target_dept || '').toUpperCase() === 'BAR'
+    ? 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80'
+    : 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=300&q=80';
+};
+
 export default function CustomerMenu() {
   const {
     selectedTable,
@@ -344,9 +377,8 @@ export default function CustomerMenu() {
           const inCart = cart.find((item) => item.product_id === product.id);
           const isBar = (product.target_dept || '').toUpperCase() === 'BAR';
           const isAvailable = product.is_available ?? true;
-          const thumbUrl = product.image_url || productThumbnails[product.id] || (isBar 
-            ? 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80'
-            : 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=300&q=80');
+          const fallbackImg = getCategoryFallbackImage(product, categories);
+          const thumbUrl = product.image_url || productThumbnails[product.id] || fallbackImg;
 
           return (
             <div
@@ -362,9 +394,7 @@ export default function CustomerMenu() {
                   loading="lazy"
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = isBar 
-                      ? 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80'
-                      : 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=300&q=80';
+                    e.target.src = fallbackImg;
                   }}
                 />
               </div>

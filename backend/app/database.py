@@ -10,7 +10,9 @@ except ImportError:
     pass
 
 # Support PostgreSQL (pgAdmin 4), Cloud DATABASE_URL, or fallback SQLite
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bermuda_pub.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "bermuda_pub.db"))
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 
 # Fix legacy postgres:// URL format for SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
