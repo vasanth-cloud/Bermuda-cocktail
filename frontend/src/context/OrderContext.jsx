@@ -672,6 +672,24 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  const uploadImage = async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.image_url;
+      }
+    } catch (err) {
+      console.error("Error uploading image:", err);
+    }
+    return null;
+  };
+
   const updateProduct = async (productId, productData) => {
     try {
       const res = await fetch(`/api/products/${productId}`, {
@@ -876,7 +894,8 @@ export const OrderProvider = ({ children }) => {
         deleteSinglePaymentLog,
         clearAllPaymentLogs,
         clearMemberEntryLogs,
-        importExcelMenu
+        importExcelMenu,
+        uploadImage
       }}
     >
       {children}

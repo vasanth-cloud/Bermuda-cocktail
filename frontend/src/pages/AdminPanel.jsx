@@ -65,8 +65,22 @@ export default function AdminPanel() {
     updateMember,
     deleteMember,
     recordMemberVisit,
-    importExcelMenu
+    importExcelMenu,
+    uploadImage
   } = useOrder();
+
+  const PRESET_PRODUCT_IMAGES = [
+    { name: 'Cocktail', url: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Old Fashioned', url: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Mojito', url: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Beer Pint', url: 'https://images.unsplash.com/photo-1608270586620-248524c67de9?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Whiskey Glass', url: 'https://images.unsplash.com/photo-1527281400683-1aae777175f8?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Wine Glass', url: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Spicy Wings', url: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Fries', url: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Burger', url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80' },
+    { name: 'Pizza', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=500&q=80' }
+  ];
 
   const ALL_TERMINALS = [
     { id: 'customer', label: 'Customer Menu', desc: 'Digital QR Ordering' },
@@ -392,8 +406,26 @@ export default function AdminPanel() {
     category_id: categories[0]?.id || 1,
     price: '',
     target_dept: 'KITCHEN',
-    description: ''
+    description: '',
+    image_url: ''
   });
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleFileUpload = async (file, isEdit = false) => {
+    if (!file) return;
+    setIsUploadingImage(true);
+    const uploadedUrl = await uploadImage(file);
+    setIsUploadingImage(false);
+    if (uploadedUrl) {
+      if (isEdit) {
+        setEditingProductData(prev => ({ ...prev, image_url: uploadedUrl }));
+      } else {
+        setNewItemData(prev => ({ ...prev, image_url: uploadedUrl }));
+      }
+    } else {
+      alert("Failed to upload image. Please try again.");
+    }
+  };
 
   // Price Editing State
   const [editingPriceId, setEditingPriceId] = useState(null);
@@ -416,7 +448,8 @@ export default function AdminPanel() {
     const success = await addProduct({
       ...newItemData,
       category_id: Number(newItemData.category_id),
-      price: parseFloat(newItemData.price)
+      price: parseFloat(newItemData.price),
+      image_url: newItemData.image_url || null
     });
 
     if (success) {
@@ -426,7 +459,8 @@ export default function AdminPanel() {
         category_id: categories[0]?.id || 1,
         price: '',
         target_dept: 'KITCHEN',
-        description: ''
+        description: '',
+        image_url: ''
       });
     }
   };
@@ -439,7 +473,8 @@ export default function AdminPanel() {
       price: item.price,
       target_dept: item.target_dept || 'KITCHEN',
       description: item.description || '',
-      is_available: item.is_available ?? true
+      is_available: item.is_available ?? true,
+      image_url: item.image_url || ''
     });
   };
 
@@ -454,7 +489,8 @@ export default function AdminPanel() {
       ...editingProductData,
       category_id: Number(editingProductData.category_id),
       price: parseFloat(editingProductData.price),
-      is_available: Boolean(editingProductData.is_available)
+      is_available: Boolean(editingProductData.is_available),
+      image_url: editingProductData.image_url || null
     });
 
     if (success) {
@@ -1489,8 +1525,8 @@ export default function AdminPanel() {
 
       {/* Add New Item Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-amber-400" /> Add New Menu Item
@@ -1551,6 +1587,76 @@ export default function AdminPanel() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none focus:border-amber-500"
                     required
                   />
+                </div>
+              </div>
+
+              {/* Image Upload & Gallery Controls */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2.5">
+                <label className="font-bold text-slate-300 block text-xs flex items-center justify-between">
+                  <span>Product Image (Upload File or URL)</span>
+                  {isUploadingImage && <span className="text-amber-400 animate-pulse text-[10px]">Uploading...</span>}
+                </label>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shrink-0 relative flex items-center justify-center">
+                    {newItemData.image_url ? (
+                      <img src={newItemData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xl text-slate-600">📷</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 text-[11px] font-extrabold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                        <UploadCloud className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Upload File</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileUpload(e.target.files[0], false)}
+                          className="hidden"
+                        />
+                      </label>
+                      {newItemData.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setNewItemData({ ...newItemData, image_url: '' })}
+                          className="text-rose-400 hover:text-rose-300 text-[11px] font-bold underline"
+                        >
+                          Clear Image
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Or paste image URL (https://...)"
+                      value={newItemData.image_url || ''}
+                      onChange={(e) => setNewItemData({ ...newItemData, image_url: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block mb-1">Quick Select Preset Image:</span>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {PRESET_PRODUCT_IMAGES.map((img, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setNewItemData({ ...newItemData, image_url: img.url })}
+                        className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-md border transition flex items-center gap-1 ${
+                          newItemData.image_url === img.url
+                            ? 'bg-amber-500/30 text-amber-300 border-amber-500'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                        }`}
+                      >
+                        <img src={img.url} className="w-3.5 h-3.5 rounded object-cover" alt="" />
+                        <span>{img.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1617,8 +1723,8 @@ export default function AdminPanel() {
 
       {/* Edit Menu Item Modal */}
       {editingProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-amber-400" /> Edit Menu Item
@@ -1677,6 +1783,76 @@ export default function AdminPanel() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-amber-300 font-bold focus:outline-none focus:border-amber-500"
                     required
                   />
+                </div>
+              </div>
+
+              {/* Image Upload & Gallery Controls */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2.5">
+                <label className="font-bold text-slate-300 block text-xs flex items-center justify-between">
+                  <span>Product Image (Upload File or URL)</span>
+                  {isUploadingImage && <span className="text-amber-400 animate-pulse text-[10px]">Uploading...</span>}
+                </label>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shrink-0 relative flex items-center justify-center">
+                    {editingProductData.image_url ? (
+                      <img src={editingProductData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xl text-slate-600">📷</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/40 text-[11px] font-extrabold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                        <UploadCloud className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Upload File</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileUpload(e.target.files[0], true)}
+                          className="hidden"
+                        />
+                      </label>
+                      {editingProductData.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingProductData({ ...editingProductData, image_url: '' })}
+                          className="text-rose-400 hover:text-rose-300 text-[11px] font-bold underline"
+                        >
+                          Clear Image
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Or paste image URL (https://...)"
+                      value={editingProductData.image_url || ''}
+                      onChange={(e) => setEditingProductData({ ...editingProductData, image_url: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-[11px] text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block mb-1">Quick Select Preset Image:</span>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {PRESET_PRODUCT_IMAGES.map((img, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setEditingProductData({ ...editingProductData, image_url: img.url })}
+                        className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-md border transition flex items-center gap-1 ${
+                          editingProductData.image_url === img.url
+                            ? 'bg-amber-500/30 text-amber-300 border-amber-500'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                        }`}
+                      >
+                        <img src={img.url} className="w-3.5 h-3.5 rounded object-cover" alt="" />
+                        <span>{img.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

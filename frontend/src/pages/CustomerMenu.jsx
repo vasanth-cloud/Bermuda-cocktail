@@ -344,7 +344,7 @@ export default function CustomerMenu() {
           const inCart = cart.find((item) => item.product_id === product.id);
           const isBar = (product.target_dept || '').toUpperCase() === 'BAR';
           const isAvailable = product.is_available ?? true;
-          const thumbUrl = productThumbnails[product.id] || (isBar 
+          const thumbUrl = product.image_url || productThumbnails[product.id] || (isBar 
             ? 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80'
             : 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=300&q=80');
 

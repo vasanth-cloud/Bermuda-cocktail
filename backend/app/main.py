@@ -1,8 +1,11 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
+import shutil
+import os
 
 from app.database import engine, Base, get_db
 from app import models, schemas
@@ -12,12 +15,12 @@ from app.services.order_router import manager
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-# Seed database on startup
-db_session = Depends(get_db)
-
-import os
-
 app = FastAPI(title="Bermuda Cocktail Pub POS & Order System", version="1.0.0")
+
+# Setup uploads directory for custom product image uploads
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Support Cloud & Custom Domain CORS
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
@@ -341,12 +344,27 @@ async def update_product(product_id: int, prod_update: schemas.ProductUpdate, db
         product.is_available = prod_update.is_available
     if prod_update.target_dept is not None:
         product.target_dept = prod_update.target_dept
+    if prod_update.image_url is not None:
+        product.image_url = prod_update.image_url
 
     db.commit()
     db.refresh(product)
 
     await manager.broadcast_all({"event": "MENU_UPDATED"})
     return product
+
+@app.post("/api/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+    ext = os.path.splitext(file.filename)[1]
+    if not ext:
+        ext = ".png"
+    filename = f"img_{uuid.uuid4().hex[:10]}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"image_url": f"/uploads/{filename}"}
 
 @app.delete("/api/products/{product_id}")
 async def delete_product(product_id: int, db: Session = Depends(get_db)):
