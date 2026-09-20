@@ -336,20 +336,9 @@ async def update_product(product_id: int, prod_update: schemas.ProductUpdate, db
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    if prod_update.name is not None:
-        product.name = prod_update.name
-    if prod_update.category_id is not None:
-        product.category_id = prod_update.category_id
-    if prod_update.price is not None:
-        product.price = prod_update.price
-    if prod_update.description is not None:
-        product.description = prod_update.description
-    if prod_update.is_available is not None:
-        product.is_available = prod_update.is_available
-    if prod_update.target_dept is not None:
-        product.target_dept = prod_update.target_dept
-    if prod_update.image_url is not None:
-        product.image_url = prod_update.image_url
+    update_data = prod_update.model_dump(exclude_unset=True) if hasattr(prod_update, 'model_dump') else prod_update.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(product, field, value)
 
     db.commit()
     db.refresh(product)

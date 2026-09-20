@@ -502,7 +502,7 @@ export default function AdminPanel() {
       category_id: Number(editingProductData.category_id),
       price: parseFloat(editingProductData.price),
       is_available: Boolean(editingProductData.is_available),
-      image_url: editingProductData.image_url || null
+      image_url: editingProductData.image_url ?? ''
     });
 
     if (success) {
