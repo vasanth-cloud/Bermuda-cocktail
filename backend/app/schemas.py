@@ -76,6 +76,7 @@ class ProductUpdate(BaseModel):
     description: Optional[str] = None
     is_available: Optional[bool] = None
     target_dept: Optional[str] = None
+    image_url: Optional[str] = None
 
 class CartItemCreate(BaseModel):
     product_id: int

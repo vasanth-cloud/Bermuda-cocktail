@@ -700,9 +700,14 @@ export const OrderProvider = ({ children }) => {
       if (res.ok) {
         await fetchData();
         return true;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error("Failed to update product:", errData);
+        alert(errData.detail || "Failed to update item");
       }
     } catch (err) {
       console.error("Error updating product:", err);
+      alert("Network error updating product");
     }
     return false;
   };
