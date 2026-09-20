@@ -728,6 +728,33 @@ def get_payment_logs(db: Session = Depends(get_db)):
         "logs": logs
     }
 
+@app.delete("/api/payments/log/{order_id}")
+async def delete_single_payment_log(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order log not found")
+
+    order.payment_status = "PENDING"
+    order.payment_mode = None
+    order.amount_collected = 0.0
+    db.commit()
+
+    await manager.broadcast_all({"event": "PAYMENT_COLLECTED"})
+    return {"message": f"Payment audit log for order #{order.order_number} deleted successfully"}
+
+@app.delete("/api/payments/log")
+async def clear_all_payment_logs(db: Session = Depends(get_db)):
+    collected_orders = db.query(models.Order).filter(models.Order.payment_status == "COLLECTED").all()
+    count = len(collected_orders)
+    for ord in collected_orders:
+        ord.payment_status = "PENDING"
+        ord.payment_mode = None
+        ord.amount_collected = 0.0
+    db.commit()
+
+    await manager.broadcast_all({"event": "PAYMENT_COLLECTED"})
+    return {"message": f"Successfully cleared {count} payment audit log records"}
+
 @app.post("/api/tables/{table_id}/settle")
 async def settle_table_bill(table_id: int, db: Session = Depends(get_db)):
     table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
@@ -895,6 +922,12 @@ def record_member_visit(member_id: int, db: Session = Depends(get_db)):
 @app.get("/api/members/entry-logs", response_model=List[schemas.MemberEntryLogSchema])
 def get_member_entry_logs(db: Session = Depends(get_db)):
     return db.query(models.MemberEntryLog).order_by(models.MemberEntryLog.entry_time.desc()).all()
+
+@app.delete("/api/members/entry-logs")
+def clear_member_entry_logs(db: Session = Depends(get_db)):
+    count = db.query(models.MemberEntryLog).delete()
+    db.commit()
+    return {"message": f"Successfully cleared {count} member entry log records"}
 
 @app.post("/api/members/bulk-import")
 def bulk_import_members(members_list: List[schemas.CustomerMemberCreate], db: Session = Depends(get_db)):

@@ -618,6 +618,47 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
+  const deleteSinglePaymentLog = async (orderId) => {
+    try {
+      const res = await fetch(`/api/payments/log/${orderId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchOrders();
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error deleting single payment log:", err);
+    }
+    return false;
+  };
+
+  const clearAllPaymentLogs = async () => {
+    try {
+      const res = await fetch('/api/payments/log', { method: 'DELETE' });
+      if (res.ok) {
+        await fetchOrders();
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error clearing all payment logs:", err);
+    }
+    return false;
+  };
+
+  const clearMemberEntryLogs = async () => {
+    try {
+      const res = await fetch('/api/members/entry-logs', { method: 'DELETE' });
+      if (res.ok) {
+        await fetchEntryLogs();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error clearing member entry logs:", err);
+    }
+    return false;
+  };
+
   const updateProduct = async (productId, productData) => {
     try {
       const res = await fetch(`/api/products/${productId}`, {
@@ -818,7 +859,10 @@ export const OrderProvider = ({ children }) => {
         recordMemberVisit,
         entryLogs,
         fetchEntryLogs,
-        bulkImportMembers
+        bulkImportMembers,
+        deleteSinglePaymentLog,
+        clearAllPaymentLogs,
+        clearMemberEntryLogs
       }}
     >
       {children}

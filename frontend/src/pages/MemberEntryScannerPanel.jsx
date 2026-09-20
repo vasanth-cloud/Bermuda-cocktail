@@ -16,7 +16,9 @@ import {
   FileSpreadsheet,
   Calendar,
   Clock,
-  Phone
+  Phone,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function MemberEntryScannerPanel() {
@@ -24,7 +26,8 @@ export default function MemberEntryScannerPanel() {
     members, 
     recordMemberVisit, 
     entryLogs, 
-    fetchEntryLogs 
+    fetchEntryLogs,
+    clearMemberEntryLogs
   } = useOrder();
 
   const [scanInputCode, setScanInputCode] = useState('');
@@ -32,6 +35,11 @@ export default function MemberEntryScannerPanel() {
   const [scanErrorMsg, setScanErrorMsg] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCameraActive, setIsCameraActive] = useState(false);
+
+  // Delete Confirmation Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const scannerInputRef = useRef(null);
   const videoRef = useRef(null);
@@ -315,6 +323,19 @@ export default function MemberEntryScannerPanel() {
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          {entryLogs.length > 0 && (
+            <button
+              onClick={() => {
+                setConfirmText('');
+                setIsDeleteModalOpen(true);
+              }}
+              className="bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800/80 text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow"
+              title="Clear member entry logs"
+            >
+              <Trash2 className="w-4 h-4 text-rose-400" /> Clear Entry Logs
+            </button>
+          )}
+
           <button
             onClick={fetchEntryLogs}
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5"
@@ -331,7 +352,7 @@ export default function MemberEntryScannerPanel() {
       </div>
 
       {/* ENTRY AUDIT LOGS TABLE */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-xl relative">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-slate-950 text-slate-400 uppercase text-[11px] font-black tracking-wider border-b border-slate-800">
@@ -402,6 +423,79 @@ export default function MemberEntryScannerPanel() {
             </tbody>
           </table>
         </div>
+
+        {/* MANDATORY 'DELETE' TEXT CONFIRMATION OVERLAY MODAL */}
+        {isDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-slate-900 border-2 border-rose-500/60 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-base text-slate-100">
+                    Confirm Clear Entry Audit Logs
+                  </h4>
+                  <p className="text-xs text-rose-300 font-medium">
+                    Clear ALL {entryLogs.length} member door entrance log records?
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2 text-xs">
+                <p className="text-slate-300">
+                  To prevent accidental loss of door entrance audit logs, please type <strong className="text-rose-400 font-mono">DELETE</strong> below to authorize deletion:
+                </p>
+                <input
+                  type="text"
+                  placeholder="Type DELETE to confirm"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  className="w-full bg-slate-900 border border-rose-500/50 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-100 placeholder-slate-600 focus:outline-none focus:border-rose-400 transition"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setConfirmText('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={confirmText.trim().toUpperCase() !== 'DELETE' || isDeleting}
+                  onClick={async () => {
+                    if (confirmText.trim().toUpperCase() !== 'DELETE') return;
+                    setIsDeleting(true);
+                    const ok = await clearMemberEntryLogs();
+                    setIsDeleting(false);
+                    if (ok) {
+                      setIsDeleteModalOpen(false);
+                      setConfirmText('');
+                    } else {
+                      alert("Failed to clear entry logs.");
+                    }
+                  }}
+                  className={`px-5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-lg ${
+                    confirmText.trim().toUpperCase() === 'DELETE'
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                  }`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {isDeleting ? 'Deleting...' : 'Confirm Deletion'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
