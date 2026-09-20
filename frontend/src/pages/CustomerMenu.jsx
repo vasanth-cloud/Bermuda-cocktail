@@ -35,6 +35,7 @@ export default function CustomerMenu() {
     isCustomerQrMode
   } = useOrder();
 
+  const [selectedDept, setSelectedDept] = useState('ALL'); // ALL, KITCHEN, BAR
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -44,11 +45,18 @@ export default function CustomerMenu() {
 
   const tableActiveOrder = allOrders?.find(o => o.table_id === selectedTable?.id && o.status !== 'BILLED');
 
+  const filteredCategories = categories.filter((cat) => {
+    if (selectedDept === 'ALL') return true;
+    return (cat.target_dept || '').toUpperCase() === selectedDept;
+  });
+
   const filteredProducts = products.filter((p) => {
+    const deptUpper = (p.target_dept || '').toUpperCase();
+    const matchesDept = selectedDept === 'ALL' || deptUpper === selectedDept;
     const matchesCat = selectedCategory === 'ALL' || p.category_id === Number(selectedCategory);
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCat && matchesSearch;
+    return matchesDept && matchesCat && matchesSearch;
   });
 
   const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
@@ -245,36 +253,82 @@ export default function CustomerMenu() {
 
       {/* Sticky Mobile Search & Horizontal Category Scrollbar */}
       <div className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md pt-1 pb-2 border-b border-slate-800/80 mb-3 space-y-2">
+        {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Search cocktails, beer, wings, nachos..."
+            placeholder="Search cocktails, beer, food, desserts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
           />
         </div>
 
-        {/* Horizontal Category Scrollbar */}
+        {/* TOP LEVEL CLASSIFICATION TABS: ALL ITEMS, FOOD, DRINKS & LIQUOR */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            onClick={() => {
+              setSelectedDept('ALL');
+              setSelectedCategory('ALL');
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shrink-0 ${
+              selectedDept === 'ALL'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/20'
+                : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <span>✨ All Items ({products.length})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedDept('KITCHEN');
+              setSelectedCategory('ALL');
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shrink-0 ${
+              selectedDept === 'KITCHEN'
+                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 shadow-md shadow-emerald-500/20'
+                : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <span>🍔 Food & Kitchen ({products.filter(p => (p.target_dept || '').toUpperCase() === 'KITCHEN').length})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedDept('BAR');
+              setSelectedCategory('ALL');
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shrink-0 ${
+              selectedDept === 'BAR'
+                ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-slate-950 shadow-md shadow-purple-500/20'
+                : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <span>🍸 Drinks & Liquor ({products.filter(p => (p.target_dept || '').toUpperCase() === 'BAR').length})</span>
+          </button>
+        </div>
+
+        {/* Sub-Category Scrollbar (Filtered by selected department) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           <button
             onClick={() => setSelectedCategory('ALL')}
             className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition ${
               selectedCategory === 'ALL'
-                ? 'bg-amber-500 text-slate-950 shadow'
+                ? 'bg-slate-200 text-slate-950 font-black shadow'
                 : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
             }`}
           >
-            All Items ({products.length})
+            All Sub-Categories ({filteredProducts.length})
           </button>
-          {categories.map((cat) => (
+          {filteredCategories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id.toString())}
               className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1 ${
                 selectedCategory === cat.id.toString()
-                  ? 'bg-amber-500 text-slate-950 shadow'
+                  ? 'bg-slate-200 text-slate-950 font-black shadow'
                   : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
               }`}
             >
@@ -325,11 +379,17 @@ export default function CustomerMenu() {
                   )}
                 </div>
 
-                <h3 className={`font-black text-xs sm:text-sm truncate ${!isAvailable ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+                <h3 className={`font-black text-xs sm:text-sm ${!isAvailable ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
                   {product.name}
                 </h3>
 
-                <div className="font-extrabold text-xs text-amber-400 mt-0.5">
+                {product.description && (
+                  <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-tight font-medium">
+                    {product.description}
+                  </p>
+                )}
+
+                <div className="font-extrabold text-xs text-amber-400 mt-1">
                   ₹{product.price}
                 </div>
               </div>
