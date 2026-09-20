@@ -219,12 +219,13 @@ export const OrderProvider = ({ children }) => {
   // Fetch initial metadata
   const fetchData = async () => {
     try {
-      const [zonesRes, tablesRes, catRes, prodRes, syncRes] = await Promise.all([
+      const [zonesRes, tablesRes, catRes, prodRes, syncRes, usersRes] = await Promise.all([
         fetch('/api/zones'),
         fetch('/api/tables'),
         fetch('/api/categories'),
         fetch('/api/products'),
-        fetch('/api/sync/status')
+        fetch('/api/sync/status'),
+        fetch('/api/users')
       ]);
 
       const zonesData = await zonesRes.json();
@@ -232,12 +233,16 @@ export const OrderProvider = ({ children }) => {
       const catData = await catRes.json();
       const prodData = await prodRes.json();
       const syncData = await syncRes.json();
+      const usersData = await usersRes.json();
 
       setZones(Array.isArray(zonesData) ? zonesData : []);
       const validTables = Array.isArray(tablesData) ? tablesData : [];
       setTables(validTables);
       setCategories(Array.isArray(catData) ? catData : []);
       setProducts(Array.isArray(prodData) ? prodData : []);
+      if (Array.isArray(usersData)) {
+        setStaffUsers(usersData);
+      }
       if (syncData && syncData.pending_sync_count !== undefined) {
         setSyncStatus(syncData);
       }

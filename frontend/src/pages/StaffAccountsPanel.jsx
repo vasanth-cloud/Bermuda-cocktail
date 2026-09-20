@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
 import { 
   Shield, 
@@ -16,10 +16,15 @@ import {
 export default function StaffAccountsPanel() {
   const { 
     staffUsers, 
+    fetchStaffUsers,
     createStaffAccount, 
     updateStaffAccount, 
     deleteStaffAccount 
   } = useOrder();
+
+  useEffect(() => {
+    fetchStaffUsers();
+  }, []);
 
   const ALL_TERMINALS = [
     { id: 'customer', label: 'Customer Menu', desc: 'Digital QR Ordering' },
