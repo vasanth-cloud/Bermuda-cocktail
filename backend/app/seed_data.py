@@ -139,5 +139,8 @@ def seed_initial_data(db: Session):
 
     # 3. Seed Categories & Products from Excel Price List
     if db.query(Category).count() < 30 or db.query(Product).count() < 50:
-        from app.excel_importer import import_excel_menu
-        import_excel_menu(db)
+        try:
+            from app.excel_importer import import_excel_menu
+            import_excel_menu(db)
+        except Exception as e:
+            print(f"[seed_data] Warning: Excel menu import encountered an issue: {e}")

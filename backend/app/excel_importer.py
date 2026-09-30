@@ -1,12 +1,27 @@
 import os
 import re
-import openpyxl
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
 from sqlalchemy.orm import Session
 from app.models import Category, Product, OrderItem
 
-DEFAULT_EXCEL_PATH = r"C:\Users\VASANTH A\OneDrive\Documents\Bermuda_Menu PRICE LIST NEW_Excel.xlsx"
+BUNDLED_EXCEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "Bermuda_Menu.xlsx"))
+LOCAL_EXCEL_PATH = r"C:\Users\VASANTH A\OneDrive\Documents\Bermuda_Menu PRICE LIST NEW_Excel.xlsx"
+
+def resolve_excel_path(custom_path: str = None) -> str:
+    if custom_path and os.path.exists(custom_path):
+        return custom_path
+    if os.path.exists(BUNDLED_EXCEL_PATH):
+        return BUNDLED_EXCEL_PATH
+    if os.path.exists(LOCAL_EXCEL_PATH):
+        return LOCAL_EXCEL_PATH
+    return None
 
 CATEGORY_ICONS = {
+
     'SOUPS': '🍲',
     'VEG STARTERS': '🥗',
     'NON VEG STARTERS': '🍗',
@@ -40,15 +55,20 @@ CATEGORY_ICONS = {
     'SOFT DRINKS & BEVERAGES': '🥤'
 }
 
-def import_excel_menu(db: Session, excel_path: str = DEFAULT_EXCEL_PATH):
-    if not os.path.exists(excel_path):
-        print(f"[excel_importer] File not found: {excel_path}")
+def import_excel_menu(db: Session, excel_path: str = None):
+    if openpyxl is None:
+        print("[excel_importer] Warning: openpyxl library is not installed. Skipping Excel menu import.")
+        return False
+
+    target_path = resolve_excel_path(excel_path)
+    if not target_path:
+        print("[excel_importer] Excel menu file not found. Skipping Excel menu import.")
         return False
 
     try:
-        wb = openpyxl.load_workbook(excel_path, data_only=True)
+        wb = openpyxl.load_workbook(target_path, data_only=True)
     except Exception as e:
-        print(f"[excel_importer] Failed to load excel workbook: {e}")
+        print(f"[excel_importer] Failed to load excel workbook '{target_path}': {e}")
         return False
     
     categories_map = {} # cat_name -> {target_dept, icon}
@@ -184,5 +204,5 @@ def import_excel_menu(db: Session, excel_path: str = DEFAULT_EXCEL_PATH):
 
     db.add_all(products_to_add)
     db.commit()
-    print(f"[excel_importer] Successfully imported {len(categories_map)} categories and {len(products_to_add)} products from {excel_path}!")
+    print(f"[excel_importer] Successfully imported {len(categories_map)} categories and {len(products_to_add)} products from {target_path}!")
     return True
