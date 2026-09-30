@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiFetch, getWsBaseUrl, getAssetUrl } from '../config';
 
 const OrderContext = createContext();
 
@@ -57,7 +58,7 @@ export const OrderProvider = ({ children }) => {
 
   const fetchStaffUsers = async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await apiFetch('/api/users');
       if (res.ok) setStaffUsers(await res.json());
     } catch (e) {
       console.error(e);
@@ -66,7 +67,7 @@ export const OrderProvider = ({ children }) => {
 
   const loginUser = async (email, password) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -103,7 +104,7 @@ export const OrderProvider = ({ children }) => {
 
   const createStaffAccount = async (userData) => {
     try {
-      const res = await fetch('/api/users', {
+      const res = await apiFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
@@ -121,7 +122,7 @@ export const OrderProvider = ({ children }) => {
 
   const updateStaffAccount = async (userId, userData) => {
     try {
-      const res = await fetch(`/api/users/${userId}`, {
+      const res = await apiFetch(`/api/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
@@ -144,7 +145,7 @@ export const OrderProvider = ({ children }) => {
 
   const deleteStaffAccount = async (userId) => {
     try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchStaffUsers();
         return true;
@@ -157,7 +158,7 @@ export const OrderProvider = ({ children }) => {
 
   const fetchTables = async () => {
     try {
-      const res = await fetch('/api/tables');
+      const res = await apiFetch('/api/tables');
       if (res.ok) {
         const data = await res.json();
         setTables(Array.isArray(data) ? data : []);
@@ -169,7 +170,7 @@ export const OrderProvider = ({ children }) => {
 
   const addPubTable = async (tableData) => {
     try {
-      const res = await fetch('/api/tables', {
+      const res = await apiFetch('/api/tables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tableData)
@@ -187,7 +188,7 @@ export const OrderProvider = ({ children }) => {
 
   const updatePubTable = async (tableId, tableData) => {
     try {
-      const res = await fetch(`/api/tables/${tableId}`, {
+      const res = await apiFetch(`/api/tables/${tableId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tableData)
@@ -205,7 +206,7 @@ export const OrderProvider = ({ children }) => {
 
   const deletePubTable = async (tableId) => {
     try {
-      const res = await fetch(`/api/tables/${tableId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/tables/${tableId}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchTables();
         return true;
@@ -220,12 +221,12 @@ export const OrderProvider = ({ children }) => {
   const fetchData = async () => {
     try {
       const [zonesRes, tablesRes, catRes, prodRes, syncRes, usersRes] = await Promise.all([
-        fetch('/api/zones'),
-        fetch('/api/tables'),
-        fetch('/api/categories'),
-        fetch('/api/products'),
-        fetch('/api/sync/status'),
-        fetch('/api/users')
+        apiFetch('/api/zones'),
+        apiFetch('/api/tables'),
+        apiFetch('/api/categories'),
+        apiFetch('/api/products'),
+        apiFetch('/api/sync/status'),
+        apiFetch('/api/users')
       ]);
 
       const zonesData = await zonesRes.json();
@@ -278,10 +279,10 @@ export const OrderProvider = ({ children }) => {
   const fetchOrders = async () => {
     try {
       const [barRes, kitchenRes, allRes, payLogRes] = await Promise.all([
-        fetch('/api/orders?target_dept=BAR'),
-        fetch('/api/orders?target_dept=KITCHEN'),
-        fetch('/api/orders'),
-        fetch('/api/payments/log')
+        apiFetch('/api/orders?target_dept=BAR'),
+        apiFetch('/api/orders?target_dept=KITCHEN'),
+        apiFetch('/api/orders'),
+        apiFetch('/api/payments/log')
       ]);
 
       if (barRes.ok) setBarOrders(await barRes.json());
@@ -343,8 +344,7 @@ export const OrderProvider = ({ children }) => {
 
     const connectWs = () => {
       try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws-api/${activeTab}`;
+        const wsUrl = `${getWsBaseUrl()}/ws-api/${activeTab}`;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
@@ -439,7 +439,7 @@ export const OrderProvider = ({ children }) => {
     };
 
     try {
-      const res = await fetch('/api/orders', {
+      const res = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -461,7 +461,7 @@ export const OrderProvider = ({ children }) => {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      await fetch(`/api/orders/${orderId}/status`, {
+      await apiFetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -474,7 +474,7 @@ export const OrderProvider = ({ children }) => {
 
   const updateItemStatus = async (itemId, newStatus) => {
     try {
-      await fetch(`/api/order-items/${itemId}/status`, {
+      await apiFetch(`/api/order-items/${itemId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -487,7 +487,7 @@ export const OrderProvider = ({ children }) => {
 
   const settleTableBill = async (tableId) => {
     try {
-      await fetch(`/api/tables/${tableId}/settle`, { method: 'POST' });
+      await apiFetch(`/api/tables/${tableId}/settle`, { method: 'POST' });
       fetchOrders();
       fetchData();
     } catch (err) {
@@ -506,7 +506,7 @@ export const OrderProvider = ({ children }) => {
     finalAmount = 0.0
   ) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/collect-payment`, {
+      const res = await apiFetch(`/api/orders/${orderId}/collect-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -532,7 +532,7 @@ export const OrderProvider = ({ children }) => {
 
   const addProduct = async (productData) => {
     try {
-      const res = await fetch('/api/products', {
+      const res = await apiFetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData)
@@ -549,7 +549,7 @@ export const OrderProvider = ({ children }) => {
 
   const updateProductPrice = async (productId, newPrice) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, {
+      const res = await apiFetch(`/api/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ price: parseFloat(newPrice) })
@@ -566,7 +566,7 @@ export const OrderProvider = ({ children }) => {
 
   const toggleProductAvailability = async (productId, targetAvailability) => {
     try {
-      await fetch(`/api/products/${productId}`, {
+      await apiFetch(`/api/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_available: Boolean(targetAvailability) })
@@ -579,7 +579,7 @@ export const OrderProvider = ({ children }) => {
 
   const triggerSync = async () => {
     try {
-      const res = await fetch('/api/sync/trigger', { method: 'POST' });
+      const res = await apiFetch('/api/sync/trigger', { method: 'POST' });
       const data = await res.json();
       alert(data.message);
       fetchData();
@@ -590,7 +590,7 @@ export const OrderProvider = ({ children }) => {
 
   const confirmOrderAsWaiter = async (orderId, waiterName = 'Waiter') => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/waiter-confirm?waiter_name=${encodeURIComponent(waiterName)}`, {
+      const res = await apiFetch(`/api/orders/${orderId}/waiter-confirm?waiter_name=${encodeURIComponent(waiterName)}`, {
         method: 'POST'
       });
       if (res.ok) {
@@ -606,7 +606,7 @@ export const OrderProvider = ({ children }) => {
 
   const addItemsToOrder = async (orderId, items, waiterName = 'Waiter') => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/add-items`, {
+      const res = await apiFetch(`/api/orders/${orderId}/add-items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items, waiter_name: waiterName })
@@ -624,7 +624,7 @@ export const OrderProvider = ({ children }) => {
 
   const deleteOrderItem = async (itemId) => {
     try {
-      const res = await fetch(`/api/order-items/${itemId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/order-items/${itemId}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchOrders();
         await fetchData();
@@ -638,7 +638,7 @@ export const OrderProvider = ({ children }) => {
 
   const deleteSinglePaymentLog = async (orderId) => {
     try {
-      const res = await fetch(`/api/payments/log/${orderId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/payments/log/${orderId}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchOrders();
         await fetchData();
@@ -652,7 +652,7 @@ export const OrderProvider = ({ children }) => {
 
   const clearAllPaymentLogs = async () => {
     try {
-      const res = await fetch('/api/payments/log', { method: 'DELETE' });
+      const res = await apiFetch('/api/payments/log', { method: 'DELETE' });
       if (res.ok) {
         await fetchOrders();
         await fetchData();
@@ -666,7 +666,7 @@ export const OrderProvider = ({ children }) => {
 
   const clearMemberEntryLogs = async () => {
     try {
-      const res = await fetch('/api/members/entry-logs', { method: 'DELETE' });
+      const res = await apiFetch('/api/members/entry-logs', { method: 'DELETE' });
       if (res.ok) {
         await fetchEntryLogs();
         return true;
@@ -679,7 +679,7 @@ export const OrderProvider = ({ children }) => {
 
   const importExcelMenu = async () => {
     try {
-      const res = await fetch('/api/menu/import-excel', { method: 'POST' });
+      const res = await apiFetch('/api/menu/import-excel', { method: 'POST' });
       if (res.ok) {
         await fetchData();
         return true;
@@ -694,7 +694,7 @@ export const OrderProvider = ({ children }) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload-image', {
+      const res = await apiFetch('/api/upload-image', {
         method: 'POST',
         body: formData
       });
@@ -710,7 +710,7 @@ export const OrderProvider = ({ children }) => {
 
   const updateProduct = async (productId, productData) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, {
+      const res = await apiFetch(`/api/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData)
@@ -732,7 +732,7 @@ export const OrderProvider = ({ children }) => {
 
   const deleteProduct = async (productId) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/products/${productId}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchData();
         return true;
@@ -749,7 +749,7 @@ export const OrderProvider = ({ children }) => {
   const fetchMembers = async (query = '') => {
     try {
       const url = query ? `/api/members?q=${encodeURIComponent(query)}` : '/api/members';
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (res.ok) setMembers(await res.json());
     } catch (e) {
       console.error("Error fetching members:", e);
@@ -758,7 +758,7 @@ export const OrderProvider = ({ children }) => {
 
   const createMember = async (memberData) => {
     try {
-      const res = await fetch('/api/members', {
+      const res = await apiFetch('/api/members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(memberData)
@@ -779,7 +779,7 @@ export const OrderProvider = ({ children }) => {
 
   const updateMember = async (memberId, memberData) => {
     try {
-      const res = await fetch(`/api/members/${memberId}`, {
+      const res = await apiFetch(`/api/members/${memberId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(memberData)
@@ -796,7 +796,7 @@ export const OrderProvider = ({ children }) => {
 
   const deleteMember = async (memberId) => {
     try {
-      const res = await fetch(`/api/members/${memberId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/members/${memberId}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchMembers();
         return true;
@@ -812,7 +812,7 @@ export const OrderProvider = ({ children }) => {
 
   const fetchEntryLogs = async () => {
     try {
-      const res = await fetch('/api/members/entry-logs');
+      const res = await apiFetch('/api/members/entry-logs');
       if (res.ok) setEntryLogs(await res.json());
     } catch (e) {
       console.error("Error fetching entry logs:", e);
@@ -821,7 +821,7 @@ export const OrderProvider = ({ children }) => {
 
   const recordMemberVisit = async (memberId) => {
     try {
-      const res = await fetch(`/api/members/${memberId}/record-visit`, { method: 'POST' });
+      const res = await apiFetch(`/api/members/${memberId}/record-visit`, { method: 'POST' });
       if (res.ok) {
         await fetchMembers();
         await fetchEntryLogs();
@@ -835,7 +835,7 @@ export const OrderProvider = ({ children }) => {
 
   const bulkImportMembers = async (membersList) => {
     try {
-      const res = await fetch('/api/members/bulk-import', {
+      const res = await apiFetch('/api/members/bulk-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(membersList)

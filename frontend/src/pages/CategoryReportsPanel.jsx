@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
+import { apiFetch } from '../config';
 import PaymentAuditLogModal from '../components/PaymentAuditLogModal';
 import { 
   BarChart3, 
@@ -36,7 +37,7 @@ export default function CategoryReportsPanel() {
   const fetchReportData = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/reports/category-summary');
+      const res = await apiFetch('/api/reports/category-summary');
       if (res.ok) {
         const data = await res.json();
         setReportData(data);

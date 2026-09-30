@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
+import { getAssetUrl } from '../config';
 import BermudaLogo from '../components/BermudaLogo';
 import { 
   ShoppingBag, Plus, Minus, Check, Wine, Utensils, Search, 
@@ -378,7 +379,7 @@ export default function CustomerMenu() {
           const isBar = (product.target_dept || '').toUpperCase() === 'BAR';
           const isAvailable = product.is_available ?? true;
           const fallbackImg = getCategoryFallbackImage(product, categories);
-          const thumbUrl = product.image_url || productThumbnails[product.id] || fallbackImg;
+          const thumbUrl = (product.image_url ? getAssetUrl(product.image_url) : null) || productThumbnails[product.id] || fallbackImg;
 
           return (
             <div

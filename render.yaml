@@ -10,6 +10,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: ALLOWED_ORIGINS
+        value: "*"
 
   # 2. Frontend Static Web Service (Vite React App)
   - type: web
@@ -19,6 +21,9 @@ services:
     plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://bermuda-cocktail-backend.onrender.com
     routes:
       - type: rewrite
         source: /*

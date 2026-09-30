@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
+import { apiFetch, getAssetUrl } from '../config';
 import PaymentAuditLogModal from '../components/PaymentAuditLogModal';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
 import { 
@@ -322,7 +323,7 @@ export default function AdminPanel() {
   });
 
   useEffect(() => {
-    fetch('/api/system/ip')
+    apiFetch('/api/system/ip')
       .then(r => r.json())
       .then(data => {
         if (data.local_ip && data.local_ip !== '127.0.0.1') {
@@ -889,7 +890,7 @@ export default function AdminPanel() {
                           <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-950 border border-slate-800 shrink-0 flex items-center justify-center">
                             {item.image_url ? (
                               <img 
-                                src={item.image_url} 
+                                src={getAssetUrl(item.image_url)} 
                                 alt="" 
                                 className="w-full h-full object-cover" 
                                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -1359,7 +1360,7 @@ export default function AdminPanel() {
                   <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shrink-0 relative flex items-center justify-center">
                     {newItemData.image_url ? (
                       <img 
-                        src={newItemData.image_url} 
+                        src={getAssetUrl(newItemData.image_url)} 
                         alt="Preview" 
                         className="w-full h-full object-cover" 
                         onError={(e) => {
@@ -1563,7 +1564,7 @@ export default function AdminPanel() {
                   <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shrink-0 relative flex items-center justify-center">
                     {editingProductData.image_url ? (
                       <img 
-                        src={editingProductData.image_url} 
+                        src={getAssetUrl(editingProductData.image_url)} 
                         alt="Preview" 
                         className="w-full h-full object-cover" 
                         onError={(e) => {

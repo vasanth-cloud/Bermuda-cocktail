@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
+import { apiFetch } from '../config';
 import { BarChart3, X, FileSpreadsheet, Utensils, Wine, DollarSign, Download, Sparkles, Filter, PieChart, ShieldCheck } from 'lucide-react';
 
 export default function CategorySalesReportModal({ isOpen, onClose }) {
@@ -17,7 +18,7 @@ export default function CategorySalesReportModal({ isOpen, onClose }) {
   const fetchReportData = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/reports/category-summary');
+      const res = await apiFetch('/api/reports/category-summary');
       if (res.ok) {
         const data = await res.json();
         setReportData(data);
