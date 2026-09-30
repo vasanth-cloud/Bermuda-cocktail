@@ -24,7 +24,13 @@ export const OrderProvider = ({ children }) => {
   // Offline Sync State & Connection
   const [syncStatus, setSyncStatus] = useState({ pending_sync_count: 0, connection_mode: 'OFFLINE_LOCAL_SERVER' });
   const [wsConnected, setWsConnected] = useState(false);
-  const [isCustomerQrMode, setIsCustomerQrMode] = useState(false);
+  const [isCustomerQrMode, setIsCustomerQrMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      return Boolean(urlParams.get('table') || urlParams.get('t'));
+    }
+    return false;
+  });
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem('bermuda_theme') || 'dark';

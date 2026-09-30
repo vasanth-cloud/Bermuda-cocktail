@@ -326,7 +326,11 @@ export default function AdminPanel() {
     apiFetch('/api/system/ip')
       .then(r => r.json())
       .then(data => {
-        if (data.local_ip && data.local_ip !== '127.0.0.1') {
+        // Only override if currently running on localhost/127.0.0.1 in local dev
+        // In cloud production (e.g. elitedominators.com), preserve window.location.host so QR points to public domain
+        const isLocalHost = typeof window !== 'undefined' && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        if (isLocalHost && data.local_ip && data.local_ip !== '127.0.0.1' && !data.local_ip.startsWith('10.')) {
           setLocalIpHost(`${data.local_ip}:${data.default_port || 3000}`);
         }
       })
@@ -755,6 +759,21 @@ export default function AdminPanel() {
                     level={"H"}
                     includeMargin={false}
                   />
+                </div>
+
+                {/* Scannable Target URL & Quick Test Link */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-[10px] text-slate-400 font-mono break-all bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-800 text-center select-all">
+                    {activeQrUrl}
+                  </div>
+                  <a
+                    href={activeQrUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 font-bold transition py-1"
+                  >
+                    <span>🚀 Test Customer Menu in New Tab</span>
+                  </a>
                 </div>
 
                 <button
