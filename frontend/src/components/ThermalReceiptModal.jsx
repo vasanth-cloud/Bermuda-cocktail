@@ -327,46 +327,46 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {mode === 'BILL' ? (
               <>
+                {/* Browser 1-Click Print (Primary for Web Users) */}
+                <button
+                  type="button"
+                  onClick={handleBrowserPrint}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition"
+                >
+                  <Printer className="w-4 h-4 text-slate-950" /> Print Bill (1-Click Browser)
+                </button>
+
                 {/* Print Bill over LAN Socket */}
                 <button
                   type="button"
                   onClick={handleSendBillToLan}
                   disabled={isSendingBillToLan}
-                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition disabled:opacity-50"
+                  className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition disabled:opacity-50"
                 >
-                  <Wifi className="w-4 h-4" />
-                  {isSendingBillToLan ? 'Printing to LAN...' : 'Print Bill over LAN'}
-                </button>
-
-                {/* Browser Print Backup */}
-                <button
-                  type="button"
-                  onClick={handleBrowserPrint}
-                  className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition"
-                >
-                  <Printer className="w-4 h-4 text-amber-400" /> Browser Print Backup
+                  <Wifi className="w-4 h-4 text-amber-400" />
+                  {isSendingBillToLan ? 'Relaying to LAN...' : 'Relay over LAN Socket'}
                 </button>
               </>
             ) : (
               <>
+                {/* Browser 1-Click Print (Primary for Web Users) */}
+                <button
+                  type="button"
+                  onClick={handleBrowserPrint}
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition"
+                >
+                  <Printer className="w-4 h-4 text-white" /> Print KOT (1-Click Browser)
+                </button>
+
                 {/* Send KOT over LAN Socket */}
                 <button
                   type="button"
                   onClick={handleSendToRugtek}
                   disabled={isSendingToRugtek}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition disabled:opacity-50"
+                  className="bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition disabled:opacity-50"
                 >
-                  <Wifi className="w-4 h-4" />
-                  {isSendingToRugtek ? 'Sending to Kitchen LAN...' : 'Send KOT to Kitchen (LAN)'}
-                </button>
-
-                {/* Browser Print Backup */}
-                <button
-                  type="button"
-                  onClick={handleBrowserPrint}
-                  className="bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition"
-                >
-                  <Printer className="w-4 h-4 text-purple-400" /> Browser Print Backup
+                  <Wifi className="w-4 h-4 text-purple-400" />
+                  {isSendingToRugtek ? 'Relaying to Kitchen...' : 'Relay to Kitchen LAN'}
                 </button>
               </>
             )}
