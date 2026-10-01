@@ -94,6 +94,69 @@ def send_raw_esc_pos(ip: str, port: int, data: bytes, timeout: float = 3.0) -> T
         return False, f"Printer network error on {ip}:{port}: {str(e)}"
 
 
+class PrintBridgeManager:
+    """
+    Manages WebSocket connections to local POS counter machines inside the pub.
+    Allows the cloud backend (elitedominators.com) to print over raw LAN sockets (192.168.x.x)
+    via a lightweight relay running on the counter PC.
+    """
+    def __init__(self):
+        self.active_bridges: Dict[str, Any] = {}
+
+    async def register(self, bridge_id: str, websocket: Any):
+        await websocket.accept()
+        self.active_bridges[bridge_id] = websocket
+        print(f"[PrintBridge] Local POS print bridge connected: {bridge_id}")
+
+    def unregister(self, bridge_id: str):
+        if bridge_id in self.active_bridges:
+            del self.active_bridges[bridge_id]
+            print(f"[PrintBridge] Local POS print bridge disconnected: {bridge_id}")
+
+    def is_connected(self) -> bool:
+        return len(self.active_bridges) > 0
+
+    def get_connected_bridges(self) -> List[str]:
+        return list(self.active_bridges.keys())
+
+    async def dispatch_print(self, target: str, ip: str, port: int, data: bytes, job_title: str) -> Tuple[bool, str]:
+        """
+        Dispatches print jobs:
+        1. If a local print bridge is connected (POS machine in pub), forwards job via WebSocket.
+        2. Otherwise, attempts direct LAN socket connection (works when running locally in pub).
+        """
+        import base64
+
+        if self.active_bridges:
+            b64_data = base64.b64encode(data).decode('ascii')
+            payload = {
+                "action": "PRINT",
+                "target": target,
+                "ip": ip,
+                "port": port,
+                "job_title": job_title,
+                "data_b64": b64_data
+            }
+            dead = []
+            sent = False
+            for b_id, ws in list(self.active_bridges.items()):
+                try:
+                    await ws.send_json(payload)
+                    sent = True
+                except Exception:
+                    dead.append(b_id)
+            for d in dead:
+                self.unregister(d)
+            if sent:
+                return True, f"Print job '{job_title}' relayed to local POS bridge ({', '.join(self.active_bridges.keys())}) for direct LAN delivery to {ip}:{port}"
+
+        # Direct LAN socket attempt (works when backend is running on local pub network)
+        return send_raw_esc_pos(ip=ip, port=port, data=data)
+
+
+print_bridge = PrintBridgeManager()
+
+
 def build_test_slip(printer_name: str, ip: str, port: int) -> bytes:
     """
     Constructs a test page to verify network receipt printer functionality.

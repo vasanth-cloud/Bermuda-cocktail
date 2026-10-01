@@ -643,7 +643,7 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
                             items=k_items,
                             dept="KITCHEN"
                         )
-                        thermal_printer.send_raw_esc_pos(ip=k_ip, port=k_port, data=kot_data, timeout=2.5)
+                        await thermal_printer.print_bridge.dispatch_print(target="KITCHEN", ip=k_ip, port=k_port, data=kot_data, job_title=f"KOT #{order.order_number}")
                 except Exception as ex:
                     print(f"[AutoPrintKOT] Notice: {ex}")
             asyncio.create_task(_auto_print_job())
@@ -710,7 +710,7 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
                         items=k_addon_items,
                         dept="KITCHEN ADD-ON"
                     )
-                    thermal_printer.send_raw_esc_pos(ip=k_ip, port=k_port, data=kot_data, timeout=2.5)
+                    await thermal_printer.print_bridge.dispatch_print(target="KITCHEN", ip=k_ip, port=k_port, data=kot_data, job_title=f"KOT Addon #{order.order_number}")
                 except Exception as ex:
                     print(f"[AutoPrintKOTAddon] Notice: {ex}")
             asyncio.create_task(_auto_print_addon())
@@ -822,7 +822,7 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
                     ]
                 }
                 bill_data = thermal_printer.build_bill_esc_pos(order_dict)
-                thermal_printer.send_raw_esc_pos(ip=c_ip, port=c_port, data=bill_data, timeout=2.5)
+                await thermal_printer.print_bridge.dispatch_print(target="CASHIER", ip=c_ip, port=c_port, data=bill_data, job_title=f"Bill #{order.order_number}")
             except Exception as ex:
                 print(f"[AutoPrintBill] Notice: {ex}")
         asyncio.create_task(_auto_print_bill())
@@ -1238,11 +1238,31 @@ def bulk_import_members(members_list: List[schemas.CustomerMemberCreate], db: Se
 
 @app.get("/api/printers/config")
 def get_printer_configuration():
-    return thermal_printer.load_printer_config()
+    cfg = thermal_printer.load_printer_config()
+    cfg["bridge_connected"] = thermal_printer.print_bridge.is_connected()
+    cfg["connected_bridges"] = thermal_printer.print_bridge.get_connected_bridges()
+    return cfg
+
+@app.websocket("/api/printers/ws/bridge")
+async def printer_bridge_websocket(websocket: WebSocket, client_id: str = Query(default="POS-Terminal")):
+    """
+    WebSocket channel for the local Bermuda Print Bridge running on the counter PC.
+    Relays ESC/POS print jobs from cloud (elitedominators.com) to local LAN printers (192.168.0.70).
+    """
+    await thermal_printer.print_bridge.register(client_id, websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        thermal_printer.print_bridge.unregister(client_id)
+    except Exception:
+        thermal_printer.print_bridge.unregister(client_id)
 
 @app.post("/api/printers/config")
 def update_printer_configuration(config_data: dict):
     saved = thermal_printer.save_printer_config(config_data)
+    saved["bridge_connected"] = thermal_printer.print_bridge.is_connected()
+    saved["connected_bridges"] = thermal_printer.print_bridge.get_connected_bridges()
     return {"message": "Printer configuration saved successfully", "config": saved}
 
 @app.post("/api/printers/discover")
@@ -1283,7 +1303,7 @@ async def discover_lan_printers():
     return {
         "local_subnet": f"{base_prefix}.x",
         "found_printers": found,
-        "message": f"Found {len(found)} thermal printer(s) on LAN: {', '.join(found)}" if found else f"No port 9100 printers responding on {base_prefix}.x. Print a Self-Test slip (Hold FEED while powering on) to check the printer's configured IP."
+        "message": f"Found {len(found)} thermal printer(s) on LAN: {', '.join(found)}" if found else f"No port 9100 printers responding on {base_prefix}.x. If using elitedominators.com (cloud), start the local Print Bridge on the counter PC to connect cloud to pub printers."
     }
 
 @app.post("/api/printers/test")
@@ -1292,27 +1312,30 @@ async def test_printer_connection(req: dict = {}):
     target = (req.get("target") or "KITCHEN").upper()
 
     if target == "CASHIER":
-        default_ip = cfg.get("cashier_printer_ip", "192.168.1.201")
+        default_ip = cfg.get("cashier_printer_ip", "192.168.1.87")
         default_port = cfg.get("cashier_printer_port", 9100)
-        default_name = cfg.get("cashier_printer_name", "POSIFLEX PP-8800 (Cashier/Bar LAN)")
+        default_name = cfg.get("cashier_printer_name", "POSIFLEX PP-8800 / RP327 (Cashier / Bar Billing)")
     else:
-        default_ip = cfg.get("kitchen_printer_ip", "192.168.1.200")
+        default_ip = cfg.get("kitchen_printer_ip", "192.168.0.70")
         default_port = cfg.get("kitchen_printer_port", 9100)
-        default_name = cfg.get("kitchen_printer_name", "RUGTEK RP326 (Kitchen LAN)")
+        default_name = cfg.get("kitchen_printer_name", "RUGTEK RP327 / RP326 (Kitchen KOT)")
 
     ip = req.get("ip") or default_ip
     port = int(req.get("port") or default_port)
     name = req.get("printer_name") or default_name
 
     test_slip_bytes = thermal_printer.build_test_slip(printer_name=name, ip=ip, port=port)
-    success, message = thermal_printer.send_raw_esc_pos(ip=ip, port=port, data=test_slip_bytes, timeout=3.0)
+    success, message = await thermal_printer.print_bridge.dispatch_print(
+        target=target, ip=ip, port=port, data=test_slip_bytes, job_title=f"{name} Test Slip"
+    )
 
     return {
         "success": success,
         "message": message,
         "ip": ip,
         "port": port,
-        "target": target
+        "target": target,
+        "bridge_active": thermal_printer.print_bridge.is_connected()
     }
 
 @app.post("/api/printers/print-kot/{order_id}")
@@ -1361,12 +1384,15 @@ async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(g
         created_at_str=order.created_at.strftime("%d-%b-%Y %I:%M %p") if order.created_at else None
     )
 
-    success, message = thermal_printer.send_raw_esc_pos(ip=ip, port=port, data=kot_bytes, timeout=3.0)
+    success, message = await thermal_printer.print_bridge.dispatch_print(
+        target="KITCHEN", ip=ip, port=port, data=kot_bytes, job_title=f"KOT #{order.order_number}"
+    )
     return {
         "success": success,
         "message": message,
         "order_number": order.order_number,
-        "items_printed": len(kitchen_items)
+        "items_printed": len(kitchen_items),
+        "bridge_active": thermal_printer.print_bridge.is_connected()
     }
 
 @app.post("/api/printers/print-bill/{order_id}")
@@ -1376,7 +1402,7 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Order not found")
 
     cfg = thermal_printer.load_printer_config()
-    ip = req.get("ip") or cfg.get("cashier_printer_ip", "192.168.1.201")
+    ip = req.get("ip") or cfg.get("cashier_printer_ip", "192.168.1.87")
     port = int(req.get("port") or cfg.get("cashier_printer_port", 9100))
 
     order_dict = {
@@ -1401,13 +1427,16 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
     }
 
     bill_bytes = thermal_printer.build_bill_esc_pos(order_dict)
-    success, message = thermal_printer.send_raw_esc_pos(ip=ip, port=port, data=bill_bytes, timeout=3.0)
+    success, message = await thermal_printer.print_bridge.dispatch_print(
+        target="CASHIER", ip=ip, port=port, data=bill_bytes, job_title=f"Bill #{order.order_number}"
+    )
     return {
         "success": success,
         "message": message,
         "order_number": order.order_number,
         "ip": ip,
-        "port": port
+        "port": port,
+        "bridge_active": thermal_printer.print_bridge.is_connected()
     }
 
 

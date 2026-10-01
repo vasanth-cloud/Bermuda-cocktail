@@ -166,6 +166,57 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
               </div>
             )}
 
+            {/* Bridge Status Card */}
+            <div className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-all ${
+              config.bridge_connected
+                ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+                : 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+            }`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full animate-pulse ${
+                    config.bridge_connected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-amber-400'
+                  }`} />
+                  <span className="font-extrabold text-xs sm:text-sm text-slate-100">
+                    {config.bridge_connected
+                      ? `Cloud-to-LAN Print Bridge: CONNECTED (${(config.connected_bridges || []).join(', ') || 'Counter PC'})`
+                      : 'Cloud-to-LAN Bridge: OFFLINE (Requires Counter PC Relay)'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchConfig}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold flex items-center gap-1 transition"
+                >
+                  <RefreshCw className="w-3 h-3" /> Refresh Status
+                </button>
+              </div>
+
+              {config.bridge_connected ? (
+                <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                  🟢 Your POS counter terminal is linked to the cloud. KOT tickets and customer bills will automatically dispatch to LAN printers (192.168.0.70 & 192.168.1.87) in under 0.1s.
+                </p>
+              ) : (
+                <div className="text-[11px] text-slate-300 space-y-1.5 bg-slate-900/60 p-2.5 rounded-lg border border-amber-500/20">
+                  <div className="text-amber-300 font-bold flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                    Why IP 192.168.x.x fails from elitedominators.com:
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    <strong>192.168.x.x</strong> is a private local network IP inside the pub. Cloud servers on the internet cannot cross your pub's Wi-Fi router directly.
+                  </p>
+                  <div className="pt-1 flex flex-wrap gap-2 text-[10px]">
+                    <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                      Option 1: Double-click tools\Start_Print_Bridge.bat on counter PC
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold">
+                      Option 2: Open POS locally at http://localhost:3000
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* LAN Scanner & Self-Test Guide Bar */}
             <div className="bg-slate-950 p-3.5 rounded-xl border border-blue-500/30 space-y-2.5">
               <div className="flex items-center justify-between flex-wrap gap-2">
