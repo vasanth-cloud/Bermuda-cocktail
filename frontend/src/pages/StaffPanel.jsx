@@ -174,8 +174,10 @@ export default function StaffPanel() {
     setIsSubmittingPayment(false);
 
     if (success) {
+      const orderJustPaid = { ...activePaymentOrder, payment_status: 'COLLECTED', payment_mode: paymentMode };
       setActivePaymentOrder(null);
       setAmountCollected('');
+      setActivePrintOrder(orderJustPaid);
     }
   };
 
