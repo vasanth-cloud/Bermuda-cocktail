@@ -7,13 +7,13 @@ from typing import Optional, Dict, Any, List, Tuple
 CONFIG_FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "printer_config.json"))
 
 DEFAULT_PRINTER_CONFIG = {
-    "kitchen_printer_name": "RUGTEK RP326 (Kitchen LAN)",
-    "kitchen_printer_ip": "192.168.1.200",
+    "kitchen_printer_name": "RUGTEK RP327 / RP326 (Kitchen KOT)",
+    "kitchen_printer_ip": "192.168.0.70",
     "kitchen_printer_port": 9100,
     "kitchen_printer_enabled": True,
     "auto_print_kot": True,
-    "cashier_printer_name": "POSIFLEX PP-8800 (Cashier/Bar LAN)",
-    "cashier_printer_ip": "192.168.1.201",
+    "cashier_printer_name": "POSIFLEX PP-8800 / RP327 (Cashier / Bar Billing)",
+    "cashier_printer_ip": "192.168.1.87",
     "cashier_printer_port": 9100,
     "cashier_printer_enabled": True,
     "auto_print_bill": True,

@@ -1254,7 +1254,12 @@ async def discover_lan_printers():
     base_prefix = ".".join(local_ip.split(".")[:3])
 
     candidates = [f"{base_prefix}.{i}" for i in range(1, 255)]
-    candidates.extend(["192.168.1.87", "192.168.123.100", "192.168.0.87", "192.168.0.100", "192.168.1.200", "192.168.1.201"])
+    # Always include known printer and gateway IPs across 192.168.0.x and 192.168.1.x
+    candidates.extend([
+        "192.168.0.70", "192.168.1.70", "192.168.0.87", "192.168.1.87",
+        "192.168.0.100", "192.168.1.100", "192.168.0.200", "192.168.1.200",
+        "192.168.0.201", "192.168.1.201", "192.168.123.100"
+    ])
     candidates = list(dict.fromkeys(candidates))
 
     found = []
