@@ -14,6 +14,11 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
     cashier_printer_port: 9100,
     cashier_printer_enabled: true,
     auto_print_bill: true,
+    bar_printer_name: 'POSIFLEX PP-8800 (Bar KOT)',
+    bar_printer_ip: '192.168.1.87',
+    bar_printer_port: 9100,
+    bar_printer_enabled: true,
+    auto_print_bar_kot: true,
     bill_header_title: 'THE BERMUDA COCKTAIL',
     bill_header_subtitle: 'Craft Cocktails & Gourmet Pub',
     bill_address: 'Main Boulevard, Pub Row',
@@ -27,6 +32,7 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
   const [saving, setSaving] = useState(false);
   const [kitchenTestResult, setKitchenTestResult] = useState(null);
   const [cashierTestResult, setCashierTestResult] = useState(null);
+  const [barTestResult, setBarTestResult] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState('');
 
   // Auto-Discovery State
@@ -91,11 +97,22 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
   };
 
   const handleTestPrinter = async (target) => {
-    const isKitchen = target === 'KITCHEN';
-    const setResult = isKitchen ? setKitchenTestResult : setCashierTestResult;
-    const ip = isKitchen ? config.kitchen_printer_ip : config.cashier_printer_ip;
-    const port = isKitchen ? config.kitchen_printer_port : config.cashier_printer_port;
-    const name = isKitchen ? config.kitchen_printer_name : config.cashier_printer_name;
+    let setResult = setKitchenTestResult;
+    let ip = config.kitchen_printer_ip;
+    let port = config.kitchen_printer_port;
+    let name = config.kitchen_printer_name;
+
+    if (target === 'CASHIER') {
+      setResult = setCashierTestResult;
+      ip = config.cashier_printer_ip;
+      port = config.cashier_printer_port;
+      name = config.cashier_printer_name;
+    } else if (target === 'BAR') {
+      setResult = setBarTestResult;
+      ip = config.bar_printer_ip || '192.168.1.87';
+      port = config.bar_printer_port || 9100;
+      name = config.bar_printer_name || 'POSIFLEX PP-8800 (Bar KOT)';
+    }
 
     setResult({ loading: true, message: `Sending ESC/POS test packet to ${name} at ${ip}:${port}...` });
     try {
@@ -463,6 +480,95 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
                 )}
                 <div className="font-mono text-[11px] leading-tight">
                   {cashierTestResult.message}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* PRINTER 3: BAR KOT PRINTER (Drinks & Cocktails) */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-cyan-500/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🍸</span>
+                <div>
+                  <div className="font-black text-sm text-cyan-300 flex items-center gap-2">
+                    Bar KOT Printer (Cocktails & Drinks)
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                      Bar Station
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">Prints drinks, cocktails, and beer tickets at the bar</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-300">Auto-Print Bar KOT</span>
+                  <input
+                    type="checkbox"
+                    checked={config.auto_print_bar_kot}
+                    onChange={(e) => setConfig({ ...config, auto_print_bar_kot: e.target.checked })}
+                    className="w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 bg-slate-900 border-slate-700"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div className="sm:col-span-2">
+                <label className="font-bold text-slate-300 block mb-1">
+                  Bar Printer IP Address:
+                </label>
+                <input
+                  type="text"
+                  value={config.bar_printer_ip || '192.168.1.87'}
+                  onChange={(e) => setConfig({ ...config, bar_printer_ip: e.target.value })}
+                  placeholder="e.g. 192.168.1.87"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Port (Default 9100):</label>
+                <input
+                  type="number"
+                  value={config.bar_printer_port || 9100}
+                  onChange={(e) => setConfig({ ...config, bar_printer_port: Number(e.target.value) })}
+                  placeholder="9100"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => handleTestPrinter('BAR')}
+                disabled={barTestResult?.loading}
+                className="bg-cyan-900/60 hover:bg-cyan-800 border border-cyan-500/40 text-cyan-200 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50"
+              >
+                <Wifi className="w-3.5 h-3.5" />
+                {barTestResult?.loading ? 'Pinging Bar Printer...' : 'Test Bar LAN Printer'}
+              </button>
+              
+              <div className="text-[11px] text-slate-400">
+                Target: <span className="font-mono text-cyan-300">{config.bar_printer_ip || '192.168.1.87'}:{config.bar_printer_port || 9100}</span>
+              </div>
+            </div>
+
+            {barTestResult && !barTestResult.loading && (
+              <div className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+                barTestResult.success
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+              }`}>
+                {barTestResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                )}
+                <div className="font-mono text-[11px] leading-tight">
+                  {barTestResult.message}
                 </div>
               </div>
             )}

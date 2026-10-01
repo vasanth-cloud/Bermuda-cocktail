@@ -1314,7 +1314,11 @@ async def test_printer_connection(req: dict = {}):
     if target == "CASHIER":
         default_ip = cfg.get("cashier_printer_ip", "192.168.1.87")
         default_port = cfg.get("cashier_printer_port", 9100)
-        default_name = cfg.get("cashier_printer_name", "POSIFLEX PP-8800 / RP327 (Cashier / Bar Billing)")
+        default_name = cfg.get("cashier_printer_name", "POSIFLEX PP-8800 / RP327 (Cashier / Billing)")
+    elif target == "BAR":
+        default_ip = cfg.get("bar_printer_ip", "192.168.1.87")
+        default_port = cfg.get("bar_printer_port", 9100)
+        default_name = cfg.get("bar_printer_name", "POSIFLEX PP-8800 (Bar KOT)")
     else:
         default_ip = cfg.get("kitchen_printer_ip", "192.168.0.70")
         default_port = cfg.get("kitchen_printer_port", 9100)
@@ -1345,7 +1349,7 @@ async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Order not found")
 
     cfg = thermal_printer.load_printer_config()
-    ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.1.200")
+    ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.0.70")
     port = int(req.get("port") or cfg.get("kitchen_printer_port", 9100))
 
     # Filter kitchen food items
