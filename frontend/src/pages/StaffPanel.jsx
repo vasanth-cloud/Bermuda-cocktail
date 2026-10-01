@@ -543,7 +543,7 @@ export default function StaffPanel() {
 
       {/* Collect Payment & Clear Table Modal */}
       {activePaymentOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 my-6">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div>
@@ -793,7 +793,7 @@ export default function StaffPanel() {
 
       {/* Print KOT / Receipt Preview Modal */}
       {activePrintOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h3 className="font-extrabold text-base text-slate-100 flex items-center gap-2">
@@ -857,7 +857,7 @@ export default function StaffPanel() {
 
       {/* Waiter Edit & Add Items Modal */}
       {editingOrderForWaiter && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4 shadow-2xl relative">
             <button
               onClick={() => setEditingOrderForWaiter(null)}

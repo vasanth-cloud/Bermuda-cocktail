@@ -110,8 +110,14 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+    <div 
+      className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -201,13 +207,13 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
             <span className="font-mono text-[11px]">Auto-saved locally</span>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <div className="overflow-x-auto rounded-xl border border-slate-800 custom-scrollbar">
             {paymentLogs.length === 0 ? (
               <div className="text-center text-xs text-slate-500 py-12 italic bg-slate-950/40">
                 No payment logs recorded yet today. When cash or payments are collected, logs will appear here.
               </div>
             ) : (
-              <table className="w-full text-left text-xs text-slate-300">
+              <table className="w-full min-w-[850px] text-left text-xs text-slate-300">
                 <thead className="bg-slate-950 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-slate-800 sticky top-0">
                   <tr>
                     <th className="p-3">Time</th>

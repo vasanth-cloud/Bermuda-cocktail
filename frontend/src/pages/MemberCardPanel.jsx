@@ -622,7 +622,7 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
 
       {/* MODAL: Bulk Import Members (1000 Database CSV Upload) */}
       {isBulkImportOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border-2 border-emerald-500/40 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 relative overflow-hidden animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -725,7 +725,7 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
 
       {/* MODAL: Printable Physical VIP Card */}
       {printableMember && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <span className="text-xs font-black tracking-widest text-amber-400 uppercase flex items-center gap-1.5">
@@ -799,7 +799,7 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
 
       {/* MODAL: Issue New Member Card */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-amber-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -928,7 +928,7 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
 
       {/* MODAL: Edit Member Card */}
       {editingMember && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-amber-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -1037,7 +1037,7 @@ Gokul Nath,8248161233,BMC-1003,123456789123,gokul@gmail.com,Chennai,ACTIVE`;
 
       {/* MODAL: Digital Member Pass QR View */}
       {selectedMemberForQr && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-5 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <span className="text-xs font-black tracking-widest text-amber-400 uppercase flex items-center gap-1">

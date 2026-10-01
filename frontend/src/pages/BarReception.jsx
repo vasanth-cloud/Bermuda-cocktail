@@ -378,7 +378,7 @@ export default function BarReception() {
 
       {/* Collect Payment Modal */}
       {activePaymentOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 my-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
