@@ -1245,6 +1245,42 @@ def update_printer_configuration(config_data: dict):
     saved = thermal_printer.save_printer_config(config_data)
     return {"message": "Printer configuration saved successfully", "config": saved}
 
+@app.post("/api/printers/discover")
+async def discover_lan_printers():
+    import socket
+    from concurrent.futures import ThreadPoolExecutor
+
+    local_ip = get_local_ip()
+    base_prefix = ".".join(local_ip.split(".")[:3])
+
+    candidates = [f"{base_prefix}.{i}" for i in range(1, 255)]
+    candidates.extend(["192.168.1.87", "192.168.123.100", "192.168.0.87", "192.168.0.100", "192.168.1.200", "192.168.1.201"])
+    candidates = list(dict.fromkeys(candidates))
+
+    found = []
+    def probe(ip):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.3)
+            res = s.connect_ex((ip, 9100))
+            s.close()
+            if res == 0:
+                return ip
+        except Exception:
+            pass
+        return None
+
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        for res in executor.map(probe, candidates):
+            if res:
+                found.append(res)
+
+    return {
+        "local_subnet": f"{base_prefix}.x",
+        "found_printers": found,
+        "message": f"Found {len(found)} thermal printer(s) on LAN: {', '.join(found)}" if found else f"No port 9100 printers responding on {base_prefix}.x. Print a Self-Test slip (Hold FEED while powering on) to check the printer's configured IP."
+    }
+
 @app.post("/api/printers/test")
 async def test_printer_connection(req: dict = {}):
     cfg = thermal_printer.load_printer_config()

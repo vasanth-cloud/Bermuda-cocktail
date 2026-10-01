@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Printer, Wifi, Save, RefreshCw, CheckCircle2, AlertCircle, X, Sliders, ShieldCheck } from 'lucide-react';
+import { Printer, Wifi, Save, RefreshCw, CheckCircle2, AlertCircle, X, Search, HelpCircle, ArrowRight } from 'lucide-react';
 import { apiFetch } from '../config';
 
 export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
   const [config, setConfig] = useState({
     kitchen_printer_name: 'RUGTEK RP326 (Kitchen LAN)',
-    kitchen_printer_ip: '192.168.1.200',
+    kitchen_printer_ip: '192.168.1.87',
     kitchen_printer_port: 9100,
     kitchen_printer_enabled: true,
     auto_print_kot: true,
@@ -28,6 +28,11 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
   const [kitchenTestResult, setKitchenTestResult] = useState(null);
   const [cashierTestResult, setCashierTestResult] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState('');
+
+  // Auto-Discovery State
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveryResult, setDiscoveryResult] = useState(null);
+  const [showSelfTestGuide, setShowSelfTestGuide] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,6 +76,20 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
     }
   };
 
+  const handleDiscoverPrinters = async () => {
+    setIsDiscovering(true);
+    setDiscoveryResult(null);
+    try {
+      const res = await apiFetch('/api/printers/discover', { method: 'POST' });
+      const data = await res.json();
+      setDiscoveryResult(data);
+    } catch (err) {
+      setDiscoveryResult({ message: `Discovery error: ${err.message}` });
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
+
   const handleTestPrinter = async (target) => {
     const isKitchen = target === 'KITCHEN';
     const setResult = isKitchen ? setKitchenTestResult : setCashierTestResult;
@@ -109,7 +128,7 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-5 my-6">
+      <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 my-6">
         
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -121,7 +140,7 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 LAN Thermal Printers Setup
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                  ALL-LAN ARCHITECTURE
+                  ALL-LAN SOCKETS
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
@@ -144,7 +163,80 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
           </div>
         )}
 
-        <form onSubmit={handleSave} className="space-y-5 text-xs">
+        {/* LAN Scanner & Self-Test Guide Bar */}
+        <div className="bg-slate-950 p-3.5 rounded-xl border border-blue-500/30 space-y-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleDiscoverPrinters}
+              disabled={isDiscovering}
+              className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow transition disabled:opacity-50"
+            >
+              <Search className="w-3.5 h-3.5" />
+              {isDiscovering ? 'Scanning Subnet...' : '🔍 Scan & Auto-Discover LAN Printers'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowSelfTestGuide(!showSelfTestGuide)}
+              className="text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1 underline underline-offset-4"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              {showSelfTestGuide ? 'Hide Self-Test Instructions' : 'How to find printer IP in 5 seconds?'}
+            </button>
+          </div>
+
+          {/* Self-Test Diagnostic Guide */}
+          {showSelfTestGuide && (
+            <div className="bg-slate-900 border border-amber-500/40 p-3.5 rounded-xl text-[11px] text-slate-300 space-y-2">
+              <div className="font-extrabold text-amber-300 text-xs flex items-center gap-1.5">
+                📄 Print Self-Test Diagnostic Slip (Reveals IP Address):
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-slate-300 leading-relaxed">
+                <li>Turn <strong className="text-white">OFF</strong> the printer power switch.</li>
+                <li>Press and <strong className="text-amber-300">HOLD down the FEED button</strong> on the printer.</li>
+                <li>Turn the power switch <strong className="text-white">ON</strong> while continuing to hold the FEED button.</li>
+                <li>Release the FEED button after <strong className="text-amber-300">2-3 seconds</strong>.</li>
+                <li>The printer will feed and print a self-test diagnostic slip showing its exact <strong className="text-emerald-400">IP Address</strong> (e.g. <span className="font-mono text-emerald-300">192.168.1.xxx</span> or factory default <span className="font-mono text-emerald-300">192.168.123.100</span>).</li>
+              </ol>
+            </div>
+          )}
+
+          {/* Discovery Output */}
+          {discoveryResult && (
+            <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs space-y-2">
+              <div className="text-slate-300 font-mono text-[11px]">{discoveryResult.message}</div>
+              {discoveryResult.found_printers && discoveryResult.found_printers.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="font-bold text-emerald-400">Detected Printers:</div>
+                  {discoveryResult.found_printers.map((ip) => (
+                    <div key={ip} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
+                      <span className="font-mono font-bold text-amber-300">{ip}:9100</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfig({ ...config, kitchen_printer_ip: ip })}
+                          className="px-2.5 py-1 bg-purple-900 text-purple-200 rounded font-bold text-[10px] hover:bg-purple-800"
+                        >
+                          Use for Kitchen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfig({ ...config, cashier_printer_ip: ip })}
+                          className="px-2.5 py-1 bg-amber-900 text-amber-200 rounded font-bold text-[10px] hover:bg-amber-800"
+                        >
+                          Use for Cashier
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4 text-xs">
           
           {/* PRINTER 1: RUGTEK RP326 (Kitchen LAN) */}
           <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/40 space-y-3">
@@ -184,7 +276,7 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
                   type="text"
                   value={config.kitchen_printer_ip}
                   onChange={(e) => setConfig({ ...config, kitchen_printer_ip: e.target.value })}
-                  placeholder="e.g. 192.168.1.200"
+                  placeholder="e.g. 192.168.1.87"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-purple-500 focus:outline-none"
                 />
               </div>
