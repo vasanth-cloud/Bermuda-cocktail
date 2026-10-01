@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
 import PaymentAuditLogModal from '../components/PaymentAuditLogModal';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
-import { Wine, Utensils, CheckCircle2, Clock, DollarSign, Receipt, RefreshCw, AlertCircle, Smartphone, CreditCard, Flame, Sparkles, Filter, BarChart3 } from 'lucide-react';
+import ThermalReceiptModal from '../components/ThermalReceiptModal';
+import ThermalPrinterSettingsModal from '../components/ThermalPrinterSettingsModal';
+import { Wine, Utensils, CheckCircle2, Clock, DollarSign, Receipt, RefreshCw, AlertCircle, Smartphone, CreditCard, Flame, Sparkles, Filter, BarChart3, Printer } from 'lucide-react';
 
 export default function BarReception() {
   const { allOrders, updateOrderStatus, updateItemStatus, collectPayment, settleTableBill, tables, paymentLogs, paymentSummary } = useOrder();
@@ -20,6 +22,10 @@ export default function BarReception() {
   const [bookingPlatform, setBookingPlatform] = useState('Direct / Walk-in');
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
+
+  // Thermal Printing & Settings State
+  const [activePrintOrder, setActivePrintOrder] = useState(null);
+  const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
 
   const openPaymentModal = (ord) => {
     setActivePaymentOrder(ord);
@@ -76,11 +82,23 @@ export default function BarReception() {
     );
 
     if (success) {
+      const settledOrder = {
+        ...activePaymentOrder,
+        payment_status: 'COLLECTED',
+        payment_mode: paymentMode,
+        final_amount: finalNetPayable,
+        discount_percentage: discountPercentage,
+        discount_amount: discountAmount,
+        booking_platform: bookingPlatform
+      };
       setActivePaymentOrder(null);
       setAmountCollected('');
       setDiscountPercentage(0);
       setDiscountAmount(0);
       setBookingPlatform('Direct / Walk-in');
+
+      // Automatically open 80mm thermal receipt preview for POSIFLEX USB printing
+      setActivePrintOrder({ ...settledOrder, initialMode: 'BILL' });
     }
   };
 
@@ -132,6 +150,15 @@ export default function BarReception() {
               <span className="bg-emerald-500/20 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded-full font-mono">
                 {paymentLogs.length}
               </span>
+            </button>
+
+            <button
+              onClick={() => setIsPrinterSettingsOpen(true)}
+              className="bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 text-amber-300 font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+              title="Configure RUGTEK RP326 LAN & POSIFLEX USB Printers"
+            >
+              <Printer className="w-4 h-4 text-amber-400" />
+              <span>Printers (80mm)</span>
             </button>
 
             <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
@@ -360,6 +387,24 @@ export default function BarReception() {
                       <div className="flex-1 bg-amber-950/40 border border-amber-500/40 text-amber-300 text-xs font-bold py-2 rounded-xl text-center flex items-center justify-center gap-1.5">
                         ⏳ Preparing...
                       </div>
+                    )}
+
+                    <button
+                      onClick={() => setActivePrintOrder({ ...order, initialMode: 'BILL' })}
+                      className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
+                      title="Print 80mm Bill on POSIFLEX / Browser"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-amber-400" /> Bill
+                    </button>
+
+                    {kitchenItems.length > 0 && (
+                      <button
+                        onClick={() => setActivePrintOrder({ ...order, initialMode: 'KOT' })}
+                        className="bg-purple-950/70 hover:bg-purple-900 border border-purple-800/60 text-purple-300 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
+                        title="Send KOT to RUGTEK RP326 Kitchen LAN Printer"
+                      >
+                        <Utensils className="w-3.5 h-3.5 text-purple-400" /> KOT
+                      </button>
                     )}
 
                     <button
@@ -632,6 +677,21 @@ export default function BarReception() {
       <CategorySalesReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
+      />
+
+      {/* 80mm Thermal Receipt & KOT Modal (POSIFLEX USB & RUGTEK LAN) */}
+      {activePrintOrder && (
+        <ThermalReceiptModal
+          order={activePrintOrder}
+          initialMode={activePrintOrder.initialMode || 'BILL'}
+          onClose={() => setActivePrintOrder(null)}
+        />
+      )}
+
+      {/* Hardware Printer Settings Modal */}
+      <ThermalPrinterSettingsModal
+        isOpen={isPrinterSettingsOpen}
+        onClose={() => setIsPrinterSettingsOpen(false)}
       />
     </div>
   );

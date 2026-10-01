@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
+import ThermalReceiptModal from '../components/ThermalReceiptModal';
 import { 
   Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, 
   ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check, Edit2, 
@@ -791,68 +792,13 @@ export default function StaffPanel() {
         </div>
       )}
 
-      {/* Print KOT / Receipt Preview Modal */}
+      {/* 80mm Thermal Receipt & KOT Modal (POSIFLEX USB & RUGTEK LAN) */}
       {activePrintOrder && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h3 className="font-extrabold text-base text-slate-100 flex items-center gap-2">
-                <Printer className="w-5 h-5 text-amber-400" /> KOT / Bill Receipt
-              </h3>
-              <button
-                onClick={() => setActivePrintOrder(null)}
-                className="w-7 h-7 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-xs font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Printable Receipt Preview */}
-            <div className="bg-white text-slate-950 p-4 rounded-xl font-mono text-xs space-y-2 shadow-inner">
-              <div className="text-center border-b border-slate-300 pb-2">
-                <div className="font-black text-sm">THE BERMUDA COCKTAIL</div>
-                <div className="text-[10px] text-slate-600">Table: {formatTableLabel(activePrintOrder.table?.table_number || 'T-01')}</div>
-                <div className="text-[10px] text-slate-500">Bill #: {activePrintOrder.order_number}</div>
-                <div className="text-[10px] text-amber-700 font-bold">Waiter: {activePrintOrder.waiter_name || activePrintOrder.collected_by || 'Staff'}</div>
-              </div>
-
-              <div className="space-y-1 py-1">
-                {activePrintOrder.items?.map((it) => (
-                  <div key={it.id} className="flex justify-between items-center text-[11px]">
-                    <span>{it.quantity}x {it.product?.name || `Item #${it.product_id}`}</span>
-                    <span className="font-bold">₹{it.unit_price * it.quantity}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t border-slate-300 pt-2 flex justify-between font-black text-sm">
-                <span>Total Amount:</span>
-                <span>₹{activePrintOrder.total_amount}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setActivePrintOrder(null)}
-                className="w-full bg-slate-800 text-slate-300 py-2.5 rounded-xl font-bold text-xs"
-              >
-                Close
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.print();
-                  setActivePrintOrder(null);
-                }}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 py-2.5 rounded-xl font-black text-xs shadow-lg flex items-center justify-center gap-1.5"
-              >
-                <Printer className="w-4 h-4" /> Print Receipt
-              </button>
-            </div>
-          </div>
-        </div>
+        <ThermalReceiptModal
+          order={activePrintOrder}
+          initialMode="BILL"
+          onClose={() => setActivePrintOrder(null)}
+        />
       )}
 
       {/* Waiter Edit & Add Items Modal */}

@@ -3,6 +3,7 @@ import { useOrder } from '../context/OrderContext';
 import { apiFetch, getAssetUrl } from '../config';
 import PaymentAuditLogModal from '../components/PaymentAuditLogModal';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
+import ThermalPrinterSettingsModal from '../components/ThermalPrinterSettingsModal';
 import { 
   LayoutDashboard, 
   QrCode, 
@@ -35,7 +36,8 @@ import {
   Search,
   BarChart3,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Printer
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -99,6 +101,7 @@ export default function AdminPanel() {
   const [selectedTableForQr, setSelectedTableForQr] = useState(tables[0] || null);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
 
   // Master Menu Search, Filter & Pagination State
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
@@ -693,8 +696,17 @@ export default function AdminPanel() {
             </div>
           </div>
 
-        {/* Top-Right Controls: Audit Log Button */}
+        {/* Top-Right Controls: Audit Log Button & Printer Hardware Settings */}
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => setIsPrinterSettingsOpen(true)}
+            className="bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 text-amber-300 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+            title="Configure RUGTEK RP326 LAN & POSIFLEX USB Printers"
+          >
+            <Printer className="w-4 h-4 text-amber-400" />
+            <span>Thermal Printers (80mm)</span>
+          </button>
+
           <button
             onClick={() => setIsLogModalOpen(true)}
             className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
@@ -2260,6 +2272,12 @@ export default function AdminPanel() {
       <CategorySalesReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
+      />
+
+      {/* Hardware Printer Settings Modal */}
+      <ThermalPrinterSettingsModal
+        isOpen={isPrinterSettingsOpen}
+        onClose={() => setIsPrinterSettingsOpen(false)}
       />
     </div>
   );

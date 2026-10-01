@@ -12,6 +12,7 @@ from app.database import engine, Base, get_db
 from app import models, schemas
 from app.seed_data import seed_initial_data
 from app.services.order_router import manager
+from app.services import thermal_printer
 
 STAFF_USERS_JSON_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "staff_users.json"))
 
@@ -612,6 +613,40 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
         await manager.broadcast_to_channel("bar", {**order_payload, "dept_filter": "BAR"})
     if kitchen_items_count > 0:
         await manager.broadcast_to_channel("kitchen", {**order_payload, "dept_filter": "KITCHEN", "trigger_kot_print": True})
+        
+        # Hardware ESC/POS Print to RUGTEK RP326 Kitchen LAN Printer (if configured)
+        printer_cfg = thermal_printer.load_printer_config()
+        if printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
+            import asyncio
+            async def _auto_print_job():
+                try:
+                    k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.1.200")
+                    k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
+                    k_items = [
+                        {
+                            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                            "quantity": it.quantity,
+                            "unit_price": it.unit_price,
+                            "notes": it.notes
+                        }
+                        for it in order.items
+                        if (it.target_dept or "").upper() == "KITCHEN"
+                    ]
+                    if k_items:
+                        t_label = order.table.table_number if order.table else "ST-01"
+                        z_label = order.table.zone.display_name if order.table and order.table.zone else ""
+                        full_tbl = f"{t_label} ({z_label})" if z_label else t_label
+                        kot_data = thermal_printer.build_kot_esc_pos(
+                            order_number=order.order_number,
+                            table_label=full_tbl,
+                            waiter_name=waiter_name or "Staff",
+                            items=k_items,
+                            dept="KITCHEN"
+                        )
+                        thermal_printer.send_raw_esc_pos(ip=k_ip, port=k_port, data=kot_data, timeout=2.5)
+                except Exception as ex:
+                    print(f"[AutoPrintKOT] Notice: {ex}")
+            asyncio.create_task(_auto_print_job())
     
     await manager.broadcast_all(order_payload)
     return {"message": "Order confirmed by Waiter and routed to Reception Bar & Kitchen KOT", "order": order_payload}
@@ -1130,6 +1165,128 @@ def bulk_import_members(members_list: List[schemas.CustomerMemberCreate], db: Se
         "added_count": added_count,
         "skipped_count": skipped_count
     }
+
+# --- Thermal Printer Management & ESC/POS Endpoints ---
+
+@app.get("/api/printers/config")
+def get_printer_configuration():
+    return thermal_printer.load_printer_config()
+
+@app.post("/api/printers/config")
+def update_printer_configuration(config_data: dict):
+    saved = thermal_printer.save_printer_config(config_data)
+    return {"message": "Printer configuration saved successfully", "config": saved}
+
+@app.post("/api/printers/test")
+async def test_printer_connection(req: dict = {}):
+    cfg = thermal_printer.load_printer_config()
+    ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.1.200")
+    port = int(req.get("port") or cfg.get("kitchen_printer_port", 9100))
+    name = req.get("printer_name") or cfg.get("kitchen_printer_name", "RUGTEK RP326")
+
+    test_slip_bytes = thermal_printer.build_test_slip(printer_name=name, ip=ip, port=port)
+    success, message = thermal_printer.send_raw_esc_pos(ip=ip, port=port, data=test_slip_bytes, timeout=3.0)
+
+    return {
+        "success": success,
+        "message": message,
+        "ip": ip,
+        "port": port
+    }
+
+@app.post("/api/printers/print-kot/{order_id}")
+async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    cfg = thermal_printer.load_printer_config()
+    ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.1.200")
+    port = int(req.get("port") or cfg.get("kitchen_printer_port", 9100))
+
+    # Filter kitchen food items
+    kitchen_items = [
+        {
+            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+            "quantity": it.quantity,
+            "unit_price": it.unit_price,
+            "notes": it.notes
+        }
+        for it in order.items
+        if (it.target_dept or "").upper() == "KITCHEN"
+    ]
+
+    if not kitchen_items:
+        kitchen_items = [
+            {
+                "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "unit_price": it.unit_price,
+                "notes": it.notes
+            }
+            for it in order.items
+        ]
+
+    table_str = order.table.table_number if order.table else "T-01"
+    zone_str = order.table.zone.display_name if order.table and order.table.zone else ""
+    table_label = f"{table_str} ({zone_str})" if zone_str else table_str
+
+    kot_bytes = thermal_printer.build_kot_esc_pos(
+        order_number=order.order_number,
+        table_label=table_label,
+        waiter_name=order.waiter_name or order.collected_by or "Staff",
+        items=kitchen_items,
+        dept="KITCHEN",
+        created_at_str=order.created_at.strftime("%d-%b-%Y %I:%M %p") if order.created_at else None
+    )
+
+    success, message = thermal_printer.send_raw_esc_pos(ip=ip, port=port, data=kot_bytes, timeout=3.0)
+    return {
+        "success": success,
+        "message": message,
+        "order_number": order.order_number,
+        "items_printed": len(kitchen_items)
+    }
+
+@app.post("/api/printers/print-bill/{order_id}")
+async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    cfg = thermal_printer.load_printer_config()
+    ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.1.200")
+    port = int(req.get("port") or cfg.get("kitchen_printer_port", 9100))
+
+    order_dict = {
+        "order_number": order.order_number,
+        "table_number": f"{order.table.table_number} ({order.table.zone.display_name})" if order.table and order.table.zone else (order.table.table_number if order.table else "T-01"),
+        "customer_name": order.customer_name or "Guest",
+        "waiter_name": order.waiter_name or order.collected_by or "Staff",
+        "total_amount": order.total_amount,
+        "discount_percentage": order.discount_percentage or 0.0,
+        "discount_amount": order.discount_amount or 0.0,
+        "final_amount": order.final_amount or order.total_amount,
+        "payment_mode": order.payment_mode or "PENDING",
+        "booking_platform": order.booking_platform or "Direct / Walk-in",
+        "items": [
+            {
+                "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "unit_price": it.unit_price
+            }
+            for it in order.items
+        ]
+    }
+
+    bill_bytes = thermal_printer.build_bill_esc_pos(order_dict)
+    success, message = thermal_printer.send_raw_esc_pos(ip=ip, port=port, data=bill_bytes, timeout=3.0)
+    return {
+        "success": success,
+        "message": message,
+        "order_number": order.order_number
+    }
+
 
 
 
