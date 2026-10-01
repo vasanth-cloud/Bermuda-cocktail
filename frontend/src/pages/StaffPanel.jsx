@@ -544,24 +544,25 @@ export default function StaffPanel() {
 
       {/* Collect Payment & Clear Table Modal */}
       {activePaymentOrder && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 my-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 shrink-0 bg-slate-900">
               <div>
-                <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <h3 className="font-extrabold text-base sm:text-lg text-slate-100 flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-amber-400" /> Collect Payment & Settle Bill
                 </h3>
                 <p className="text-xs text-slate-400">Order #{activePaymentOrder.order_number} — Table {formatTableLabel(activePaymentOrder.table?.table_number || 'T-01')}</p>
               </div>
               <button
                 onClick={() => setActivePaymentOrder(null)}
-                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold"
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleConfirmPayment} className="space-y-4 text-xs">
+            <form onSubmit={handleConfirmPayment} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
               {/* 1. Booking Platform Selection */}
               <div>
                 <label className="font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
@@ -770,11 +771,12 @@ export default function StaffPanel() {
                 />
               </div>
 
-              <div className="pt-2 flex gap-2">
+              </div>
+              <div className="p-3.5 sm:p-4 border-t border-slate-800 shrink-0 bg-slate-900/95 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setActivePaymentOrder(null)}
-                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold hover:bg-slate-700 transition"
                 >
                   Cancel
                 </button>
@@ -782,7 +784,7 @@ export default function StaffPanel() {
                 <button
                   type="submit"
                   disabled={isSubmittingPayment}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl font-black shadow-lg"
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl font-black shadow-lg transition disabled:opacity-50"
                 >
                   {isSubmittingPayment ? 'Saving...' : 'Confirm Paid & Reset Table'}
                 </button>
@@ -803,26 +805,31 @@ export default function StaffPanel() {
 
       {/* Waiter Edit & Add Items Modal */}
       {editingOrderForWaiter && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setEditingOrderForWaiter(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                <Edit2 className="w-5 h-5" />
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl relative my-auto overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 shrink-0 bg-slate-900">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                  <Edit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
+                    Edit & Add Items — Table {formatTableLabel(editingOrderForWaiter.table?.table_number || 'D1')}
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-slate-400">Add extra drinks/dishes requested by customer at table before confirming.</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-100 flex items-center gap-2">
-                  Edit & Add Items — Table {formatTableLabel(editingOrderForWaiter.table?.table_number || 'D1')}
-                </h3>
-                <p className="text-xs text-slate-400">Add extra drinks/dishes requested by customer at table before confirming.</p>
-              </div>
+              <button
+                onClick={() => setEditingOrderForWaiter(null)}
+                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100 shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
+
+            {/* Scrollable Body */}
+            <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-4 text-xs">
 
             {/* Current Items in Order */}
             <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2">
@@ -936,8 +943,10 @@ export default function StaffPanel() {
               </div>
             </div>
 
+            </div>
+
             {/* Modal Actions - Option 1: Edit/Save Items, Option 2: Confirm & Send to Bar/Kitchen */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800">
+            <div className="p-3.5 sm:p-4 border-t border-slate-800 shrink-0 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setEditingOrderForWaiter(null)}

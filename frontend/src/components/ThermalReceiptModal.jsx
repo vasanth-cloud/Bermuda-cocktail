@@ -96,17 +96,17 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
   );
 
   return (
-    <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 my-6">
+    <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
         
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-800 p-3.5 sm:p-4 shrink-0 bg-slate-900">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
               <Printer className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-100 flex items-center gap-1.5">
+              <h3 className="font-extrabold text-sm sm:text-base text-slate-100 flex items-center gap-1.5">
                 Thermal 80mm Printer
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
                   POSIFLEX & RUGTEK
@@ -117,11 +117,14 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold transition"
+            className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold transition shrink-0"
           >
             ✕
           </button>
         </div>
+
+        {/* Scrollable Body */}
+        <div className="p-3 sm:p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
 
         {/* Mode Selector Tab (Bill vs KOT) */}
         <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
@@ -317,9 +320,10 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
             )}
           </div>
         </div>
+        </div>
 
-        {/* Action Buttons */}
-        <div className="space-y-2 pt-2">
+        {/* Sticky Action Buttons Footer */}
+        <div className="p-3 sm:p-4 border-t border-slate-800 shrink-0 bg-slate-900/95 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {mode === 'BILL' ? (
               <>

@@ -1080,8 +1080,8 @@ export default function AdminPanel() {
 
       {/* Create Staff Account Modal */}
       {isCreateUserOpen && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg p-4 sm:p-6 shadow-2xl space-y-4 relative my-auto max-h-[92vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-amber-400" /> Create Staff Account
@@ -1202,8 +1202,8 @@ export default function AdminPanel() {
 
       {/* Edit Staff Account & Page Permissions Modal */}
       {editingUser && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-blue-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-blue-500/40 rounded-2xl w-full max-w-lg p-4 sm:p-6 shadow-2xl space-y-4 relative my-auto max-h-[92vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-blue-400" /> Edit Staff Account & Access Permissions
@@ -1315,8 +1315,8 @@ export default function AdminPanel() {
 
       {/* Add New Item Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 my-8">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-amber-400" /> Add New Menu Item
@@ -1521,8 +1521,8 @@ export default function AdminPanel() {
 
       {/* Edit Menu Item Modal */}
       {editingProduct && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 my-8">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-amber-400" /> Edit Menu Item
@@ -1753,8 +1753,8 @@ export default function AdminPanel() {
 
       {/* Create Bermuda Member Card Modal */}
       {isCreateMemberOpen && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 relative my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-amber-400" /> Issue New Bermuda Member Card
@@ -1887,8 +1887,8 @@ export default function AdminPanel() {
 
       {/* Edit Member Details Modal */}
       {editingMember && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-blue-500/40 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-blue-500/40 rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 relative my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-blue-400" /> Edit Bermuda Member Details
@@ -1994,8 +1994,8 @@ export default function AdminPanel() {
 
       {/* Digital Bermuda Member Card & QR Preview Modal */}
       {cardPreviewMember && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 text-center relative overflow-hidden">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 text-center relative my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-base text-amber-400 flex items-center gap-2">
                 <Crown className="w-5 h-5 text-amber-400" /> Bermuda VIP Member Card
@@ -2073,8 +2073,8 @@ export default function AdminPanel() {
 
       {/* Create Table Modal */}
       {isCreateTableOpen && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-amber-400" /> Add New Pub Table
@@ -2172,8 +2172,8 @@ export default function AdminPanel() {
 
       {/* Edit Table Modal */}
       {editingTable && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-amber-400" /> Edit Pub Table Details

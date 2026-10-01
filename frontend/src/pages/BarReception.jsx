@@ -423,24 +423,25 @@ export default function BarReception() {
 
       {/* Collect Payment Modal */}
       {activePaymentOrder && (
-        <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 my-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 p-3.5 sm:p-4 shrink-0 bg-slate-900">
               <div>
-                <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+                <h3 className="font-extrabold text-base sm:text-lg text-slate-100 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-amber-400" /> Settle Bill & Collect Payment
                 </h3>
                 <p className="text-xs text-slate-400">Order #{activePaymentOrder.order_number} — Table {activePaymentOrder.table?.table_number}</p>
               </div>
               <button
                 onClick={() => setActivePaymentOrder(null)}
-                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold"
+                className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleRecordPayment} className="space-y-4 text-xs">
+            <form onSubmit={handleRecordPayment} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
               {/* 1. Booking Platform Selection */}
               <div>
                 <label className="font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
@@ -647,11 +648,12 @@ export default function BarReception() {
                 />
               </div>
 
-              <div className="pt-2 flex gap-2">
+              </div>
+              <div className="p-3.5 sm:p-4 border-t border-slate-800 shrink-0 bg-slate-900/95 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setActivePaymentOrder(null)}
-                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold"
+                  className="w-full bg-slate-800 text-slate-300 py-3 rounded-xl font-bold hover:bg-slate-700 transition"
                 >
                   Cancel
                 </button>

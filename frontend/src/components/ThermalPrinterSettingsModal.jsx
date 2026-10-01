@@ -127,116 +127,117 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 md:left-64 lg:left-72 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 my-6">
+    <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
         
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        {/* Sticky Modal Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 p-3.5 sm:p-4 shrink-0 bg-slate-900">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
               <Printer className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
+              <h3 className="font-extrabold text-sm sm:text-base text-slate-100 flex items-center gap-2">
                 LAN Thermal Printers Setup
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                   ALL-LAN SOCKETS
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] sm:text-xs text-slate-400">
                 Direct TCP/IP socket printing over pub Wi-Fi router / switch (Port 9100)
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold transition"
+            className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100 flex items-center justify-center text-sm font-bold transition shrink-0"
           >
             ✕
           </button>
         </div>
 
-        {saveSuccess && (
-          <div className="bg-emerald-950/70 border border-emerald-500/50 p-3 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            {saveSuccess}
-          </div>
-        )}
-
-        {/* LAN Scanner & Self-Test Guide Bar */}
-        <div className="bg-slate-950 p-3.5 rounded-xl border border-blue-500/30 space-y-2.5">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleDiscoverPrinters}
-              disabled={isDiscovering}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow transition disabled:opacity-50"
-            >
-              <Search className="w-3.5 h-3.5" />
-              {isDiscovering ? 'Scanning Subnet...' : '🔍 Scan & Auto-Discover LAN Printers'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowSelfTestGuide(!showSelfTestGuide)}
-              className="text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1 underline underline-offset-4"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              {showSelfTestGuide ? 'Hide Self-Test Instructions' : 'How to find printer IP in 5 seconds?'}
-            </button>
-          </div>
-
-          {/* Self-Test Diagnostic Guide */}
-          {showSelfTestGuide && (
-            <div className="bg-slate-900 border border-amber-500/40 p-3.5 rounded-xl text-[11px] text-slate-300 space-y-2">
-              <div className="font-extrabold text-amber-300 text-xs flex items-center gap-1.5">
-                📄 Print Self-Test Diagnostic Slip (Reveals IP Address):
+        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* Scrollable Modal Content */}
+          <div className="p-3 sm:p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
+            {saveSuccess && (
+              <div className="bg-emerald-950/70 border border-emerald-500/50 p-3 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                {saveSuccess}
               </div>
-              <ol className="list-decimal list-inside space-y-1 text-slate-300 leading-relaxed">
-                <li>Turn <strong className="text-white">OFF</strong> the printer power switch.</li>
-                <li>Press and <strong className="text-amber-300">HOLD down the FEED button</strong> on the printer.</li>
-                <li>Turn the power switch <strong className="text-white">ON</strong> while continuing to hold the FEED button.</li>
-                <li>Release the FEED button after <strong className="text-amber-300">2-3 seconds</strong>.</li>
-                <li>The printer will feed and print a self-test diagnostic slip showing its exact <strong className="text-emerald-400">IP Address</strong> (e.g. <span className="font-mono text-emerald-300">192.168.1.xxx</span> or factory default <span className="font-mono text-emerald-300">192.168.123.100</span>).</li>
-              </ol>
-            </div>
-          )}
+            )}
 
-          {/* Discovery Output */}
-          {discoveryResult && (
-            <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs space-y-2">
-              <div className="text-slate-300 font-mono text-[11px]">{discoveryResult.message}</div>
-              {discoveryResult.found_printers && discoveryResult.found_printers.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <div className="font-bold text-emerald-400">Detected Printers:</div>
-                  {discoveryResult.found_printers.map((ip) => (
-                    <div key={ip} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
-                      <span className="font-mono font-bold text-amber-300">{ip}:9100</span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setConfig({ ...config, kitchen_printer_ip: ip })}
-                          className="px-2.5 py-1 bg-purple-900 text-purple-200 rounded font-bold text-[10px] hover:bg-purple-800"
-                        >
-                          Use for Kitchen
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfig({ ...config, cashier_printer_ip: ip })}
-                          className="px-2.5 py-1 bg-amber-900 text-amber-200 rounded font-bold text-[10px] hover:bg-amber-800"
-                        >
-                          Use for Cashier
-                        </button>
-                      </div>
+            {/* LAN Scanner & Self-Test Guide Bar */}
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-blue-500/30 space-y-2.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleDiscoverPrinters}
+                  disabled={isDiscovering}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow transition disabled:opacity-50"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  {isDiscovering ? 'Scanning Subnet...' : '🔍 Scan & Auto-Discover LAN Printers'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSelfTestGuide(!showSelfTestGuide)}
+                  className="text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center gap-1 underline underline-offset-4"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  {showSelfTestGuide ? 'Hide Self-Test Instructions' : 'How to find printer IP in 5 seconds?'}
+                </button>
+              </div>
+
+              {/* Self-Test Diagnostic Guide */}
+              {showSelfTestGuide && (
+                <div className="bg-slate-900 border border-amber-500/40 p-3.5 rounded-xl text-[11px] text-slate-300 space-y-2">
+                  <div className="font-extrabold text-amber-300 text-xs flex items-center gap-1.5">
+                    📄 Print Self-Test Diagnostic Slip (Reveals IP Address):
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1 text-slate-300 leading-relaxed">
+                    <li>Turn <strong className="text-white">OFF</strong> the printer power switch.</li>
+                    <li>Press and <strong className="text-amber-300">HOLD down the FEED button</strong> on the printer.</li>
+                    <li>Turn the power switch <strong className="text-white">ON</strong> while continuing to hold the FEED button.</li>
+                    <li>Release the FEED button after <strong className="text-amber-300">2-3 seconds</strong>.</li>
+                    <li>The printer will feed and print a self-test diagnostic slip showing its exact <strong className="text-emerald-400">IP Address</strong> (e.g. <span className="font-mono text-emerald-300">192.168.1.xxx</span> or factory default <span className="font-mono text-emerald-300">192.168.123.100</span>).</li>
+                  </ol>
+                </div>
+              )}
+
+              {/* Discovery Output */}
+              {discoveryResult && (
+                <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs space-y-2">
+                  <div className="text-slate-300 font-mono text-[11px]">{discoveryResult.message}</div>
+                  {discoveryResult.found_printers && discoveryResult.found_printers.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="font-bold text-emerald-400">Detected Printers:</div>
+                      {discoveryResult.found_printers.map((ip) => (
+                        <div key={ip} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800">
+                          <span className="font-mono font-bold text-amber-300">{ip}:9100</span>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setConfig({ ...config, kitchen_printer_ip: ip })}
+                              className="px-2.5 py-1 bg-purple-900 text-purple-200 rounded font-bold text-[10px] hover:bg-purple-800"
+                            >
+                              Use for Kitchen
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfig({ ...config, cashier_printer_ip: ip })}
+                              className="px-2.5 py-1 bg-amber-900 text-amber-200 rounded font-bold text-[10px] hover:bg-amber-800"
+                            >
+                              Use for Cashier
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        <form onSubmit={handleSave} className="space-y-4 text-xs">
           
           {/* PRINTER 1: RUGTEK RP326 (Kitchen LAN) */}
           <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/40 space-y-3">
@@ -485,8 +486,10 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+          </div>
+
+          {/* Sticky Form Actions Footer */}
+          <div className="flex items-center justify-between p-3 sm:p-4 border-t border-slate-800 shrink-0 bg-slate-900/95">
             <button
               type="button"
               onClick={onClose}
