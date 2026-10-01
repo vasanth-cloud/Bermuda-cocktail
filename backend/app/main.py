@@ -6,11 +6,35 @@ from typing import List, Optional
 import uuid
 import shutil
 import os
+import json
 
 from app.database import engine, Base, get_db
 from app import models, schemas
 from app.seed_data import seed_initial_data
 from app.services.order_router import manager
+
+STAFF_USERS_JSON_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "staff_users.json"))
+
+def sync_staff_users_to_file(db: Session):
+    try:
+        users = db.query(models.User).all()
+        data = [
+            {
+                "name": u.name,
+                "email": u.email,
+                "password_hash": u.password_hash,
+                "role": u.role,
+                "allowed_terminals": u.allowed_terminals,
+                "is_active": u.is_active
+            }
+            for u in users
+        ]
+        os.makedirs(os.path.dirname(STAFF_USERS_JSON_PATH), exist_ok=True)
+        with open(STAFF_USERS_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"[sync_staff_users_to_file] Warning: {e}")
+
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -177,6 +201,7 @@ def create_staff_user(user_data: schemas.UserCreate, db: Session = Depends(get_d
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    sync_staff_users_to_file(db)
     return new_user
 
 @app.put("/api/users/{user_id}", response_model=schemas.UserSchema)
@@ -204,6 +229,7 @@ def update_staff_user(user_id: int, user_data: schemas.UserUpdate, db: Session =
 
     db.commit()
     db.refresh(user)
+    sync_staff_users_to_file(db)
     return user
 
 @app.delete("/api/users/{user_id}")
@@ -216,6 +242,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
 
     db.delete(user)
     db.commit()
+    sync_staff_users_to_file(db)
     return {"message": "User deleted successfully"}
 
 # --- Table & Zone Endpoints ---
@@ -472,11 +499,8 @@ async def create_order(order_data: schemas.OrderCreate, db: Session = Depends(ge
     }
 
     # Broadcast to specific departments via WebSockets
-    if bar_items_added > 0:
-        await manager.broadcast_to_channel("bar", {**order_payload, "dept_filter": "BAR"})
-    if kitchen_items_added > 0:
-        await manager.broadcast_to_channel("kitchen", {**order_payload, "dept_filter": "KITCHEN"})
-    
+    # Note: Customer orders start as PENDING awaiting waiter review and acceptance.
+    # ONLY broadcast to staff (waiter terminals) and admin! DO NOT route to bar or kitchen until accepted!
     await manager.broadcast_to_channel("staff", order_payload)
     await manager.broadcast_to_channel("admin", order_payload)
 
@@ -504,7 +528,9 @@ def get_orders(
         filtered_orders = []
         target_dept_upper = target_dept.upper()
         for dto in dtos:
-            if dto.status == "BILLED":
+            # Exclude unaccepted customer orders from Bar & Kitchen KDS!
+            # Orders must be accepted by a waiter (e.g. status CONFIRMED, IN_PREP, READY, SERVED)
+            if dto.status in ["PENDING", "PENDING_WAITER", "BILLED"]:
                 continue
             dept_items = [it for it in dto.items if (it.target_dept or "").upper() == target_dept_upper]
             if dept_items:

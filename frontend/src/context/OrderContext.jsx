@@ -366,7 +366,12 @@ export const OrderProvider = ({ children }) => {
             const data = JSON.parse(event.data);
             if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
               if (['NEW_ORDER', 'ITEM_STATUS_UPDATED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
-                playNotificationChime();
+                // Bar and kitchen should only chime once order is accepted/confirmed by a waiter
+                if (data.event === 'NEW_ORDER' && (activeTab === 'bar' || activeTab === 'kitchen')) {
+                  // Customer order pending waiter confirmation
+                } else {
+                  playNotificationChime();
+                }
               }
               fetchOrders();
               fetchData();

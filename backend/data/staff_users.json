@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Vasanth Admin",
+    "email": "avasanth081@gmail.com",
+    "password_hash": "e5cec166c024552655c40b9ca1835fd0ec880c75c2eabace212b3051fb347e0d",
+    "role": "ADMIN",
+    "allowed_terminals": "customer,entry_scanner,bar,staff,members,admin",
+    "is_active": true
+  },
+  {
+    "name": "padmesh",
+    "email": "padmeshskmr@gmail.com",
+    "password_hash": "99a96506f91a60e57d7cae1aa3d4f794cdee1f7ef621fb521efded8479b9a4da",
+    "role": "BAR_KITCHEN",
+    "allowed_terminals": "customer,bar,staff,members",
+    "is_active": true
+  },
+  {
+    "name": "surendar",
+    "email": "surendar@gmail.com",
+    "password_hash": "840979de0c216277cf7d1805bd4f309a6d82ac29ee94b7087d30fd79c36beb95",
+    "role": "WAITER",
+    "allowed_terminals": "customer,staff,members",
+    "is_active": true
+  },
+  {
+    "name": "Ajaykumar",
+    "email": "ajaykumar@bermuda.pub",
+    "password_hash": "545e6bef13dfee72dcbf20c2910054577b06d6a90e7ef34241b4f609678972e2",
+    "role": "WAITER",
+    "allowed_terminals": "customer,staff,members",
+    "is_active": true
+  },
+  {
+    "name": "John Waiter",
+    "email": "waiter@bermuda.pub",
+    "password_hash": "9151da3212994dcdbdc1bd0824502da90839422c99cb4737944ce93fd1f1c877",
+    "role": "WAITER",
+    "allowed_terminals": "customer,entry_scanner,staff,members",
+    "is_active": true
+  },
+  {
+    "name": "Bar & Kitchen Staff",
+    "email": "bar@bermuda.pub",
+    "password_hash": "33724c5c2e5844ac9a37b1b045bd4fd865dc0dc2a56ace88913c62dd43cbc444",
+    "role": "BAR_KITCHEN",
+    "allowed_terminals": "customer,entry_scanner,bar,members",
+    "is_active": true
+  },
+  {
+    "name": "Chef Mario",
+    "email": "kitchen@bermuda.pub",
+    "password_hash": "651e20ba013a41a7aa0e7eb81569d3fc6b0d54ca5a6893d9bd3cc289906c89af",
+    "role": "BAR_KITCHEN",
+    "allowed_terminals": "customer,entry_scanner,bar,members",
+    "is_active": true
+  }
+]

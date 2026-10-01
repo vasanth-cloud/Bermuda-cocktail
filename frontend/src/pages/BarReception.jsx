@@ -34,7 +34,15 @@ export default function BarReception() {
     setAmountCollected(calculatedNet > 0 ? calculatedNet.toFixed(2) : sub.toString());
   };
 
-  const filteredOrders = allOrders.filter((ord) => {
+  // Only show orders that have been reviewed and accepted by a waiter!
+  // Pending customer orders must NOT show on the Bar & Kitchen KDS until a waiter confirms/accepts them.
+  const acceptedOrders = allOrders.filter((ord) => {
+    if (ord.status === 'PENDING' || ord.status === 'PENDING_WAITER') return false;
+    if (ord.status === 'BILLED') return false;
+    return true;
+  });
+
+  const filteredOrders = acceptedOrders.filter((ord) => {
     const matchesTable = selectedTableFilter === 'ALL' || Number(ord.table_id) === Number(selectedTableFilter);
     if (!matchesTable) return false;
 
@@ -133,7 +141,7 @@ export default function BarReception() {
                 onChange={(e) => setSelectedTableFilter(e.target.value)}
                 className="bg-transparent text-xs font-bold text-amber-400 focus:outline-none cursor-pointer"
               >
-                <option value="ALL" className="bg-slate-900 text-slate-200">All Tables ({allOrders.length})</option>
+                <option value="ALL" className="bg-slate-900 text-slate-200">All Tables ({acceptedOrders.length})</option>
                 {tables.map((t) => (
                   <option key={t.id} value={t.id} className="bg-slate-900 text-slate-200">
                     Table {t.table_number} ({t.zone?.display_name})
@@ -155,7 +163,7 @@ export default function BarReception() {
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
           }`}
         >
-          <Sparkles className="w-4 h-4" /> Unified All Tickets ({allOrders.length})
+          <Sparkles className="w-4 h-4" /> Unified All Tickets ({acceptedOrders.length})
         </button>
 
         <button
@@ -166,7 +174,7 @@ export default function BarReception() {
               : 'text-slate-400 hover:text-purple-300 hover:bg-slate-800'
           }`}
         >
-          <Wine className="w-4 h-4 text-purple-400" /> 🍸 Bar Drinks Station
+          <Wine className="w-4 h-4 text-purple-400" /> 🍸 Bar Drinks Station ({acceptedOrders.filter(o => o.items && o.items.some(it => (it.target_dept || '').toUpperCase() === 'BAR')).length})
         </button>
 
         <button
@@ -177,7 +185,7 @@ export default function BarReception() {
               : 'text-slate-400 hover:text-emerald-300 hover:bg-slate-800'
           }`}
         >
-          <Utensils className="w-4 h-4 text-emerald-400" /> 🍳 Kitchen Food Station
+          <Utensils className="w-4 h-4 text-emerald-400" /> 🍳 Kitchen Food Station ({acceptedOrders.filter(o => o.items && o.items.some(it => (it.target_dept || '').toUpperCase() === 'KITCHEN')).length})
         </button>
       </div>
 
