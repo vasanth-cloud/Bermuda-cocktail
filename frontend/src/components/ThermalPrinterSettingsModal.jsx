@@ -9,8 +9,11 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
     kitchen_printer_port: 9100,
     kitchen_printer_enabled: true,
     auto_print_kot: true,
-    cashier_printer_name: 'POSIFLEX PP-8800U-B (Counter USB)',
-    cashier_printer_type: 'USB_BROWSER',
+    cashier_printer_name: 'POSIFLEX PP-8800 (Cashier/Bar LAN)',
+    cashier_printer_ip: '192.168.1.201',
+    cashier_printer_port: 9100,
+    cashier_printer_enabled: true,
+    auto_print_bill: true,
     bill_header_title: 'THE BERMUDA COCKTAIL',
     bill_header_subtitle: 'Craft Cocktails & Gourmet Pub',
     bill_address: 'Main Boulevard, Pub Row',
@@ -22,7 +25,8 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testResult, setTestResult] = useState(null);
+  const [kitchenTestResult, setKitchenTestResult] = useState(null);
+  const [cashierTestResult, setCashierTestResult] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState('');
 
   useEffect(() => {
@@ -57,7 +61,7 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
         body: JSON.stringify(config)
       });
       if (res.ok) {
-        setSaveSuccess('Printer settings saved successfully!');
+        setSaveSuccess('Printer network settings saved successfully!');
         setTimeout(() => setSaveSuccess(''), 4000);
       }
     } catch (err) {
@@ -67,29 +71,36 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
     }
   };
 
-  const handleTestRugtek = async () => {
-    setTestResult({ loading: true, message: 'Testing socket connection to RUGTEK RP326...' });
+  const handleTestPrinter = async (target) => {
+    const isKitchen = target === 'KITCHEN';
+    const setResult = isKitchen ? setKitchenTestResult : setCashierTestResult;
+    const ip = isKitchen ? config.kitchen_printer_ip : config.cashier_printer_ip;
+    const port = isKitchen ? config.kitchen_printer_port : config.cashier_printer_port;
+    const name = isKitchen ? config.kitchen_printer_name : config.cashier_printer_name;
+
+    setResult({ loading: true, message: `Sending ESC/POS test packet to ${name} at ${ip}:${port}...` });
     try {
       const res = await apiFetch('/api/printers/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ip: config.kitchen_printer_ip,
-          port: config.kitchen_printer_port,
-          printer_name: config.kitchen_printer_name
+          target: target,
+          ip: ip,
+          port: port,
+          printer_name: name
         })
       });
       const data = await res.json();
-      setTestResult({
+      setResult({
         loading: false,
         success: data.success,
         message: data.message
       });
     } catch (err) {
-      setTestResult({
+      setResult({
         loading: false,
         success: false,
-        message: `Connection test error: ${err.message}`
+        message: `Network error: ${err.message}`
       });
     }
   };
@@ -108,13 +119,13 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
             </div>
             <div>
               <h3 className="font-extrabold text-lg text-slate-100 flex items-center gap-2">
-                Thermal Printer Hardware Setup
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
-                  80mm ESC/POS
+                LAN Thermal Printers Setup
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                  ALL-LAN ARCHITECTURE
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Configure RUGTEK RP326 (Kitchen LAN) & POSIFLEX PP-8800U-B (Billing USB)
+                Direct TCP/IP socket printing over pub Wi-Fi router / switch (Port 9100)
               </p>
             </div>
           </div>
@@ -133,39 +144,41 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
           </div>
         )}
 
-        <form onSubmit={handleSave} className="space-y-6 text-xs">
+        <form onSubmit={handleSave} className="space-y-5 text-xs">
           
-          {/* PRINTER 1: RUGTEK RP326 (Kitchen LAN / Ethernet) */}
-          <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/30 space-y-3">
+          {/* PRINTER 1: RUGTEK RP326 (Kitchen LAN) */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/40 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">🖨️</span>
+                <span className="text-xl">🍳</span>
                 <div>
                   <div className="font-black text-sm text-purple-300 flex items-center gap-2">
-                    RUGTEK RP326 (Kitchen KOT Printer)
+                    Kitchen KOT Printer (RUGTEK RP326)
                     <span className="text-[10px] px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800 font-mono">
-                      Ethernet LAN
+                      LAN Socket
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-400">Prints food tickets in the kitchen automatically</div>
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <span className="text-[11px] font-bold text-slate-300">Auto-Print KOT</span>
-                <input
-                  type="checkbox"
-                  checked={config.auto_print_kot}
-                  onChange={(e) => setConfig({ ...config, auto_print_kot: e.target.checked })}
-                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700"
-                />
-              </label>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-300">Auto-Print KOT</span>
+                  <input
+                    type="checkbox"
+                    checked={config.auto_print_kot}
+                    onChange={(e) => setConfig({ ...config, auto_print_kot: e.target.checked })}
+                    className="w-4 h-4 rounded text-purple-500 focus:ring-purple-500 bg-slate-900 border-slate-700"
+                  />
+                </label>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
               <div className="sm:col-span-2">
                 <label className="font-bold text-slate-300 block mb-1">
-                  Printer IP Address (on Pub Wi-Fi / LAN router):
+                  Kitchen Printer IP Address:
                 </label>
                 <input
                   type="text"
@@ -177,7 +190,7 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Port (Default: 9100):</label>
+                <label className="font-bold text-slate-300 block mb-1">Port (Default 9100):</label>
                 <input
                   type="number"
                   value={config.kitchen_printer_port}
@@ -188,64 +201,136 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
               </div>
             </div>
 
-            {/* Test Connection Button */}
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-between pt-1">
               <button
                 type="button"
-                onClick={handleTestRugtek}
-                disabled={testResult?.loading}
+                onClick={() => handleTestPrinter('KITCHEN')}
+                disabled={kitchenTestResult?.loading}
                 className="bg-purple-900/60 hover:bg-purple-800 border border-purple-500/40 text-purple-200 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50"
               >
                 <Wifi className="w-3.5 h-3.5" />
-                {testResult?.loading ? 'Pinging & Printing...' : 'Test Connection & Print Slip'}
+                {kitchenTestResult?.loading ? 'Pinging Kitchen Printer...' : 'Test Kitchen LAN Printer'}
               </button>
               
               <div className="text-[11px] text-slate-400">
-                Subnet: <span className="font-mono text-purple-300">192.168.1.x</span>
+                Target: <span className="font-mono text-purple-300">{config.kitchen_printer_ip}:{config.kitchen_printer_port}</span>
               </div>
             </div>
 
-            {/* Test Connection Result */}
-            {testResult && !testResult.loading && (
+            {kitchenTestResult && !kitchenTestResult.loading && (
               <div className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
-                testResult.success
+                kitchenTestResult.success
                   ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
                   : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
               }`}>
-                {testResult.success ? (
+                {kitchenTestResult.success ? (
                   <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
                 ) : (
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
                 )}
                 <div className="font-mono text-[11px] leading-tight">
-                  {testResult.message}
+                  {kitchenTestResult.message}
                 </div>
               </div>
             )}
           </div>
 
-          {/* PRINTER 2: POSIFLEX PP-8800U-B (Counter / Cashier USB) */}
-          <div className="bg-slate-950 p-4 rounded-xl border border-amber-500/30 space-y-3">
+          {/* PRINTER 2: POSIFLEX PP-8800 (Cashier/Bar LAN) */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-amber-500/40 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">🧾</span>
+                <span className="text-xl">🧾</span>
                 <div>
                   <div className="font-black text-sm text-amber-300 flex items-center gap-2">
-                    POSIFLEX PP-8800U-B (Cashier & Billing Printer)
+                    Cashier / Bar Billing Printer (POSIFLEX PP-8800)
                     <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 font-mono">
-                      USB Connected
+                      LAN Socket
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400">Prints 80mm tax invoices & customer receipts at counter</div>
+                  <div className="text-[11px] text-slate-400">Prints customer 80mm tax invoices over the network</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-bold">
-                <ShieldCheck className="w-4 h-4" /> Ready for Print
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-300">Auto-Print Bill</span>
+                  <input
+                    type="checkbox"
+                    checked={config.auto_print_bill}
+                    onChange={(e) => setConfig({ ...config, auto_print_bill: e.target.checked })}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-900 border-slate-700"
+                  />
+                </label>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div className="sm:col-span-2">
+                <label className="font-bold text-slate-300 block mb-1">
+                  Cashier Printer IP Address:
+                </label>
+                <input
+                  type="text"
+                  value={config.cashier_printer_ip}
+                  onChange={(e) => setConfig({ ...config, cashier_printer_ip: e.target.value })}
+                  placeholder="e.g. 192.168.1.201"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Port (Default 9100):</label>
+                <input
+                  type="number"
+                  value={config.cashier_printer_port}
+                  onChange={(e) => setConfig({ ...config, cashier_printer_port: Number(e.target.value) })}
+                  placeholder="9100"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => handleTestPrinter('CASHIER')}
+                disabled={cashierTestResult?.loading}
+                className="bg-amber-900/60 hover:bg-amber-800 border border-amber-500/40 text-amber-200 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition disabled:opacity-50"
+              >
+                <Wifi className="w-3.5 h-3.5" />
+                {cashierTestResult?.loading ? 'Pinging Cashier Printer...' : 'Test Cashier LAN Printer'}
+              </button>
+              
+              <div className="text-[11px] text-slate-400">
+                Target: <span className="font-mono text-amber-300">{config.cashier_printer_ip}:{config.cashier_printer_port}</span>
+              </div>
+            </div>
+
+            {cashierTestResult && !cashierTestResult.loading && (
+              <div className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+                cashierTestResult.success
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+              }`}>
+                {cashierTestResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                )}
+                <div className="font-mono text-[11px] leading-tight">
+                  {cashierTestResult.message}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* STORE & RECEIPT HEADER SETTINGS */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="font-black text-sm text-slate-200 flex items-center gap-2">
+              <span>🏢</span> Store Header & Receipt Details
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Receipt Header Title:</label>
                 <input

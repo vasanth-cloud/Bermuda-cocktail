@@ -5,12 +5,41 @@ import { apiFetch } from '../config';
 export default function ThermalReceiptModal({ order, onClose, initialMode = 'BILL' }) {
   const [mode, setMode] = useState(initialMode); // 'BILL' or 'KOT'
   const [isSendingToRugtek, setIsSendingToRugtek] = useState(false);
+  const [isSendingBillToLan, setIsSendingBillToLan] = useState(false);
   const [networkPrintStatus, setNetworkPrintStatus] = useState(null);
 
   if (!order) return null;
 
   const handleBrowserPrint = () => {
     window.print();
+  };
+
+  const handleSendBillToLan = async () => {
+    setIsSendingBillToLan(true);
+    setNetworkPrintStatus(null);
+    try {
+      const res = await apiFetch(`/api/printers/print-bill/${order.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setNetworkPrintStatus({ success: true, message: data.message || `Bill sent to Cashier LAN printer (${data.ip || 'LAN'})!` });
+      } else {
+        setNetworkPrintStatus({
+          success: false,
+          message: data.message || 'Could not connect to Cashier LAN printer. Check printer power & IP address in settings.'
+        });
+      }
+    } catch (err) {
+      setNetworkPrintStatus({
+        success: false,
+        message: `LAN error: ${err.message || 'Check printer IP and connection'}`
+      });
+    } finally {
+      setIsSendingBillToLan(false);
+    }
   };
 
   const handleSendToRugtek = async () => {
@@ -24,17 +53,17 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setNetworkPrintStatus({ success: true, message: data.message || 'KOT sent to RUGTEK RP326 kitchen printer!' });
+        setNetworkPrintStatus({ success: true, message: data.message || 'KOT sent to Kitchen LAN printer (RUGTEK RP326)!' });
       } else {
         setNetworkPrintStatus({
           success: false,
-          message: data.message || 'Could not connect to RUGTEK RP326 on network. Check printer power & IP address.'
+          message: data.message || 'Could not connect to Kitchen LAN printer. Check printer power & IP address.'
         });
       }
     } catch (err) {
       setNetworkPrintStatus({
         success: false,
-        message: `Network error: ${err.message || 'Check printer IP and connection'}`
+        message: `LAN error: ${err.message || 'Check printer IP and connection'}`
       });
     } finally {
       setIsSendingToRugtek(false);
@@ -292,25 +321,51 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
         {/* Action Buttons */}
         <div className="space-y-2 pt-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {/* POSIFLEX USB Browser Print */}
-            <button
-              type="button"
-              onClick={handleBrowserPrint}
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition"
-            >
-              <Printer className="w-4 h-4" /> Print on POSIFLEX (USB)
-            </button>
+            {mode === 'BILL' ? (
+              <>
+                {/* Print Bill over LAN Socket */}
+                <button
+                  type="button"
+                  onClick={handleSendBillToLan}
+                  disabled={isSendingBillToLan}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition disabled:opacity-50"
+                >
+                  <Wifi className="w-4 h-4" />
+                  {isSendingBillToLan ? 'Printing to LAN...' : 'Print Bill over LAN'}
+                </button>
 
-            {/* RUGTEK LAN Network Socket Print */}
-            <button
-              type="button"
-              onClick={handleSendToRugtek}
-              disabled={isSendingToRugtek}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition disabled:opacity-50"
-            >
-              <Wifi className="w-4 h-4" />
-              {isSendingToRugtek ? 'Sending to RUGTEK...' : 'Send to RUGTEK (LAN)'}
-            </button>
+                {/* Browser Print Backup */}
+                <button
+                  type="button"
+                  onClick={handleBrowserPrint}
+                  className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition"
+                >
+                  <Printer className="w-4 h-4 text-amber-400" /> Browser Print Backup
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Send KOT over LAN Socket */}
+                <button
+                  type="button"
+                  onClick={handleSendToRugtek}
+                  disabled={isSendingToRugtek}
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition disabled:opacity-50"
+                >
+                  <Wifi className="w-4 h-4" />
+                  {isSendingToRugtek ? 'Sending to Kitchen LAN...' : 'Send KOT to Kitchen (LAN)'}
+                </button>
+
+                {/* Browser Print Backup */}
+                <button
+                  type="button"
+                  onClick={handleBrowserPrint}
+                  className="bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition"
+                >
+                  <Printer className="w-4 h-4 text-purple-400" /> Browser Print Backup
+                </button>
+              </>
+            )}
           </div>
 
           <button

@@ -1,0 +1,19 @@
+{
+  "kitchen_printer_name": "RUGTEK RP326 (Kitchen LAN)",
+  "kitchen_printer_ip": "192.168.1.87",
+  "kitchen_printer_port": 9100,
+  "kitchen_printer_enabled": true,
+  "auto_print_kot": true,
+  "cashier_printer_name": "POSIFLEX PP-8800 (Cashier/Bar LAN)",
+  "cashier_printer_ip": "192.168.1.201",
+  "cashier_printer_port": 9100,
+  "cashier_printer_enabled": true,
+  "auto_print_bill": true,
+  "bill_header_title": "THE BERMUDA COCKTAIL",
+  "bill_header_subtitle": "Craft Cocktails & Gourmet Pub",
+  "bill_address": "Main Boulevard, Pub Row",
+  "bill_phone": "+91 98765 43210",
+  "bill_gstin": "33ABCDE1234F1Z5",
+  "bill_fssai": "12423002000123",
+  "bill_footer_msg": "Thank You For Visiting! Drink Responsibly."
+}

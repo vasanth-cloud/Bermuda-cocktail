@@ -681,6 +681,40 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
     db.commit()
     db.refresh(order)
 
+    # Auto-dispatch supplemental KOT to Kitchen LAN printer if kitchen items were added
+    printer_cfg = thermal_printer.load_printer_config()
+    if printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
+        k_addon_items = []
+        for it in req.items:
+            prod = db.query(models.Product).filter(models.Product.id == it.product_id).first()
+            if prod and (prod.target_dept or "").upper() == "KITCHEN":
+                k_addon_items.append({
+                    "product_name": prod.name,
+                    "quantity": it.quantity,
+                    "unit_price": prod.price,
+                    "notes": it.notes
+                })
+        if k_addon_items:
+            import asyncio
+            async def _auto_print_addon():
+                try:
+                    k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.1.200")
+                    k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
+                    t_lbl = order.table.table_number if order.table else "ST-01"
+                    z_lbl = order.table.zone.display_name if order.table and order.table.zone else ""
+                    tbl_str = f"{t_lbl} ({z_lbl})" if z_lbl else t_lbl
+                    kot_data = thermal_printer.build_kot_esc_pos(
+                        order_number=f"{order.order_number}-ADDON",
+                        table_label=tbl_str,
+                        waiter_name=req.waiter_name or "Waiter",
+                        items=k_addon_items,
+                        dept="KITCHEN ADD-ON"
+                    )
+                    thermal_printer.send_raw_esc_pos(ip=k_ip, port=k_port, data=kot_data, timeout=2.5)
+                except Exception as ex:
+                    print(f"[AutoPrintKOTAddon] Notice: {ex}")
+            asyncio.create_task(_auto_print_addon())
+
     await manager.broadcast_all({
         "event": "ORDER_ITEMS_ADDED",
         "order_id": order.id,
@@ -758,6 +792,40 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
         order.table.current_status = "VACANT"
 
     db.commit()
+
+    # Auto-dispatch 80mm Bill directly over the LAN to the Cashier LAN Printer
+    printer_cfg = thermal_printer.load_printer_config()
+    if printer_cfg.get("auto_print_bill", True) and printer_cfg.get("cashier_printer_enabled", True):
+        import asyncio
+        async def _auto_print_bill():
+            try:
+                c_ip = printer_cfg.get("cashier_printer_ip", "192.168.1.201")
+                c_port = int(printer_cfg.get("cashier_printer_port", 9100))
+                order_dict = {
+                    "order_number": order.order_number,
+                    "table_number": f"{order.table.table_number} ({order.table.zone.display_name})" if order.table and order.table.zone else (order.table.table_number if order.table else "T-01"),
+                    "customer_name": order.customer_name or "Guest",
+                    "waiter_name": order.waiter_name or order.collected_by or "Staff",
+                    "total_amount": order.total_amount,
+                    "discount_percentage": order.discount_percentage or 0.0,
+                    "discount_amount": order.discount_amount or 0.0,
+                    "final_amount": order.final_amount or order.amount_collected or order.total_amount,
+                    "payment_mode": order.payment_mode or "CASH",
+                    "booking_platform": order.booking_platform or "Direct / Walk-in",
+                    "items": [
+                        {
+                            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                            "quantity": it.quantity,
+                            "unit_price": it.unit_price
+                        }
+                        for it in order.items
+                    ]
+                }
+                bill_data = thermal_printer.build_bill_esc_pos(order_dict)
+                thermal_printer.send_raw_esc_pos(ip=c_ip, port=c_port, data=bill_data, timeout=2.5)
+            except Exception as ex:
+                print(f"[AutoPrintBill] Notice: {ex}")
+        asyncio.create_task(_auto_print_bill())
 
     event_payload = {
         "event": "PAYMENT_COLLECTED",
@@ -1180,9 +1248,20 @@ def update_printer_configuration(config_data: dict):
 @app.post("/api/printers/test")
 async def test_printer_connection(req: dict = {}):
     cfg = thermal_printer.load_printer_config()
-    ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.1.200")
-    port = int(req.get("port") or cfg.get("kitchen_printer_port", 9100))
-    name = req.get("printer_name") or cfg.get("kitchen_printer_name", "RUGTEK RP326")
+    target = (req.get("target") or "KITCHEN").upper()
+
+    if target == "CASHIER":
+        default_ip = cfg.get("cashier_printer_ip", "192.168.1.201")
+        default_port = cfg.get("cashier_printer_port", 9100)
+        default_name = cfg.get("cashier_printer_name", "POSIFLEX PP-8800 (Cashier/Bar LAN)")
+    else:
+        default_ip = cfg.get("kitchen_printer_ip", "192.168.1.200")
+        default_port = cfg.get("kitchen_printer_port", 9100)
+        default_name = cfg.get("kitchen_printer_name", "RUGTEK RP326 (Kitchen LAN)")
+
+    ip = req.get("ip") or default_ip
+    port = int(req.get("port") or default_port)
+    name = req.get("printer_name") or default_name
 
     test_slip_bytes = thermal_printer.build_test_slip(printer_name=name, ip=ip, port=port)
     success, message = thermal_printer.send_raw_esc_pos(ip=ip, port=port, data=test_slip_bytes, timeout=3.0)
@@ -1191,7 +1270,8 @@ async def test_printer_connection(req: dict = {}):
         "success": success,
         "message": message,
         "ip": ip,
-        "port": port
+        "port": port,
+        "target": target
     }
 
 @app.post("/api/printers/print-kot/{order_id}")
@@ -1255,8 +1335,8 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Order not found")
 
     cfg = thermal_printer.load_printer_config()
-    ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.1.200")
-    port = int(req.get("port") or cfg.get("kitchen_printer_port", 9100))
+    ip = req.get("ip") or cfg.get("cashier_printer_ip", "192.168.1.201")
+    port = int(req.get("port") or cfg.get("cashier_printer_port", 9100))
 
     order_dict = {
         "order_number": order.order_number,
@@ -1266,7 +1346,7 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
         "total_amount": order.total_amount,
         "discount_percentage": order.discount_percentage or 0.0,
         "discount_amount": order.discount_amount or 0.0,
-        "final_amount": order.final_amount or order.total_amount,
+        "final_amount": order.final_amount or order.amount_collected or order.total_amount,
         "payment_mode": order.payment_mode or "PENDING",
         "booking_platform": order.booking_platform or "Direct / Walk-in",
         "items": [
@@ -1284,7 +1364,9 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
     return {
         "success": success,
         "message": message,
-        "order_number": order.order_number
+        "order_number": order.order_number,
+        "ip": ip,
+        "port": port
     }
 
 
