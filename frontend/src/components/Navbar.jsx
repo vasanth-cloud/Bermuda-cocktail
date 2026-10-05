@@ -241,15 +241,6 @@ export default function Navbar() {
               <X className="w-5 h-5" />
             </button>
 
-            {/* Desktop Collapse / Hide Button */}
-            <button
-              onClick={toggleSidebar}
-              className="hidden md:flex absolute top-0 right-0 p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-amber-400 border border-slate-800 transition shadow-sm"
-              title="Hide Navigation Sidebar (Full Screen View)"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
             <BermudaLogo size="md" className="my-0.5" />
 
             <div className="mt-2.5 flex items-center gap-1.5">
@@ -276,17 +267,6 @@ export default function Navbar() {
                 </button>
               )}
             </div>
-
-            {/* Single One-Click Action: Hide Terminal */}
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              className="w-full bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 text-amber-300 font-extrabold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-sm mb-3 group cursor-pointer active:scale-95"
-              title="Hide Navigation Sidebar"
-            >
-              <ChevronLeft className="w-4 h-4 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
-              <span>Hide Terminal</span>
-            </button>
 
             {/* Menu Button Cards */}
             <nav className="space-y-2">
