@@ -140,6 +140,64 @@ import hashlib
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
+def is_bar_drink_item(it) -> bool:
+    """
+    Distinguishes bar drinks/cocktails/beverages vs kitchen food items.
+    Routes bar drinks to Posiflex (BAR BOT USB002) and food to Kitchen (KITCHEN KOT 192.168.0.70).
+    """
+    dept = (getattr(it, "target_dept", None) or "").upper().strip()
+    if dept in ("BAR", "DRINK", "DRINKS", "BEVERAGE", "BEVERAGES"):
+        return True
+    if dept in ("KITCHEN", "FOOD"):
+        return False
+
+    prod = getattr(it, "product", None)
+    if prod:
+        p_dept = (getattr(prod, "target_dept", None) or "").upper().strip()
+        if p_dept in ("BAR", "DRINK", "DRINKS", "BEVERAGE", "BEVERAGES"):
+            return True
+        if p_dept in ("KITCHEN", "FOOD"):
+            return False
+
+        cat_name = (prod.category.name if prod.category else "").upper()
+        if any(w in cat_name for w in ["BAR", "DRINK", "COCKTAIL", "LIQUOR", "BEER", "WINE", "ALCOHOL", "BEVERAGE", "MOCKTAIL", "SPIRIT", "SHOTS"]):
+            return True
+
+        prod_name = (prod.name or "").upper()
+        if any(w in prod_name for w in [
+            "COCKTAIL", "BEER", "WHISKY", "WHISKEY", "VODKA", "RUM", "GIN",
+            "TEQUILA", "WINE", "BRANDY", "MOCKTAIL", "SEX ON THE BEACH",
+            "MOJITO", "MARGARITA", "MARTINI", "PEPSI", "COKE", "SODA",
+            "JUICE", "COOLER", "SHAKE", "SHOT", "DRAUGHT", "BREEZER", "TONIC"
+        ]):
+            return True
+
+    # If it is a Product object directly (e.g. during order creation)
+    if hasattr(it, "price") and hasattr(it, "category"):
+        cat_name = (it.category.name if it.category else "").upper()
+        if any(w in cat_name for w in ["BAR", "DRINK", "COCKTAIL", "LIQUOR", "BEER", "WINE", "ALCOHOL", "BEVERAGE", "MOCKTAIL", "SPIRIT", "SHOTS"]):
+            return True
+        prod_name = (it.name or "").upper()
+        if any(w in prod_name for w in [
+            "COCKTAIL", "BEER", "WHISKY", "WHISKEY", "VODKA", "RUM", "GIN",
+            "TEQUILA", "WINE", "BRANDY", "MOCKTAIL", "SEX ON THE BEACH",
+            "MOJITO", "MARGARITA", "MARTINI", "PEPSI", "COKE", "SODA",
+            "JUICE", "COOLER", "SHAKE", "SHOT", "DRAUGHT", "BREEZER", "TONIC"
+        ]):
+            return True
+
+    p_name = (getattr(it, "product_name", None) or "").upper()
+    if any(w in p_name for w in [
+        "COCKTAIL", "BEER", "WHISKY", "WHISKEY", "VODKA", "RUM", "GIN",
+        "TEQUILA", "WINE", "BRANDY", "MOCKTAIL", "SEX ON THE BEACH",
+        "MOJITO", "MARGARITA", "MARTINI", "PEPSI", "COKE", "SODA",
+        "JUICE", "COOLER", "SHAKE", "SHOT", "DRAUGHT", "BREEZER", "TONIC"
+    ]):
+        return True
+
+    return False
+
+
 # --- Auth & User Management Endpoints ---
 @app.post("/api/auth/login")
 def login_user(creds: schemas.UserLogin, db: Session = Depends(get_db)):
@@ -441,21 +499,23 @@ async def create_order(order_data: schemas.OrderCreate, db: Session = Depends(ge
         item_price = prod.price * item.quantity
         total += item_price
 
+        item_dept = "BAR" if is_bar_drink_item(prod) else "KITCHEN"
         order_item = models.OrderItem(
             order_id=new_order.id,
             product_id=prod.id,
             quantity=item.quantity,
             unit_price=prod.price,
-            target_dept=prod.target_dept,
+            target_dept=item_dept,
             status="PENDING",
             notes=item.notes
         )
         db.add(order_item)
 
-        if prod.target_dept == "BAR":
+        if item_dept == "BAR":
             bar_items_added += 1
-        elif prod.target_dept == "KITCHEN":
+        else:
             kitchen_items_added += 1
+
 
     new_order.total_amount = total
     table.current_status = "OCCUPIED"
@@ -573,12 +633,18 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
     for item in order.items:
         if item.status == "PENDING":
             item.status = "CONFIRMED"
+        # Accurately classify department in DB
+        item.target_dept = "BAR" if is_bar_drink_item(item) else "KITCHEN"
 
     db.commit()
     db.refresh(order)
 
-    bar_items_count = sum(1 for it in order.items if (it.target_dept or "").upper() == "BAR")
-    kitchen_items_count = sum(1 for it in order.items if (it.target_dept or "").upper() == "KITCHEN")
+    # Split order items into Bar Drinks and Kitchen Food
+    bar_items = [it for it in order.items if is_bar_drink_item(it)]
+    kitchen_items = [it for it in order.items if not is_bar_drink_item(it)]
+
+    bar_items_count = len(bar_items)
+    kitchen_items_count = len(kitchen_items)
 
     order_payload = {
         "event": "WAITER_CONFIRMED_ORDER",
@@ -600,7 +666,7 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
                 "product_name": it.product.name if it.product else f"Item #{it.product_id}",
                 "quantity": it.quantity,
                 "unit_price": it.unit_price,
-                "target_dept": it.target_dept,
+                "target_dept": "BAR" if is_bar_drink_item(it) else "KITCHEN",
                 "status": it.status,
                 "notes": it.notes
             }
@@ -608,95 +674,92 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
         ]
     }
 
-    # Route split orders to Bar Reception & Kitchen KDS / KOT machine
     printer_cfg = thermal_printer.load_printer_config()
-    
-    if bar_items_count > 0:
-        await manager.broadcast_to_channel("bar", {**order_payload, "dept_filter": "BAR"})
-        
-        # Hardware ESC/POS Print to Posiflex Bar BOT Printer (BAR BOT USB002)
-        if printer_cfg.get("auto_print_bar_kot", True) and printer_cfg.get("bar_printer_enabled", True):
-            import asyncio
-            async def _auto_print_bot_job():
-                try:
-                    b_items = [
-                        {
-                            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
-                            "quantity": it.quantity,
-                            "unit_price": it.unit_price,
-                            "notes": it.notes
-                        }
-                        for it in order.items
-                        if (it.target_dept or "").upper() == "BAR"
-                    ]
-                    if b_items:
-                        t_label = order.table.table_number if order.table else "ST-01"
-                        z_label = order.table.zone.display_name if order.table and order.table.zone else ""
-                        full_tbl = f"{t_label} ({z_label})" if z_label else t_label
-                        bot_data = thermal_printer.build_kot_esc_pos(
-                            order_number=order.order_number,
-                            table_label=full_tbl,
-                            waiter_name=waiter_name or "Staff",
-                            items=b_items,
-                            dept="BAR"
-                        )
-                        bar_win = printer_cfg.get("bar_printer_windows_name", "BAR BOT")
-                        await thermal_printer.print_bridge.dispatch_print(
-                            target="BAR",
-                            windows_printer=bar_win,
-                            data=bot_data,
-                            job_title=f"BOT #{order.order_number}"
-                        )
-                except Exception as ex:
-                    print(f"[AutoPrintBOT] Notice: {ex}")
-            asyncio.create_task(_auto_print_bot_job())
+    t_label = order.table.table_number if order.table else "ST-01"
+    z_label = order.table.zone.display_name if order.table and order.table.zone else ""
+    full_tbl = f"{t_label} ({z_label})" if z_label else t_label
 
+    # 1. Automatic Food Order Ticket -> Rugtek RP327 Kitchen KOT (Ethernet 192.168.0.70 / KITCHEN KOT)
     if kitchen_items_count > 0:
         await manager.broadcast_to_channel("kitchen", {**order_payload, "dept_filter": "KITCHEN", "trigger_kot_print": True})
         
-        # Hardware ESC/POS Print to Rugtek RP327 Kitchen LAN Printer (192.168.0.70:9100 / KITCHEN KOT)
         if printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
             import asyncio
-            async def _auto_print_job():
+            async def _auto_print_kitchen_job():
                 try:
                     k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.0.70")
                     k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
                     k_win = printer_cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
-                    k_items = [
+                    k_items_data = [
                         {
                             "product_name": it.product.name if it.product else f"Item #{it.product_id}",
                             "quantity": it.quantity,
                             "unit_price": it.unit_price,
                             "notes": it.notes
                         }
-                        for it in order.items
-                        if (it.target_dept or "").upper() == "KITCHEN"
+                        for it in kitchen_items
                     ]
-                    if k_items:
-                        t_label = order.table.table_number if order.table else "ST-01"
-                        z_label = order.table.zone.display_name if order.table and order.table.zone else ""
-                        full_tbl = f"{t_label} ({z_label})" if z_label else t_label
-                        kot_data = thermal_printer.build_kot_esc_pos(
-                            order_number=order.order_number,
-                            table_label=full_tbl,
-                            waiter_name=waiter_name or "Staff",
-                            items=k_items,
-                            dept="KITCHEN"
-                        )
-                        await thermal_printer.print_bridge.dispatch_print(
-                            target="KITCHEN",
-                            ip=k_ip,
-                            port=k_port,
-                            windows_printer=k_win,
-                            data=kot_data,
-                            job_title=f"KOT #{order.order_number}"
-                        )
+                    kot_data = thermal_printer.build_kot_esc_pos(
+                        order_number=order.order_number,
+                        table_label=full_tbl,
+                        waiter_name=waiter_name or "Staff",
+                        items=k_items_data,
+                        dept="KITCHEN"
+                    )
+                    await thermal_printer.print_bridge.dispatch_print(
+                        target="KITCHEN",
+                        ip=k_ip,
+                        port=k_port,
+                        windows_printer=k_win,
+                        data=kot_data,
+                        job_title=f"KOT #{order.order_number}"
+                    )
                 except Exception as ex:
-                    print(f"[AutoPrintKOT] Notice: {ex}")
-            asyncio.create_task(_auto_print_job())
-    
+                    print(f"[AutoPrintKitchenKOT] Error: {ex}")
+            asyncio.create_task(_auto_print_kitchen_job())
+
+    # 2. Automatic Drinks Order Ticket -> Posiflex Bar BOT Printer (BAR BOT USB002)
+    if bar_items_count > 0:
+        await manager.broadcast_to_channel("bar", {**order_payload, "dept_filter": "BAR"})
+        
+        if printer_cfg.get("auto_print_bar_kot", True) and printer_cfg.get("bar_printer_enabled", True):
+            import asyncio
+            async def _auto_print_bar_job():
+                try:
+                    bar_win = printer_cfg.get("bar_printer_windows_name", "BAR BOT")
+                    b_items_data = [
+                        {
+                            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                            "quantity": it.quantity,
+                            "unit_price": it.unit_price,
+                            "notes": it.notes
+                        }
+                        for it in bar_items
+                    ]
+                    bot_data = thermal_printer.build_kot_esc_pos(
+                        order_number=order.order_number,
+                        table_label=full_tbl,
+                        waiter_name=waiter_name or "Staff",
+                        items=b_items_data,
+                        dept="BAR"
+                    )
+                    await thermal_printer.print_bridge.dispatch_print(
+                        target="BAR",
+                        windows_printer=bar_win,
+                        ip=printer_cfg.get("bar_printer_ip", ""),
+                        port=int(printer_cfg.get("bar_printer_port", 9100)),
+                        data=bot_data,
+                        job_title=f"BOT #{order.order_number}"
+                    )
+                except Exception as ex:
+                    print(f"[AutoPrintBarBOT] Error: {ex}")
+            asyncio.create_task(_auto_print_bar_job())
+
     await manager.broadcast_all(order_payload)
-    return {"message": "Order confirmed by Waiter and routed to Reception Bar & Kitchen KOT", "order": order_payload}
+    return {
+        "message": f"Order #{order.order_number} confirmed by {waiter_name} and routed: {kitchen_items_count} food items to Kitchen KOT, {bar_items_count} drinks items to Posiflex Bar",
+        "order": order_payload
+    }
 
 @app.post("/api/orders/{order_id}/add-items")
 async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest, db: Session = Depends(get_db)):
@@ -705,6 +768,9 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
         raise HTTPException(status_code=404, detail="Order not found")
 
     added_total = 0.0
+    added_kitchen_items = []
+    added_bar_items = []
+
     for item in req.items:
         prod = db.query(models.Product).filter(models.Product.id == item.product_id).first()
         if not prod:
@@ -713,54 +779,91 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
         item_price = prod.price * item.quantity
         added_total += item_price
 
+        dept = "BAR" if is_bar_drink_item(prod) else "KITCHEN"
+
         order_item = models.OrderItem(
             order_id=order.id,
             product_id=prod.id,
             quantity=item.quantity,
             unit_price=prod.price,
-            target_dept=prod.target_dept,
+            target_dept=dept,
             status="PENDING",
             notes=item.notes
         )
         db.add(order_item)
 
+        item_dict = {
+            "product_name": prod.name,
+            "quantity": item.quantity,
+            "unit_price": prod.price,
+            "notes": item.notes
+        }
+        if dept == "BAR":
+            added_bar_items.append(item_dict)
+        else:
+            added_kitchen_items.append(item_dict)
+
     order.total_amount += added_total
     db.commit()
     db.refresh(order)
 
-    # Auto-dispatch supplemental KOT to Kitchen LAN printer if kitchen items were added
     printer_cfg = thermal_printer.load_printer_config()
-    if printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
-        k_addon_items = []
-        for it in req.items:
-            prod = db.query(models.Product).filter(models.Product.id == it.product_id).first()
-            if prod and (prod.target_dept or "").upper() == "KITCHEN":
-                k_addon_items.append({
-                    "product_name": prod.name,
-                    "quantity": it.quantity,
-                    "unit_price": prod.price,
-                    "notes": it.notes
-                })
-        if k_addon_items:
-            import asyncio
-            async def _auto_print_addon():
-                try:
-                    k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.1.200")
-                    k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
-                    t_lbl = order.table.table_number if order.table else "ST-01"
-                    z_lbl = order.table.zone.display_name if order.table and order.table.zone else ""
-                    tbl_str = f"{t_lbl} ({z_lbl})" if z_lbl else t_lbl
-                    kot_data = thermal_printer.build_kot_esc_pos(
-                        order_number=f"{order.order_number}-ADDON",
-                        table_label=tbl_str,
-                        waiter_name=req.waiter_name or "Waiter",
-                        items=k_addon_items,
-                        dept="KITCHEN ADD-ON"
-                    )
-                    await thermal_printer.print_bridge.dispatch_print(target="KITCHEN", ip=k_ip, port=k_port, data=kot_data, job_title=f"KOT Addon #{order.order_number}")
-                except Exception as ex:
-                    print(f"[AutoPrintKOTAddon] Notice: {ex}")
-            asyncio.create_task(_auto_print_addon())
+    t_lbl = order.table.table_number if order.table else "ST-01"
+    z_lbl = order.table.zone.display_name if order.table and order.table.zone else ""
+    tbl_str = f"{t_lbl} ({z_lbl})" if z_lbl else t_lbl
+
+    # Auto-dispatch supplemental Food KOT to Kitchen LAN printer if kitchen items were added
+    if added_kitchen_items and printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
+        import asyncio
+        async def _auto_print_addon_kitchen():
+            try:
+                k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.0.70")
+                k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
+                k_win = printer_cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
+                kot_data = thermal_printer.build_kot_esc_pos(
+                    order_number=f"{order.order_number}-ADDON",
+                    table_label=tbl_str,
+                    waiter_name=req.waiter_name or "Waiter",
+                    items=added_kitchen_items,
+                    dept="KITCHEN"
+                )
+                await thermal_printer.print_bridge.dispatch_print(
+                    target="KITCHEN",
+                    ip=k_ip,
+                    port=k_port,
+                    windows_printer=k_win,
+                    data=kot_data,
+                    job_title=f"KOT Addon #{order.order_number}"
+                )
+            except Exception as ex:
+                print(f"[AutoPrintKitchenAddon] Error: {ex}")
+        asyncio.create_task(_auto_print_addon_kitchen())
+
+    # Auto-dispatch supplemental Drinks BOT to Posiflex USB if bar items were added
+    if added_bar_items and printer_cfg.get("auto_print_bar_kot", True) and printer_cfg.get("bar_printer_enabled", True):
+        import asyncio
+        async def _auto_print_addon_bar():
+            try:
+                bar_win = printer_cfg.get("bar_printer_windows_name", "BAR BOT")
+                bot_data = thermal_printer.build_kot_esc_pos(
+                    order_number=f"{order.order_number}-ADDON",
+                    table_label=tbl_str,
+                    waiter_name=req.waiter_name or "Waiter",
+                    items=added_bar_items,
+                    dept="BAR"
+                )
+                await thermal_printer.print_bridge.dispatch_print(
+                    target="BAR",
+                    windows_printer=bar_win,
+                    ip=printer_cfg.get("bar_printer_ip", ""),
+                    port=int(printer_cfg.get("bar_printer_port", 9100)),
+                    data=bot_data,
+                    job_title=f"BOT Addon #{order.order_number}"
+                )
+            except Exception as ex:
+                print(f"[AutoPrintBarAddon] Error: {ex}")
+        asyncio.create_task(_auto_print_addon_bar())
+
 
     await manager.broadcast_all({
         "event": "ORDER_ITEMS_ADDED",
@@ -840,14 +943,16 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
 
     db.commit()
 
-    # Auto-dispatch 80mm Bill directly over the LAN to the Cashier LAN Printer
+    # Auto-dispatch 80mm Bill directly to the Rugtek RP327 Cashier Printer (RP327 Printer USB001)
     printer_cfg = thermal_printer.load_printer_config()
     if printer_cfg.get("auto_print_bill", True) and printer_cfg.get("cashier_printer_enabled", True):
         import asyncio
         async def _auto_print_bill():
             try:
-                c_ip = printer_cfg.get("cashier_printer_ip", "192.168.1.201")
+                c_win = printer_cfg.get("cashier_printer_windows_name", "RP327 Printer")
+                c_ip = printer_cfg.get("cashier_printer_ip", "")
                 c_port = int(printer_cfg.get("cashier_printer_port", 9100))
+                # BOTH Food AND Drinks together on the same bill with quantities and rates
                 order_dict = {
                     "order_number": order.order_number,
                     "table_number": f"{order.table.table_number} ({order.table.zone.display_name})" if order.table and order.table.zone else (order.table.table_number if order.table else "T-01"),
@@ -869,7 +974,14 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
                     ]
                 }
                 bill_data = thermal_printer.build_bill_esc_pos(order_dict)
-                await thermal_printer.print_bridge.dispatch_print(target="CASHIER", ip=c_ip, port=c_port, data=bill_data, job_title=f"Bill #{order.order_number}")
+                await thermal_printer.print_bridge.dispatch_print(
+                    target="CASHIER",
+                    windows_printer=c_win,
+                    ip=c_ip,
+                    port=c_port,
+                    data=bill_data,
+                    job_title=f"Bill #{order.order_number}"
+                )
             except Exception as ex:
                 print(f"[AutoPrintBill] Notice: {ex}")
         asyncio.create_task(_auto_print_bill())
@@ -1422,7 +1534,7 @@ async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(g
             "notes": it.notes
         }
         for it in order.items
-        if (it.target_dept or "").upper() == "KITCHEN"
+        if not is_bar_drink_item(it)
     ]
 
     if not kitchen_items:
@@ -1485,7 +1597,7 @@ async def print_order_bot(order_id: int, req: dict = {}, db: Session = Depends(g
             "notes": it.notes
         }
         for it in order.items
-        if (it.target_dept or "").upper() == "BAR"
+        if is_bar_drink_item(it)
     ]
 
     if not bar_items:

@@ -290,21 +290,25 @@ def build_kot_esc_pos(
     created_at_str: Optional[str] = None
 ) -> bytes:
     """
-    Builds a high-visibility Kitchen Order Ticket (KOT) in ESC/POS format.
-    Double-height table number so kitchen chefs can read it from 5 meters away.
+    Builds a high-visibility, extra-dark Order Ticket (KOT / BOT) in ESC/POS format.
+    Works for Rugtek RP327 Kitchen KOT (Ethernet) and Posiflex (BAR BOT USB002).
     """
     now = created_at_str or datetime.now().strftime("%d-%b-%Y %I:%M %p")
-    title = f"*** {dept.upper()} ORDER TICKET ({'KOT' if dept.upper() == 'KITCHEN' else 'BOT'}) ***"
+    ticket_type = "KOT (FOOD)" if dept.upper() == "KITCHEN" else "BOT (DRINKS)"
+    title = f"*** {ticket_type} ***"
 
     b = bytearray()
     b.extend(CMD_INIT)
+    # Enable double-strike mode for extra deep black thermal printing
+    b.extend(ESC + b'G\x01')
+    b.extend(ESC + b't\x00')
     
     # Header
     b.extend(CMD_ALIGN_CENTER)
     b.extend(CMD_BOLD_ON)
     b.extend(f"{title}\n".encode('latin-1', 'replace'))
     b.extend(CMD_BOLD_OFF)
-    b.extend(b"------------------------------------------\n")
+    b.extend(b"----------------------------------------\n")
     
     # Large Table Number
     b.extend(CMD_TEXT_DOUBLE_SIZE)
@@ -315,28 +319,27 @@ def build_kot_esc_pos(
     
     # Metadata
     b.extend(CMD_ALIGN_LEFT)
+    b.extend(CMD_BOLD_ON)
     b.extend(f"Order #:  {order_number}\n".encode('latin-1', 'replace'))
     b.extend(f"Time:     {now}\n".encode('latin-1', 'replace'))
-    b.extend(f"Waiter:   {waiter_name}\n".encode('latin-1', 'replace'))
+    b.extend(f"Server:   {waiter_name}\n".encode('latin-1', 'replace'))
     if notes:
         b.extend(f"Note:     {notes}\n".encode('latin-1', 'replace'))
-    b.extend(b"==========================================\n")
+    b.extend(b"========================================\n")
     
-    # Items Column Header
-    b.extend(CMD_BOLD_ON)
-    # QTY (5) | ITEM NAME (30)
+    # Items Column Header: QTY (5) | ITEM DESCRIPTION (35)
     b.extend(b"QTY   ITEM DESCRIPTION\n")
-    b.extend(b"------------------------------------------\n")
+    b.extend(b"----------------------------------------\n")
     b.extend(CMD_BOLD_OFF)
     
     total_qty = 0
     for it in items:
         qty = it.get("quantity", 1)
-        name = it.get("product_name") or it.get("name") or "Food Item"
+        name = it.get("product_name") or it.get("name") or "Item"
         item_note = it.get("notes")
         total_qty += qty
         
-        # Double height for item line for great kitchen visibility
+        # Double height for item line for great visibility
         b.extend(CMD_TEXT_DOUBLE_HEIGHT)
         b.extend(CMD_BOLD_ON)
         qty_str = f"[{qty}]".ljust(6)
@@ -345,12 +348,12 @@ def build_kot_esc_pos(
         b.extend(CMD_BOLD_OFF)
         
         if item_note:
-            b.extend(f"      >> SPECIAL: {item_note}\n".encode('latin-1', 'replace'))
+            b.extend(f"      >> Note: {item_note}\n".encode('latin-1', 'replace'))
     
-    b.extend(b"==========================================\n")
+    b.extend(b"========================================\n")
     b.extend(CMD_ALIGN_RIGHT)
     b.extend(CMD_BOLD_ON)
-    b.extend(f"Total Kitchen Items: {total_qty}\n".encode('latin-1', 'replace'))
+    b.extend(f"Total Items: {total_qty}\n".encode('latin-1', 'replace'))
     b.extend(CMD_BOLD_OFF)
     b.extend(CMD_ALIGN_CENTER)
     b.extend(b"--- END OF TICKET ---\n")
@@ -360,8 +363,9 @@ def build_kot_esc_pos(
 
 def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     """
-    Builds a complete 80mm Customer Tax Invoice / Bill in ESC/POS format.
-    Can be sent to Network thermal printer or saved.
+    Builds a complete, extra-dark 80mm Customer Tax Invoice / Final Bill in ESC/POS format.
+    Includes BOTH Food AND Drinks together on the same bill with quantities, unit rates, and totals.
+    Works for Rugtek RP327 (RP327 Printer USB001).
     """
     cfg = load_printer_config()
     now = datetime.now().strftime("%d-%b-%Y %I:%M %p")
@@ -370,7 +374,7 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     order_num = order_dict.get("order_number") or "ORD-0000"
     waiter = order_dict.get("waiter_name") or order_dict.get("collected_by") or "Staff"
     customer = order_dict.get("customer_name") or "Guest"
-    payment_mode = order_dict.get("payment_mode") or "PENDING"
+    payment_mode = order_dict.get("payment_mode") or "CASH"
     platform = order_dict.get("booking_platform") or "Direct / Walk-in"
     
     subtotal = float(order_dict.get("total_amount") or 0.0)
@@ -380,6 +384,9 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     
     b = bytearray()
     b.extend(CMD_INIT)
+    # Enable double-strike mode for extra deep black thermal printing
+    b.extend(ESC + b'G\x01')
+    b.extend(ESC + b't\x00')
     
     # Store Header
     b.extend(CMD_ALIGN_CENTER)
@@ -400,61 +407,69 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     if cfg.get("bill_fssai"):
         b.extend(f"FSSAI: {cfg['bill_fssai']}\n".encode('latin-1', 'replace'))
         
-    b.extend(b"------------------------------------------\n")
+    b.extend(b"----------------------------------------\n")
     b.extend(CMD_BOLD_ON)
-    b.extend(b"TAX INVOICE / FINAL RECEIPT\n")
+    b.extend(b"TAX INVOICE / FINAL BILL\n")
     b.extend(CMD_BOLD_OFF)
-    b.extend(b"------------------------------------------\n")
+    b.extend(b"----------------------------------------\n")
     
-    # Bill details
+    # Bill details (compact 40 columns to prevent right-edge clipping)
     b.extend(CMD_ALIGN_LEFT)
+    b.extend(CMD_BOLD_ON)
     b.extend(f"Bill No:   {order_num}\n".encode('latin-1', 'replace'))
     b.extend(f"Table:     {table_num}\n".encode('latin-1', 'replace'))
     b.extend(f"Date/Time: {now}\n".encode('latin-1', 'replace'))
     b.extend(f"Server:    {waiter}\n".encode('latin-1', 'replace'))
-    b.extend(f"Customer:  {customer}\n".encode('latin-1', 'replace'))
+    b.extend(f"Guest:     {customer}\n".encode('latin-1', 'replace'))
     b.extend(f"Channel:   {platform}\n".encode('latin-1', 'replace'))
-    b.extend(b"==========================================\n")
+    b.extend(CMD_BOLD_OFF)
+    b.extend(b"========================================\n")
     
-    # Column Header: ITEM (24) | QTY (4) | RATE (6) | AMT (8)
+    # Column Header: ITEM (20) | QTY (4) | RATE (7) | AMT (9) -> Exactly 40 columns!
     b.extend(CMD_BOLD_ON)
-    b.extend(f"{'ITEM'.ljust(22)}{'QTY'.rjust(4)}{'RATE'.rjust(7)}{'AMT'.rjust(9)}\n".encode('latin-1', 'replace'))
-    b.extend(b"------------------------------------------\n")
+    b.extend(f"{'ITEM'.ljust(20)}{'QTY'.rjust(4)}{'RATE'.rjust(7)}{'AMT'.rjust(9)}\n".encode('latin-1', 'replace'))
+    b.extend(b"----------------------------------------\n")
     b.extend(CMD_BOLD_OFF)
     
+    # Print all items (both food and drinks)
     items = order_dict.get("items", [])
     for it in items:
-        name = (it.get("product_name") or it.get("name") or "Item")[:21]
+        raw_name = (it.get("product_name") or it.get("name") or "Item")
+        name = raw_name[:19]
         qty = it.get("quantity", 1)
         rate = float(it.get("unit_price") or 0.0)
         line_tot = rate * qty
         
-        line = f"{name.ljust(22)}{str(qty).rjust(4)}{f'{rate:.1f}'.rjust(7)}{f'{line_tot:.2f}'.rjust(9)}\n"
+        line = f"{name.ljust(20)}{str(qty).rjust(4)}{f'{rate:.1f}'.rjust(7)}{f'{line_tot:.2f}'.rjust(9)}\n"
         b.extend(line.encode('latin-1', 'replace'))
         
-    b.extend(b"------------------------------------------\n")
+    b.extend(b"----------------------------------------\n")
     
     # Totals
-    b.extend(f"{'Subtotal:'.ljust(30)}{f'Rs. {subtotal:.2f}'.rjust(12)}\n".encode('latin-1', 'replace'))
+    b.extend(f"{'Subtotal:'.ljust(26)}{f'Rs. {subtotal:.2f}'.rjust(14)}\n".encode('latin-1', 'replace'))
     if discount_amt > 0:
         disc_label = f"Discount ({discount_pct:.0f}%):" if discount_pct > 0 else "Discount:"
-        b.extend(f"{disc_label.ljust(30)}{f'-Rs. {discount_amt:.2f}'.rjust(12)}\n".encode('latin-1', 'replace'))
+        b.extend(f"{disc_label.ljust(26)}{f'-Rs. {discount_amt:.2f}'.rjust(14)}\n".encode('latin-1', 'replace'))
         
-    b.extend(b"==========================================\n")
+    b.extend(b"========================================\n")
     b.extend(CMD_BOLD_ON)
     b.extend(CMD_TEXT_DOUBLE_HEIGHT)
-    b.extend(f"{'NET PAYABLE:'.ljust(24)}{f'Rs. {final_amt:.2f}'.rjust(18)}\n".encode('latin-1', 'replace'))
+    b.extend(f"{'NET PAYABLE:'.ljust(22)}{f'Rs. {final_amt:.2f}'.rjust(18)}\n".encode('latin-1', 'replace'))
     b.extend(CMD_TEXT_NORMAL)
     b.extend(CMD_BOLD_OFF)
-    b.extend(b"==========================================\n")
+    b.extend(b"========================================\n")
     
+    b.extend(CMD_BOLD_ON)
     b.extend(f"Payment Mode: {payment_mode}\n".encode('latin-1', 'replace'))
+    b.extend(CMD_BOLD_OFF)
     b.extend(b"Prices inclusive of all applicable taxes\n")
-    b.extend(b"------------------------------------------\n")
+    b.extend(b"----------------------------------------\n")
     
     # Footer
     b.extend(CMD_ALIGN_CENTER)
+    b.extend(CMD_BOLD_ON)
     b.extend(f"{cfg.get('bill_footer_msg', 'Thank you for visiting Bermuda Pub!')}\n".encode('latin-1', 'replace'))
+    b.extend(CMD_BOLD_OFF)
     b.extend(b"Follow us on Instagram @bermudacocktail\n")
     b.extend(CMD_FEED_AND_CUT)
     return bytes(b)

@@ -45,41 +45,55 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
               size: 80mm auto;
               margin: 0mm;
             }
+            @media print {
+              html, body {
+                width: 68mm !important;
+                max-width: 68mm !important;
+                margin: 0 auto !important;
+                padding: 1mm 1.5mm !important;
+              }
+            }
             html, body {
-              margin: 0;
-              padding: 2mm;
-              width: 72mm;
-              max-width: 72mm;
+              margin: 0 auto;
+              padding: 1mm 1.5mm;
+              width: 68mm;
+              max-width: 68mm;
               background: #ffffff !important;
               color: #000000 !important;
-              font-family: 'Courier New', Courier, monospace, monospace !important;
-              font-size: 11px !important;
+              font-family: Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+              font-size: 11.5px !important;
+              font-weight: 700 !important;
               line-height: 1.25 !important;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
             }
             * {
-              box-sizing: border-box;
+              box-sizing: border-box !important;
+              color: #000000 !important;
+              border-color: #000000 !important;
             }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
-            .font-bold { font-weight: bold; }
-            .font-black { font-weight: 900; }
+            .font-bold { font-weight: bold !important; }
+            .font-black { font-weight: 900 !important; }
             .flex { display: flex; }
             .justify-between { justify-content: space-between; }
             .items-center { align-items: center; }
             .items-start { align-items: flex-start; }
-            .border-b { border-bottom: 1px dashed #000; }
-            .border-t { border-top: 1px dashed #000; }
-            .border-b-2 { border-bottom: 2px solid #000; }
-            .border-2 { border: 2px solid #000; }
+            .border-b { border-bottom: 1.5px dashed #000000 !important; }
+            .border-t { border-top: 1.5px dashed #000000 !important; }
+            .border-b-2 { border-bottom: 2px solid #000000 !important; }
+            .border-2 { border: 2px solid #000000 !important; }
             .py-1 { padding-top: 2px; padding-bottom: 2px; }
             .py-2 { padding-top: 4px; padding-bottom: 4px; }
             .uppercase { text-transform: uppercase; }
             .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .w-12 { width: 48px; }
-            .w-14 { width: 56px; }
-            .w-half { width: 50%; }
+            table.receipt-table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
+            table.receipt-table th, table.receipt-table td { padding: 2px 0px !important; overflow: hidden !important; word-wrap: break-word !important; }
+            .col-item { width: 46% !important; text-align: left !important; }
+            .col-qty  { width: 12% !important; text-align: center !important; }
+            .col-rate { width: 21% !important; text-align: right !important; }
+            .col-amt  { width: 21% !important; text-align: right !important; }
             .rounded { border-radius: 4px; }
             .p-1 { padding: 4px; }
             .p-2 { padding: 8px; }
@@ -358,92 +372,96 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
             {/* THE 80MM THERMAL RECEIPT SHEET (Targeted by isolated iframe printing) */}
             <div
               id="printable-thermal-content"
-              className="printable-thermal-receipt bg-white text-black p-4 rounded-lg font-mono text-[11px] shadow-sm leading-tight select-none"
+              className="printable-thermal-receipt bg-white text-black p-3 rounded-lg font-sans font-bold text-[11px] shadow-sm leading-tight select-none"
+              style={{ maxWidth: '68mm', margin: '0 auto' }}
             >
               {mode === 'BILL' ? (
-                /* --- 80mm CUSTOMER FINAL BILL --- */
+                /* --- 80mm CUSTOMER FINAL BILL (Includes Food & Drinks Together) --- */
                 <div>
-                  <div className="text-center pb-2 border-b border-dashed border-gray-400">
-                    <div className="text-base font-black tracking-wide">THE BERMUDA COCKTAIL</div>
-                    <div className="text-[10px] text-gray-700">Craft Cocktails & Gourmet Kitchen</div>
-                    <div className="text-[9px] text-gray-600">Main Boulevard · City Centre</div>
-                    <div className="text-[9px] text-gray-600">GSTIN: 33ABCDE1234F1Z5 · Ph: +91 98765 43210</div>
-                    <div className="text-xs font-black mt-1 uppercase">Tax Invoice / Final Bill</div>
+                  <div className="text-center pb-2 border-b-2 border-dashed border-black">
+                    <div className="text-base font-black tracking-wide text-black uppercase">THE BERMUDA COCKTAIL</div>
+                    <div className="text-[10px] font-bold text-black">Craft Cocktails & Gourmet Kitchen</div>
+                    <div className="text-[9.5px] font-bold text-black">Main Boulevard · City Centre</div>
+                    <div className="text-[9.5px] font-bold text-black">GSTIN: 33ABCDE1234F1Z5 · Ph: +91 98765 43210</div>
+                    <div className="text-xs font-black mt-1 uppercase border-t border-black pt-1">TAX INVOICE / FINAL BILL</div>
                   </div>
 
-                  <div className="py-2 border-b border-dashed border-gray-400 text-[10px] space-y-0.5">
+                  <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5">
                     <div className="flex justify-between">
-                      <span>Bill No: <strong className="font-mono">{order.order_number}</strong></span>
-                      <span>{nowFormatted.split(',')[0]}</span>
+                      <span>Bill No: <strong className="font-bold">{order.order_number}</strong></span>
+                      <span className="font-bold">{nowFormatted.split(',')[0]}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Table: <strong className="font-bold">{tableLabel}</strong></span>
-                      <span>{nowFormatted.split(',')[1]}</span>
+                      <span>Table: <strong className="font-black">{tableLabel}</strong></span>
+                      <span className="font-bold">{nowFormatted.split(',')[1]}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Waiter: {order.waiter_name || order.collected_by || 'Staff'}</span>
+                      <span>Waiter: <strong className="font-bold">{order.waiter_name || order.collected_by || 'Staff'}</strong></span>
                       <span>Guest: {order.customer_name || 'Walk-in'}</span>
                     </div>
                     {order.booking_platform && (
-                      <div>Platform: <span className="font-bold">{order.booking_platform}</span></div>
+                      <div>Platform: <strong className="font-bold">{order.booking_platform}</strong></div>
                     )}
                   </div>
 
-                  {/* Items Table */}
-                  <div className="py-2 border-b border-dashed border-gray-400">
-                    <div className="flex justify-between text-[10px] font-black pb-1 border-b border-gray-300">
-                      <span className="w-1/2">ITEM</span>
-                      <span className="w-12 text-center">QTY</span>
-                      <span className="w-12 text-right">RATE</span>
-                      <span className="w-14 text-right">AMT</span>
-                    </div>
-
-                    <div className="divide-y divide-gray-100 py-1">
-                      {allItems.map((it, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1 text-[10.5px]">
-                          <span className="w-1/2 truncate font-medium">
-                            {it.product?.name || it.product_name || `Item #${it.product_id}`}
-                          </span>
-                          <span className="w-12 text-center font-bold">{it.quantity}</span>
-                          <span className="w-12 text-right">₹{it.unit_price}</span>
-                          <span className="w-14 text-right font-black">₹{it.quantity * it.unit_price}</span>
-                        </div>
-                      ))}
-                    </div>
+                  {/* Items Table (Fixed Proportional Columns to Prevent Margin Clipping) */}
+                  <div className="py-2 border-b-2 border-dashed border-black">
+                    <table className="receipt-table w-full border-collapse">
+                      <thead>
+                        <tr className="border-b-2 border-black text-[10.5px] font-black">
+                          <th className="col-item text-left py-1">ITEM</th>
+                          <th className="col-qty text-center py-1">QTY</th>
+                          <th className="col-rate text-right py-1">RATE</th>
+                          <th className="col-amt text-right py-1">AMT</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-black/20">
+                        {allItems.map((it, idx) => (
+                          <tr key={idx} className="text-[10.5px] font-bold">
+                            <td className="col-item text-left py-1 truncate">
+                              {it.product?.name || it.product_name || `Item #${it.product_id}`}
+                            </td>
+                            <td className="col-qty text-center py-1 font-black">{it.quantity}</td>
+                            <td className="col-rate text-right py-1">Rs.{it.unit_price}</td>
+                            <td className="col-amt text-right py-1 font-black">Rs.{it.quantity * it.unit_price}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
 
                   {/* Totals */}
-                  <div className="py-2 border-b border-dashed border-gray-400 space-y-1 text-[11px]">
+                  <div className="py-2 border-b-2 border-dashed border-black space-y-1 text-[11px] font-bold">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
-                      <span>₹{subtotal.toFixed(2)}</span>
+                      <span className="font-black">Rs.{subtotal.toFixed(2)}</span>
                     </div>
                     {discountAmt > 0 && (
-                      <div className="flex justify-between text-gray-800">
+                      <div className="flex justify-between text-black">
                         <span>Discount ({discountPct}%):</span>
-                        <span>-₹{discountAmt.toFixed(2)}</span>
+                        <span className="font-black">-Rs.{discountAmt.toFixed(2)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm font-black pt-1 border-t border-gray-300">
+                    <div className="flex justify-between text-sm font-black pt-1 border-t-2 border-black text-black">
                       <span>NET PAYABLE:</span>
-                      <span>₹{finalTotal.toFixed(2)}</span>
+                      <span className="text-base font-black">Rs.{finalTotal.toFixed(2)}</span>
                     </div>
                   </div>
 
                   {/* Payment Status */}
-                  <div className="py-2 border-b border-dashed border-gray-400 text-[10px] flex justify-between items-center">
+                  <div className="py-2 border-b border-dashed border-black text-[10px] flex justify-between items-center font-bold">
                     <span>Payment Status:</span>
-                    <span className="font-black px-1.5 py-0.5 rounded bg-gray-200">
+                    <span className="font-black px-2 py-0.5 border border-black rounded uppercase">
                       {order.payment_status === 'COLLECTED' ? `PAID (${order.payment_mode || 'CASH'})` : 'PENDING'}
                     </span>
                   </div>
 
                   {/* Footer */}
-                  <div className="text-center pt-2 text-[9px] text-gray-600 space-y-0.5">
-                    <div className="font-bold">Prices inclusive of all applicable taxes</div>
+                  <div className="text-center pt-2 text-[9.5px] text-black font-bold space-y-0.5">
+                    <div>Prices inclusive of all applicable taxes</div>
                     <div>Thank you for visiting Bermuda Pub!</div>
-                    <div className="font-semibold text-black">Drink Responsibly · Follow @bermudacocktail</div>
-                    <div className="text-[8px] text-gray-400 pt-1">*** END OF BILL ***</div>
+                    <div className="font-black">Drink Responsibly · Follow @bermudacocktail</div>
+                    <div className="text-[8px] pt-1">*** END OF BILL ***</div>
                   </div>
                 </div>
               ) : (
@@ -456,7 +474,7 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                     </div>
                   </div>
 
-                  <div className="py-2 border-b border-dashed border-gray-400 text-[10px] space-y-0.5">
+                  <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5 font-bold">
                     <div className="flex justify-between">
                       <span>KOT / Order: <strong>{order.order_number}</strong></span>
                       <span>{nowFormatted}</span>
@@ -469,18 +487,18 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
 
                   {/* Food/Bar Items for Chef / Bartender */}
                   <div className="py-2 border-b-2 border-black space-y-2">
-                    <div className="flex justify-between font-black text-xs border-b border-gray-400 pb-1">
-                      <span>QTY</span>
-                      <span>ORDER ITEM DESCRIPTION</span>
+                    <div className="flex justify-between font-black text-xs border-b border-black pb-1">
+                      <span className="w-12 text-center">QTY</span>
+                      <span className="flex-1 pl-2">ORDER ITEM DESCRIPTION</span>
                     </div>
 
                     {kotItems.length === 0 ? (
-                      <div className="text-center py-2 text-gray-500 italic text-[10px]">
+                      <div className="text-center py-2 text-black italic text-[10px]">
                         No items found for this department.
                       </div>
                     ) : (
                       kotItems.map((it, idx) => (
-                        <div key={idx} className="border-b border-gray-100 pb-1">
+                        <div key={idx} className="border-b border-black/20 pb-1">
                           <div className="flex items-start gap-2 text-xs font-black">
                             <span className="px-1.5 py-0.5 bg-black text-white rounded text-xs font-mono">
                               [{it.quantity}]
@@ -488,7 +506,7 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                             <span className="flex-1">{it.product?.name || it.product_name || `Item #${it.product_id}`}</span>
                           </div>
                           {it.notes && (
-                            <div className="text-[10px] text-gray-700 italic pl-8">
+                            <div className="text-[10px] text-black font-semibold italic pl-8">
                               &gt;&gt; Note: &ldquo;{it.notes}&rdquo;
                             </div>
                           )}
@@ -499,7 +517,7 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
 
                   <div className="pt-2 text-center text-[10px] font-black">
                     Total Items: {kotItems.reduce((acc, it) => acc + (it.quantity || 1), 0)}
-                    <div className="text-[8px] text-gray-500 mt-1">*** END OF TICKET ***</div>
+                    <div className="text-[8px] text-black mt-1">*** END OF TICKET ***</div>
                   </div>
                 </div>
               )}
