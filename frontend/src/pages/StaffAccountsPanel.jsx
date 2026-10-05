@@ -10,7 +10,12 @@ import {
   Edit2, 
   Trash2, 
   Sparkles,
-  Lock
+  Lock,
+  Eye,
+  EyeOff,
+  Key,
+  Copy,
+  Check
 } from 'lucide-react';
 
 export default function StaffAccountsPanel() {
@@ -60,6 +65,13 @@ export default function StaffAccountsPanel() {
   const [userSuccess, setUserSuccess] = useState('');
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
 
+  // Password Visibility States (Easy recovery for forgotten passwords)
+  const [visiblePasswordIds, setVisiblePasswordIds] = useState({});
+  const [copiedPasswordId, setCopiedPasswordId] = useState(null);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showCurrentEditPassword, setShowCurrentEditPassword] = useState(false);
+  const [showNewEditPassword, setShowNewEditPassword] = useState(false);
+
   const handleCreateStaffUser = async (e) => {
     e.preventDefault();
     if (!newUserData.name || !newUserData.email || !newUserData.password) {
@@ -91,6 +103,8 @@ export default function StaffAccountsPanel() {
 
   const handleOpenEditUser = (user) => {
     setEditingUser(user);
+    setShowCurrentEditPassword(false);
+    setShowNewEditPassword(false);
     const terminals = user.allowed_terminals
       ? user.allowed_terminals.split(',').map(s => s.trim()).filter(Boolean)
       : ['customer', 'staff', 'reports'];
@@ -216,6 +230,7 @@ export default function StaffAccountsPanel() {
               <tr>
                 <th className="p-3.5 rounded-l-xl">User Staff Name</th>
                 <th className="p-3.5">Email Address</th>
+                <th className="p-3.5">Password</th>
                 <th className="p-3.5">Role</th>
                 <th className="p-3.5">Permitted Page Terminals</th>
                 <th className="p-3.5 text-right rounded-r-xl">Actions</th>
@@ -224,7 +239,7 @@ export default function StaffAccountsPanel() {
             <tbody className="divide-y divide-slate-800 font-medium">
               {staffUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="p-6 text-center text-slate-500 italic">
+                  <td colSpan="6" className="p-6 text-center text-slate-500 italic">
                     No staff accounts found. Click "Create Staff / Waiter Account" to add users.
                   </td>
                 </tr>
@@ -234,6 +249,9 @@ export default function StaffAccountsPanel() {
                     .split(',')
                     .map(s => s.trim().toLowerCase())
                     .filter(Boolean);
+
+                  const isPwVisible = !!visiblePasswordIds[user.id];
+                  const plainPass = user.plain_password || 'Bermuda@123';
 
                   return (
                     <tr key={user.id} className="hover:bg-slate-800/50 transition">
@@ -246,6 +264,36 @@ export default function StaffAccountsPanel() {
 
                       <td className="p-3.5 text-slate-300 font-mono">
                         {user.email}
+                      </td>
+
+                      <td className="p-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-amber-300 font-bold tracking-wider select-all inline-block min-w-[75px] text-center">
+                            {isPwVisible ? plainPass : '••••••••'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setVisiblePasswordIds(prev => ({ ...prev, [user.id]: !prev[user.id] }))}
+                            title={isPwVisible ? "Hide Password" : "See Password"}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 transition shrink-0"
+                          >
+                            {isPwVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          {isPwVisible && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(plainPass);
+                                setCopiedPasswordId(user.id);
+                                setTimeout(() => setCopiedPasswordId(null), 2000);
+                              }}
+                              title="Copy Password"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition shrink-0"
+                            >
+                              {copiedPasswordId === user.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       <td className="p-3.5">
@@ -350,14 +398,24 @@ export default function StaffAccountsPanel() {
 
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Login Password *</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={newUserData.password}
-                  onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showCreatePassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={newUserData.password}
+                    onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 pr-10 text-slate-100 focus:outline-none focus:border-amber-500 font-mono text-xs"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePassword(!showCreatePassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 transition"
+                    title={showCreatePassword ? "Hide Password" : "See Password"}
+                  >
+                    {showCreatePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -449,15 +507,64 @@ export default function StaffAccountsPanel() {
                 />
               </div>
 
+              {/* Forgotten Password Recovery / Current Password Card */}
+              <div className="bg-slate-950/90 p-3.5 rounded-xl border border-amber-500/30 flex items-center justify-between shadow-inner">
+                <div>
+                  <div className="text-[10px] text-amber-400 font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-amber-400" /> Current Login Password
+                  </div>
+                  <div className="font-mono text-xs text-amber-200 font-black mt-1 tracking-wider select-all">
+                    {showCurrentEditPassword ? (editingUser.plain_password || 'Bermuda@123') : '••••••••'}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Staff forgot password? View or share current credentials.
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentEditPassword(!showCurrentEditPassword)}
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-400 flex items-center gap-1.5 text-xs font-bold transition border border-slate-700"
+                  >
+                    {showCurrentEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span>{showCurrentEditPassword ? 'Hide' : 'See Password'}</span>
+                  </button>
+                  {showCurrentEditPassword && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(editingUser.plain_password || 'Bermuda@123');
+                        setCopiedPasswordId('edit_modal');
+                        setTimeout(() => setCopiedPasswordId(null), 2000);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition border border-slate-700"
+                      title="Copy Password"
+                    >
+                      {copiedPasswordId === 'edit_modal' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className="font-bold text-slate-300 block mb-1">New Password (Leave blank to keep unchanged)</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={editingUserData.password}
-                  onChange={(e) => setEditingUserData({ ...editingUserData, password: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type={showNewEditPassword ? "text" : "password"}
+                    placeholder="Enter new password to change"
+                    value={editingUserData.password}
+                    onChange={(e) => setEditingUserData({ ...editingUserData, password: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 pr-10 text-slate-100 focus:outline-none focus:border-amber-500 font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewEditPassword(!showNewEditPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 transition"
+                    title={showNewEditPassword ? "Hide Password" : "See Password"}
+                  >
+                    {showNewEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>

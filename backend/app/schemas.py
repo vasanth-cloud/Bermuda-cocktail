@@ -152,6 +152,7 @@ class UserSchema(BaseModel):
     email: str
     role: str
     allowed_terminals: Optional[str] = None
+    plain_password: Optional[str] = None
     is_active: bool
     created_at: datetime
 

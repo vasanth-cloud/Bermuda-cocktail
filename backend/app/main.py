@@ -24,6 +24,7 @@ def sync_staff_users_to_file(db: Session):
                 "name": u.name,
                 "email": u.email,
                 "password_hash": u.password_hash,
+                "plain_password": getattr(u, "plain_password", None),
                 "role": u.role,
                 "allowed_terminals": u.allowed_terminals,
                 "is_active": u.is_active
@@ -73,6 +74,10 @@ def startup_event():
             if "allowed_terminals" not in user_cols:
                 with engine.connect() as conn:
                     conn.execute(text("ALTER TABLE users ADD COLUMN allowed_terminals VARCHAR DEFAULT 'customer,staff'"))
+                    conn.commit()
+            if "plain_password" not in user_cols:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN plain_password VARCHAR"))
                     conn.commit()
 
         if "orders" in tables:
@@ -254,6 +259,7 @@ def create_staff_user(user_data: schemas.UserCreate, db: Session = Depends(get_d
         name=user_data.name,
         email=user_data.email,
         password_hash=hash_password(user_data.password),
+        plain_password=user_data.password,
         role=user_data.role.upper(),
         allowed_terminals=terminals,
         is_active=True
@@ -280,6 +286,7 @@ def update_staff_user(user_id: int, user_data: schemas.UserUpdate, db: Session =
             user.email = user_data.email
     if user_data.password is not None and user_data.password.strip():
         user.password_hash = hash_password(user_data.password)
+        user.plain_password = user_data.password
     if user_data.role is not None:
         user.role = user_data.role.upper()
     if user_data.allowed_terminals is not None:

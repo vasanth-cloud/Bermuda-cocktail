@@ -111,6 +111,7 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
+    plain_password = Column(String, nullable=True)
     role = Column(String, default="WAITER")  # ADMIN, WAITER, BAR_RECEPTION, KITCHEN_CHEF
     allowed_terminals = Column(String, default="customer,staff")
     is_active = Column(Boolean, default=True)

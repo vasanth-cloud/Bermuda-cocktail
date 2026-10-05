@@ -38,7 +38,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Printer,
-  Download
+  Download,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -136,6 +138,8 @@ export default function AdminPanel() {
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showEditUserPassword, setShowEditUserPassword] = useState(false);
 
   // Member Card Management State
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
@@ -1259,13 +1263,21 @@ export default function AdminPanel() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                   <input
-                    type="password"
+                    type={showCreatePassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={newUserData.password}
                     onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-10 py-2.5 text-slate-100 focus:outline-none focus:border-amber-500 font-mono text-xs"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePassword(!showCreatePassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 transition"
+                    title={showCreatePassword ? "Hide Password" : "See Password"}
+                  >
+                    {showCreatePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 

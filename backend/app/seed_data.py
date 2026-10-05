@@ -31,20 +31,34 @@ def seed_initial_data(db: Session):
             {"name": "Chef Mario", "email": "kitchen@bermuda.pub", "password": "Kitchen@123", "role": "BAR_KITCHEN", "allowed_terminals": "customer,entry_scanner,bar,members"}
         ]
 
+    DEFAULT_PASSWORDS = {
+        "avasanth081@gmail.com": "Vasanth@123",
+        "padmeshskmr@gmail.com": "Padmesh@123",
+        "surendar@gmail.com": "Surendar@123",
+        "ajaykumar@bermuda.pub": "Ajay@123",
+        "waiter@bermuda.pub": "Waiter@123",
+        "bar@bermuda.pub": "Bar@123",
+        "kitchen@bermuda.pub": "Kitchen@123",
+    }
+
     for u_info in users_to_sync:
         existing = db.query(User).filter_by(email=u_info["email"]).first()
+        plain_pass = u_info.get("plain_password") or u_info.get("password") or DEFAULT_PASSWORDS.get(u_info["email"].lower(), "Bermuda@123")
         if not existing:
-            p_hash = u_info.get("password_hash") or hash_password(u_info.get("password", "Bermuda@123"))
+            p_hash = u_info.get("password_hash") or hash_password(plain_pass)
             new_u = User(
                 name=u_info["name"],
                 email=u_info["email"],
                 password_hash=p_hash,
+                plain_password=plain_pass,
                 role=u_info.get("role", "WAITER"),
                 allowed_terminals=u_info.get("allowed_terminals", "customer,staff"),
                 is_active=u_info.get("is_active", True)
             )
             db.add(new_u)
         else:
+            if not getattr(existing, "plain_password", None):
+                existing.plain_password = plain_pass
             if not existing.allowed_terminals and u_info.get("allowed_terminals"):
                 existing.allowed_terminals = u_info["allowed_terminals"]
     db.commit()
