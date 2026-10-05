@@ -737,6 +737,20 @@ export default function AdminPanel() {
   const menuStartIndex = (menuValidPage - 1) * menuItemsPerPage;
   const paginatedProducts = filteredProducts.slice(menuStartIndex, menuStartIndex + menuItemsPerPage);
 
+  // Helper for responsive windowed pagination numbers
+  const getPaginationRange = (current, total) => {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', total];
+    }
+    if (current >= total - 3) {
+      return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  };
+
   // Access Control Guard: Only Master Admin (ADMIN role) can view Admin Panel
   if (currentUser?.role !== 'ADMIN') {
     return (
@@ -880,7 +894,7 @@ export default function AdminPanel() {
         </div>
 
         {/* Master Menu List & Price Editor with Pagination */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+        <div className="lg:col-span-2 min-w-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl flex flex-col justify-between overflow-hidden">
           <div>
             {/* Top Bar Header & Action */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
@@ -1112,43 +1126,72 @@ export default function AdminPanel() {
 
           {/* Page-wise Pagination Controls */}
           {filteredProducts.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-              <div className="text-slate-400 font-medium">
-                Showing <span className="font-bold text-slate-200">{menuStartIndex + 1}</span> to{' '}
-                <span className="font-bold text-slate-200">{Math.min(menuStartIndex + menuItemsPerPage, filteredProducts.length)}</span> of{' '}
-                <span className="font-bold text-amber-400">{filteredProducts.length}</span> items
+            <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3 text-xs w-full">
+              <div className="flex flex-wrap items-center gap-2 text-slate-400 font-medium">
+                <span>
+                  Showing <span className="font-bold text-slate-200">{menuStartIndex + 1}</span> to{' '}
+                  <span className="font-bold text-slate-200">{Math.min(menuStartIndex + menuItemsPerPage, filteredProducts.length)}</span> of{' '}
+                  <span className="font-bold text-amber-400">{filteredProducts.length}</span> items
+                </span>
+                <span className="text-slate-600 hidden sm:inline">•</span>
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span className="text-[11px]">Show:</span>
+                  <select
+                    value={menuItemsPerPage}
+                    onChange={(e) => {
+                      setMenuItemsPerPage(Number(e.target.value));
+                      setMenuCurrentPage(1);
+                    }}
+                    className="bg-slate-950 border border-slate-800 text-amber-400 font-bold rounded-lg px-2 py-0.5 text-xs focus:outline-none cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
                 <button
                   disabled={menuValidPage === 1}
                   onClick={() => setMenuCurrentPage(p => Math.max(p - 1, 1))}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition shrink-0"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" /> Previous
+                  <ChevronLeft className="w-3.5 h-3.5" /> Prev
                 </button>
 
-                {/* Page Numbers */}
-                <div className="flex items-center gap-1 px-1">
-                  {Array.from({ length: menuTotalPages }, (_, idx) => idx + 1).map((pageNum) => (
-                    <button
-                      key={pageNum}
-                      onClick={() => setMenuCurrentPage(pageNum)}
-                      className={`w-7 h-7 rounded-lg text-xs font-black transition flex items-center justify-center ${
-                        pageNum === menuValidPage
-                          ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                          : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-800'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  ))}
+                {/* Smart Windowed Page Numbers */}
+                <div className="flex items-center gap-1 px-0.5">
+                  {getPaginationRange(menuValidPage, menuTotalPages).map((item, idx) => {
+                    if (item === '...') {
+                      return (
+                        <span key={`menu-ellipsis-${idx}`} className="w-5 text-center text-slate-500 font-bold select-none text-xs">
+                          •••
+                        </span>
+                      );
+                    }
+                    const pageNum = item;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setMenuCurrentPage(pageNum)}
+                        className={`min-w-[28px] h-7 px-1.5 rounded-lg text-xs font-black transition flex items-center justify-center shrink-0 ${
+                          pageNum === menuValidPage
+                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                            : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <button
                   disabled={menuValidPage >= menuTotalPages}
                   onClick={() => setMenuCurrentPage(p => Math.min(p + 1, menuTotalPages))}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 text-xs font-bold transition shrink-0"
                 >
                   Next <ChevronRight className="w-3.5 h-3.5" />
                 </button>
