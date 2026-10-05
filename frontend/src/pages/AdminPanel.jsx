@@ -37,7 +37,8 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Printer
+  Printer,
+  Download
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -623,6 +624,89 @@ export default function AdminPanel() {
         ? `${localIpHost}/`
         : `${window.location.protocol}//${localIpHost}/`);
 
+  const handleDownloadQr = () => {
+    if (!selectedTableForQr) return;
+    const svgEl = document.getElementById(`table-qr-svg-${selectedTableForQr.id}`);
+    if (!svgEl) return;
+
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    canvas.width = 600;
+    canvas.height = 760;
+
+    img.onload = () => {
+      // Dark pub background card
+      ctx.fillStyle = '#0F172A';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Gold border
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
+
+      // Header title
+      ctx.fillStyle = '#F59E0B';
+      ctx.font = 'bold 22px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('THE BERMUDA COCKTAIL PUB', canvas.width / 2, 62);
+
+      // Table Number
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 48px Arial, sans-serif';
+      ctx.fillText(`TABLE ${selectedTableForQr.table_number}`, canvas.width / 2, 125);
+
+      // Zone name
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = 'bold 20px Arial, sans-serif';
+      const zoneName = selectedTableForQr.zone?.display_name || 'Pub Area';
+      ctx.fillText(zoneName, canvas.width / 2, 160);
+
+      // White box for QR code
+      const qrBoxSize = 360;
+      const qrBoxX = (canvas.width - qrBoxSize) / 2;
+      const qrBoxY = 185;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 20);
+      } else {
+        ctx.fillRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize);
+      }
+      ctx.fill();
+
+      // Draw QR image
+      const qrPadding = 24;
+      ctx.drawImage(img, qrBoxX + qrPadding, qrBoxY + qrPadding, qrBoxSize - (qrPadding * 2), qrBoxSize - (qrPadding * 2));
+
+      // Scan instruction
+      ctx.fillStyle = '#FBBF24';
+      ctx.font = '900 24px Arial, sans-serif';
+      ctx.fillText('SCAN TO VIEW MENU & ORDER', canvas.width / 2, 600);
+
+      // URL text
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '14px monospace';
+      ctx.fillText(activeQrUrl, canvas.width / 2, 640);
+
+      // Footer
+      ctx.fillStyle = '#64748B';
+      ctx.font = 'bold 15px Arial, sans-serif';
+      ctx.fillText('Instant Mobile Ordering · Drinks & Food', canvas.width / 2, 680);
+
+      // Trigger automatic file download
+      const pngFile = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.download = `QR_Sticker_Table_${selectedTableForQr.table_number}.png`;
+      downloadLink.href = pngFile;
+      downloadLink.click();
+    };
+
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+  };
+
   const getRoleBadge = (role) => {
     switch (role) {
       case 'ADMIN':
@@ -764,6 +848,7 @@ export default function AdminPanel() {
                 {/* Real SVG QR Code */}
                 <div className="bg-white p-4 rounded-2xl inline-block shadow-inner my-1">
                   <QRCodeSVG
+                    id={`table-qr-svg-${selectedTableForQr.id}`}
                     value={activeQrUrl}
                     size={160}
                     bgColor={"#FFFFFF"}
@@ -789,10 +874,13 @@ export default function AdminPanel() {
                 </div>
 
                 <button
-                  onClick={() => window.print()}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black py-3 rounded-xl shadow-lg transition flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={handleDownloadQr}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 text-xs font-black py-3 rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  title="Download High-Resolution QR Sticker PNG Image"
                 >
-                  🖨️ Print QR Sticker
+                  <Download className="w-4 h-4 stroke-[2.5]" />
+                  <span>Download QR Sticker (PNG)</span>
                 </button>
               </div>
             )}
