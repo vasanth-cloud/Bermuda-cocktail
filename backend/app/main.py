@@ -1691,5 +1691,126 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
     }
 
 
+@app.post("/api/printers/auto-route/{order_id}")
+async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+    """
+    Automatically routes an active order's items to their respective KOT printers:
+    - Food items -> Kitchen KOT (Ethernet 192.168.0.70:9100 / Windows KITCHEN KOT)
+    - Drinks items -> Posiflex (BAR BOT on USB002)
+    Zero manual printer selection required.
+    """
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
 
+    cfg = thermal_printer.load_printer_config()
+    table_str = order.table.table_number if order.table else "T-01"
+    zone_str = order.table.zone.display_name if order.table and order.table.zone else ""
+    table_label = f"{table_str} ({zone_str})" if zone_str else table_str
+    waiter_str = order.waiter_name or order.collected_by or "Staff"
+    created_str = order.created_at.strftime("%d-%b-%Y %I:%M %p") if order.created_at else None
 
+    # Split into kitchen food vs bar drinks
+    kitchen_items = [
+        {
+            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+            "quantity": it.quantity,
+            "unit_price": it.unit_price,
+            "notes": it.notes
+        }
+        for it in order.items
+        if not is_bar_drink_item(it)
+    ]
+    bar_items = [
+        {
+            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+            "quantity": it.quantity,
+            "unit_price": it.unit_price,
+            "notes": it.notes
+        }
+        for it in order.items
+        if is_bar_drink_item(it)
+    ]
+
+    results = []
+
+    # 1. Food -> Kitchen KOT
+    if kitchen_items:
+        k_ip = cfg.get("kitchen_printer_ip", "192.168.0.70")
+        k_port = int(cfg.get("kitchen_printer_port", 9100))
+        k_win = cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
+        kot_bytes = thermal_printer.build_kot_esc_pos(
+            order_number=order.order_number,
+            table_label=table_label,
+            waiter_name=waiter_str,
+            items=kitchen_items,
+            dept="KITCHEN",
+            created_at_str=created_str
+        )
+        k_ok, k_msg = await thermal_printer.print_bridge.dispatch_print(
+            target="KITCHEN",
+            ip=k_ip,
+            port=k_port,
+            windows_printer=k_win,
+            data=kot_bytes,
+            job_title=f"KOT #{order.order_number}"
+        )
+        results.append(f"Kitchen Food: {k_msg}")
+
+    # 2. Drinks -> Posiflex Bar BOT
+    if bar_items:
+        bar_win = cfg.get("bar_printer_windows_name", "BAR BOT")
+        bot_bytes = thermal_printer.build_kot_esc_pos(
+            order_number=order.order_number,
+            table_label=table_label,
+            waiter_name=waiter_str,
+            items=bar_items,
+            dept="BAR",
+            created_at_str=created_str
+        )
+        b_ok, b_msg = await thermal_printer.print_bridge.dispatch_print(
+            target="BAR",
+            windows_printer=bar_win,
+            ip=cfg.get("bar_printer_ip", ""),
+            port=int(cfg.get("bar_printer_port", 9100)),
+            data=bot_bytes,
+            job_title=f"BOT #{order.order_number}"
+        )
+        results.append(f"Bar Drinks: {b_msg}")
+
+    # Fallback if no specific split
+    if not kitchen_items and not bar_items and order.items:
+        all_items = [
+            {
+                "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "unit_price": it.unit_price,
+                "notes": it.notes
+            }
+            for it in order.items
+        ]
+        kot_bytes = thermal_printer.build_kot_esc_pos(
+            order_number=order.order_number,
+            table_label=table_label,
+            waiter_name=waiter_str,
+            items=all_items,
+            dept="KITCHEN",
+            created_at_str=created_str
+        )
+        k_ok, k_msg = await thermal_printer.print_bridge.dispatch_print(
+            target="KITCHEN",
+            ip=cfg.get("kitchen_printer_ip", "192.168.0.70"),
+            port=int(cfg.get("kitchen_printer_port", 9100)),
+            windows_printer=cfg.get("kitchen_printer_windows_name", "KITCHEN KOT"),
+            data=kot_bytes,
+            job_title=f"KOT #{order.order_number}"
+        )
+        results.append(f"KOT: {k_msg}")
+
+    return {
+        "success": True,
+        "message": " & ".join(results) if results else "No items found in order to route.",
+        "kitchen_count": len(kitchen_items),
+        "bar_count": len(bar_items),
+        "bridge_active": thermal_printer.print_bridge.is_connected()
+    }

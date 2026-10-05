@@ -151,6 +151,61 @@ export default function StaffPanel() {
     }
   });
 
+  const [isBridgeConnected, setIsBridgeConnected] = useState(false);
+
+  useEffect(() => {
+    const checkBridge = async () => {
+      try {
+        const res = await apiFetch('/api/printers/config');
+        if (res.ok) {
+          const cfg = await res.json();
+          setIsBridgeConnected(!!cfg.bridge_connected);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    checkBridge();
+    const interval = setInterval(checkBridge, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleAutoPrintOrderKOTs = async (e, activeOrder, table) => {
+    e.stopPropagation();
+    if (!activeOrder || !activeOrder.id) {
+      setOrderFeedback({
+        type: 'bill_paid',
+        title: `Table ${table.table_number}`,
+        message: `No active order to print for Table ${table.table_number}.`
+      });
+      setTimeout(() => setOrderFeedback(null), 4000);
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`/api/printers/auto-route/${activeOrder.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      setOrderFeedback({
+        type: 'order_accepted',
+        title: `⚡ Respective KOTs Dispatched for Table ${table.table_number}!`,
+        message: data.message || `Food routed to Kitchen KOT (192.168.0.70), Drinks routed to Posiflex (BAR BOT USB002). No printer selection required!`
+      });
+      setTimeout(() => setOrderFeedback(null), 7000);
+    } catch (err) {
+      console.error("Auto route KOT print error:", err);
+      setOrderFeedback({
+        type: 'bill_paid',
+        title: `Table ${table.table_number} Print`,
+        message: `Print routing error: ${err.message}`
+      });
+      setTimeout(() => setOrderFeedback(null), 5000);
+    }
+  };
+
   const handleConfirmOrder = async (orderId) => {
     setConfirmingOrderId(orderId);
     const claimingWaiter = currentUser?.name || waiterName || 'Waiter';
@@ -259,14 +314,28 @@ export default function StaffPanel() {
             </div>
           </div>
 
-          <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="bg-purple-950/90 hover:bg-purple-900 border border-purple-500/50 text-purple-300 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
-            title="Open Category-Wise Sales & Payment Report"
-          >
-            <BarChart3 className="w-4 h-4 text-amber-400" />
-            <span>Category & Sales Reports</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {isBridgeConnected ? (
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-full font-mono font-bold flex items-center gap-1.5 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                🟢 Auto-KOT Active (Zero-Click)
+              </span>
+            ) : (
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-full font-mono font-bold flex items-center gap-1.5" title="Double-click Start_Print_Bridge.bat on counter PC to enable zero-click auto-printing">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                ⚠️ Run Start_Print_Bridge.bat on Counter PC
+              </span>
+            )}
+
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className="bg-purple-950/90 hover:bg-purple-900 border border-purple-500/50 text-purple-300 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+              title="Open Category-Wise Sales & Payment Report"
+            >
+              <BarChart3 className="w-4 h-4 text-amber-400" />
+              <span>Category & Sales Reports</span>
+            </button>
+          </div>
         </div>
 
         {/* Dynamic Hardware Auto-Print Feedback Banner */}
@@ -526,24 +595,12 @@ export default function StaffPanel() {
 
                         {/* Bottom Row: Quick Action Buttons */}
                         <div className="flex items-center justify-center gap-1 pt-0.5 border-t border-black/20">
-                          {/* Print Icon Button */}
+                          {/* Auto-Print Respective KOTs Button */}
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const orderToPrint = activeOrder || {
-                                id: 0,
-                                order_number: `ORD-${table.table_number}`,
-                                table: table,
-                                customer_name: 'Guest',
-                                total_amount: 0,
-                                items: [],
-                                waiter_name: currentUser?.name || 'Waiter'
-                              };
-                              setActivePrintOrder(orderToPrint);
-                            }}
-                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-white"
-                            title="Print KOT / Bill Receipt"
+                            onClick={(e) => handleAutoPrintOrderKOTs(e, activeOrder, table)}
+                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-amber-400 hover:text-amber-300"
+                            title="⚡ Auto-Print Respective KOTs (Food ➔ Kitchen KOT, Drinks ➔ Bar Posiflex)"
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>

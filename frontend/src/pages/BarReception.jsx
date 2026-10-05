@@ -27,6 +27,78 @@ export default function BarReception() {
   const [activePrintOrder, setActivePrintOrder] = useState(null);
   const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
   const [paymentFeedback, setPaymentFeedback] = useState(null);
+  const [isBridgeConnected, setIsBridgeConnected] = useState(false);
+
+  useEffect(() => {
+    const checkBridge = async () => {
+      try {
+        const res = await apiFetch('/api/printers/config');
+        if (res.ok) {
+          const cfg = await res.json();
+          setIsBridgeConnected(!!cfg.bridge_connected);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    checkBridge();
+    const interval = setInterval(checkBridge, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleDirectPrintBill = async (orderId, tableNum) => {
+    try {
+      const res = await apiFetch(`/api/printers/print-bill/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      setPaymentFeedback({
+        title: `Bill Dispatched (Table ${tableNum})`,
+        message: data.message || `Dispatched directly to Rugtek RP327 billing machine (USB001). Zero manual selection!`
+      });
+      setTimeout(() => setPaymentFeedback(null), 6000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDirectPrintBOT = async (orderId, tableNum) => {
+    try {
+      const res = await apiFetch(`/api/printers/print-bot/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      setPaymentFeedback({
+        title: `Bar BOT Dispatched (Table ${tableNum})`,
+        message: data.message || `Drinks dispatched directly to Posiflex (BAR BOT USB002). Zero manual selection!`
+      });
+      setTimeout(() => setPaymentFeedback(null), 6000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDirectPrintKOT = async (orderId, tableNum) => {
+    try {
+      const res = await apiFetch(`/api/printers/print-kot/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      setPaymentFeedback({
+        title: `Kitchen KOT Dispatched (Table ${tableNum})`,
+        message: data.message || `Food dispatched directly to Kitchen KOT (Ethernet 192.168.0.70). Zero manual selection!`
+      });
+      setTimeout(() => setPaymentFeedback(null), 6000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const openPaymentModal = (ord) => {
     setActivePaymentOrder(ord);
@@ -421,18 +493,18 @@ export default function BarReception() {
                     )}
 
                     <button
-                      onClick={() => setActivePrintOrder({ ...order, initialMode: 'BILL' })}
+                      onClick={() => handleDirectPrintBill(order.id, order.table?.table_number || 'T-01')}
                       className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
-                      title="Print 80mm Bill on Rugtek RP327 (RP327 Printer USB001)"
+                      title="Direct Print 80mm Bill to Rugtek RP327 (USB001)"
                     >
                       <Printer className="w-3.5 h-3.5 text-amber-400" /> Bill
                     </button>
 
                     {barItems.length > 0 && (
                       <button
-                        onClick={() => setActivePrintOrder({ ...order, initialMode: 'BAR' })}
+                        onClick={() => handleDirectPrintBOT(order.id, order.table?.table_number || 'T-01')}
                         className="bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-800/60 text-cyan-300 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
-                        title="Print Bar BOT to Posiflex (BAR BOT USB002)"
+                        title="Direct Print Drinks to Posiflex (BAR BOT USB002)"
                       >
                         <Wine className="w-3.5 h-3.5 text-cyan-400" /> BOT
                       </button>
@@ -440,9 +512,9 @@ export default function BarReception() {
 
                     {kitchenItems.length > 0 && (
                       <button
-                        onClick={() => setActivePrintOrder({ ...order, initialMode: 'KOT' })}
+                        onClick={() => handleDirectPrintKOT(order.id, order.table?.table_number || 'T-01')}
                         className="bg-purple-950/70 hover:bg-purple-900 border border-purple-800/60 text-purple-300 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
-                        title="Send KOT to Rugtek RP327 Kitchen Ethernet (192.168.0.70)"
+                        title="Direct Send Food to Rugtek RP327 Kitchen (192.168.0.70)"
                       >
                         <Utensils className="w-3.5 h-3.5 text-purple-400" /> KOT
                       </button>
