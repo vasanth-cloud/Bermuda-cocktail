@@ -54,9 +54,6 @@ export default function Navbar() {
   const handleTabClick = (tab) => {
     setActiveTab(tab);
     setMobileOpen(false);
-    if (autoHideOnSelect) {
-      setIsSidebarOpen(false);
-    }
   };
 
   const navItems = [
@@ -280,57 +277,16 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Left Navbar Selection Box (Always Show vs Auto-Hide) */}
-            <div className="bg-slate-900/90 border border-slate-800/90 rounded-xl p-2.5 space-y-2 mb-3 shadow-inner">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[11px] font-extrabold text-slate-300 flex items-center gap-1.5">
-                  <span>📐</span>
-                  <span>Left Navbar:</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={toggleSidebar}
-                  className="text-[10px] font-extrabold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30 transition flex items-center gap-1"
-                  title="Hide Navbar into Fullscreen"
-                >
-                  <ChevronLeft className="w-3 h-3" /> Hide Navbar
-                </button>
-              </div>
-
-              {/* Selection Options: Always Show vs Auto-Hide */}
-              <div className="grid grid-cols-2 gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800/80 text-[10px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAutoHideOnSelect(false);
-                    setIsSidebarOpen(true);
-                  }}
-                  className={`py-1.5 px-2 rounded-md transition flex items-center justify-center gap-1 ${
-                    !autoHideOnSelect
-                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title="Keep Left Navbar Pinned & Always Visible"
-                >
-                  <span>📌 Always Show</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAutoHideOnSelect(true);
-                  }}
-                  className={`py-1.5 px-2 rounded-md transition flex items-center justify-center gap-1 ${
-                    autoHideOnSelect
-                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title="Auto-hide navbar when a terminal page is selected"
-                >
-                  <span>⚡ Auto-Hide</span>
-                </button>
-              </div>
-            </div>
+            {/* Single One-Click Action: Hide Terminal */}
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="w-full bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 text-amber-300 font-extrabold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-sm mb-3 group cursor-pointer active:scale-95"
+              title="Hide Navigation Sidebar"
+            >
+              <ChevronLeft className="w-4 h-4 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
+              <span>Hide Terminal</span>
+            </button>
 
             {/* Menu Button Cards */}
             <nav className="space-y-2">

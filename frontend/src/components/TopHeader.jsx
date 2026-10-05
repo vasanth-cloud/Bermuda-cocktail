@@ -14,7 +14,8 @@ import {
   Moon, 
   Sun, 
   Sparkles,
-  Menu
+  Menu,
+  ChevronLeft
 } from 'lucide-react';
 
 export default function TopHeader() {
@@ -83,16 +84,23 @@ export default function TopHeader() {
       {/* Seamless Floating Top Controls Container */}
       <div className="sticky top-0 z-30 w-full px-4 sm:px-6 pt-3 pb-1 flex items-center justify-between pointer-events-none">
         <div className="pointer-events-auto">
-          {!isSidebarOpen && (
-            <button
-              onClick={toggleSidebar}
-              className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border-2 border-amber-500/80 text-amber-300 hover:text-amber-200 px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xl shadow-amber-500/20 transition active:scale-95 group cursor-pointer"
-              title="Open Navigation Menu"
-            >
-              <Menu className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-              <span>Show Terminals</span>
-            </button>
-          )}
+          <button
+            onClick={toggleSidebar}
+            className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border-2 border-amber-500/80 text-amber-300 hover:text-amber-200 px-3.5 py-1.5 rounded-xl text-xs font-black shadow-xl shadow-amber-500/20 transition active:scale-95 group cursor-pointer"
+            title={isSidebarOpen ? "Hide Terminal" : "Show Terminal"}
+          >
+            {isSidebarOpen ? (
+              <>
+                <ChevronLeft className="w-4 h-4 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
+                <span>Hide Terminal</span>
+              </>
+            ) : (
+              <>
+                <Menu className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                <span>Show Terminal</span>
+              </>
+            )}
+          </button>
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2 sm:gap-3 bg-slate-900/80 light:bg-white/90 backdrop-blur-xl border border-amber-500/30 p-1.5 rounded-2xl shadow-xl">
