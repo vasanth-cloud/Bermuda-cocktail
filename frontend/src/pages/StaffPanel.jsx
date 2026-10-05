@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOrder } from '../context/OrderContext';
+import { apiFetch } from '../config';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
 import ThermalReceiptModal from '../components/ThermalReceiptModal';
 import { 
