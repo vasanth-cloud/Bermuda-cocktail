@@ -90,7 +90,7 @@ function MainContent() {
 }
 
 function AppContent() {
-  const { currentUser, isCustomerQrMode, setActiveTab } = useOrder();
+  const { currentUser, isCustomerQrMode, setActiveTab, isSidebarOpen } = useOrder();
   const [guestBypass, setGuestBypass] = useState(false);
 
   // Pure Customer QR Scan Mode (e.g. ?table=DN-01) - Dedicated mobile view when NO staff user is logged in
@@ -128,8 +128,10 @@ function AppContent() {
       {/* Executive Left Vertical Navbar */}
       <Navbar />
 
-      {/* Main Content Area - Shifted right of left vertical navbar */}
-      <div className="flex-1 md:ml-64 lg:ml-72 min-w-0 z-10 flex flex-col min-h-screen">
+      {/* Main Content Area - Shifted right of left vertical navbar when open */}
+      <div className={`flex-1 transition-all duration-300 ease-in-out min-w-0 z-10 flex flex-col min-h-screen ${
+        isSidebarOpen ? 'md:ml-64 lg:ml-72' : 'ml-0'
+      }`}>
         <TopHeader />
         <MainContent />
       </div>

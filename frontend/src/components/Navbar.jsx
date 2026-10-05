@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronLeft,
   Sparkles,
   LogIn,
   LogOut,
@@ -38,7 +39,12 @@ export default function Navbar() {
     setTheme,
     isCustomerQrMode,
     currentUser,
-    logoutUser
+    logoutUser,
+    isSidebarOpen,
+    setIsSidebarOpen,
+    toggleSidebar,
+    autoHideOnSelect,
+    setAutoHideOnSelect
   } = useOrder();
 
   const [showStaffNav, setShowStaffNav] = useState(false);
@@ -48,6 +54,9 @@ export default function Navbar() {
   const handleTabClick = (tab) => {
     setActiveTab(tab);
     setMobileOpen(false);
+    if (autoHideOnSelect) {
+      setIsSidebarOpen(false);
+    }
   };
 
   const navItems = [
@@ -221,11 +230,11 @@ export default function Navbar() {
           fixed top-0 left-0 h-full z-50 bg-slate-950 border-r border-slate-800/80 text-slate-100
           flex flex-col justify-between p-4 sm:p-5 shadow-2xl transition-transform duration-300 ease-in-out
           w-64 lg:w-72 overflow-y-auto custom-scrollbar
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          ${mobileOpen ? 'translate-x-0' : (isSidebarOpen ? '-translate-x-full md:translate-x-0' : '-translate-x-full')}
         `}
       >
         {/* Top Header & Brand */}
-        <div className="space-y-5">
+        <div className="space-y-4">
           {/* Brand Header */}
           <div className="flex flex-col items-center justify-center pb-4 border-b border-slate-800/80 relative">
             <button
@@ -233,6 +242,15 @@ export default function Navbar() {
               className="md:hidden absolute top-0 right-0 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-100"
             >
               <X className="w-5 h-5" />
+            </button>
+
+            {/* Desktop Collapse / Hide Button */}
+            <button
+              onClick={toggleSidebar}
+              className="hidden md:flex absolute top-0 right-0 p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-amber-400 border border-slate-800 transition shadow-sm"
+              title="Hide Navigation Sidebar (Full Screen View)"
+            >
+              <ChevronLeft className="w-4 h-4" />
             </button>
 
             <BermudaLogo size="md" className="my-0.5" />
@@ -260,6 +278,58 @@ export default function Navbar() {
                   {showStaffNav ? 'Staff Mode' : 'Customer'}
                 </button>
               )}
+            </div>
+
+            {/* Left Navbar Selection Box (Always Show vs Auto-Hide) */}
+            <div className="bg-slate-900/90 border border-slate-800/90 rounded-xl p-2.5 space-y-2 mb-3 shadow-inner">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[11px] font-extrabold text-slate-300 flex items-center gap-1.5">
+                  <span>📐</span>
+                  <span>Left Navbar:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  className="text-[10px] font-extrabold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30 transition flex items-center gap-1"
+                  title="Hide Navbar into Fullscreen"
+                >
+                  <ChevronLeft className="w-3 h-3" /> Hide Navbar
+                </button>
+              </div>
+
+              {/* Selection Options: Always Show vs Auto-Hide */}
+              <div className="grid grid-cols-2 gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800/80 text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoHideOnSelect(false);
+                    setIsSidebarOpen(true);
+                  }}
+                  className={`py-1.5 px-2 rounded-md transition flex items-center justify-center gap-1 ${
+                    !autoHideOnSelect
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Keep Left Navbar Pinned & Always Visible"
+                >
+                  <span>📌 Always Show</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoHideOnSelect(true);
+                  }}
+                  className={`py-1.5 px-2 rounded-md transition flex items-center justify-center gap-1 ${
+                    autoHideOnSelect
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Auto-hide navbar when a terminal page is selected"
+                >
+                  <span>⚡ Auto-Hide</span>
+                </button>
+              </div>
             </div>
 
             {/* Menu Button Cards */}

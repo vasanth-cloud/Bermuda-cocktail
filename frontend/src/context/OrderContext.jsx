@@ -50,6 +50,49 @@ export const OrderProvider = ({ children }) => {
     }
   }, [theme]);
 
+  // Sidebar Visibility & Auto-Hide Preferences
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bermuda_sidebar_open');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [autoHideOnSelect, setAutoHideOnSelect] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bermuda_sidebar_autohide');
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('bermuda_sidebar_open', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const setSidebarVisibility = (val) => {
+    setIsSidebarOpen(val);
+    try {
+      localStorage.setItem('bermuda_sidebar_open', JSON.stringify(val));
+    } catch (e) {}
+  };
+
+  const setAutoHidePreference = (val) => {
+    setAutoHideOnSelect(val);
+    try {
+      localStorage.setItem('bermuda_sidebar_autohide', JSON.stringify(val));
+    } catch (e) {}
+  };
+
   // User Auth State
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -907,6 +950,11 @@ export const OrderProvider = ({ children }) => {
         setIsCustomerQrMode,
         paymentLogs,
         paymentSummary,
+        isSidebarOpen,
+        setIsSidebarOpen: setSidebarVisibility,
+        toggleSidebar,
+        autoHideOnSelect,
+        setAutoHideOnSelect: setAutoHidePreference,
         confirmOrderAsWaiter,
         addItemsToOrder,
         deleteOrderItem,
