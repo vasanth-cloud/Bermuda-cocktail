@@ -67,6 +67,7 @@ class Order(Base):
     collected_by = Column(String, nullable=True)  # Staff name or Waiter
     waiter_name = Column(String, nullable=True)  # Waiter who claimed / accepted order
     booking_platform = Column(String, nullable=True, default="Direct / Walk-in")  # Swiggy, District, Zomato, etc.
+    booking_reference_id = Column(String, nullable=True)  # Dining app booking / voucher reference ID
     discount_percentage = Column(Float, nullable=True, default=0.0)
     discount_amount = Column(Float, nullable=True, default=0.0)
     final_amount = Column(Float, nullable=True, default=0.0)

@@ -422,6 +422,9 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     b.extend(f"Server:    {waiter}\n".encode('latin-1', 'replace'))
     b.extend(f"Guest:     {customer}\n".encode('latin-1', 'replace'))
     b.extend(f"Channel:   {platform}\n".encode('latin-1', 'replace'))
+    booking_ref = order_dict.get("booking_reference_id")
+    if booking_ref and booking_ref != "-":
+        b.extend(f"Book ID:   {booking_ref}\n".encode('latin-1', 'replace'))
     b.extend(CMD_BOLD_OFF)
     b.extend(b"========================================\n")
     

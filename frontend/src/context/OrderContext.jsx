@@ -514,7 +514,8 @@ export const OrderProvider = ({ children }) => {
     bookingPlatform = "Direct / Walk-in",
     discountPercentage = 0.0,
     discountAmount = 0.0,
-    finalAmount = 0.0
+    finalAmount = 0.0,
+    bookingReferenceId = null
   ) => {
     try {
       const res = await apiFetch(`/api/orders/${orderId}/collect-payment`, {
@@ -525,6 +526,7 @@ export const OrderProvider = ({ children }) => {
           amount_collected: parseFloat(amount),
           collected_by: collectedBy,
           booking_platform: bookingPlatform,
+          booking_reference_id: bookingReferenceId || null,
           discount_percentage: parseFloat(discountPercentage || 0),
           discount_amount: parseFloat(discountAmount || 0),
           final_amount: parseFloat(finalAmount || amount)

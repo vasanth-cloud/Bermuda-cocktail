@@ -27,12 +27,13 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
       return;
     }
 
-    const headers = ["Timestamp", "Order Number", "Table", "Booking Platform", "Original Subtotal (INR)", "Discount Amount (INR)", "Net Payable Collected (INR)", "Payment Mode", "Staff (Collected By)"];
+    const headers = ["Timestamp", "Order Number", "Table", "Booking Platform", "Booking Reference ID", "Original Subtotal (INR)", "Discount Amount (INR)", "Net Payable Collected (INR)", "Payment Mode", "Staff (Collected By)"];
     const rows = paymentLogs.map(log => [
       `"${log.timestamp || ''}"`,
       `"#${log.order_number || ''}"`,
       `"${log.table_number || ''}"`,
       `"${log.booking_platform || 'Direct / Walk-in'}"`,
+      `"${log.booking_reference_id || '-'}"`,
       `"${log.subtotal_amount || log.total_amount || log.amount_collected || 0}"`,
       `"${log.discount_amount || 0}"`,
       `"${log.amount_collected || log.final_amount || 0}"`,
@@ -85,7 +86,7 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
 
   const isDeleteConfirmed = confirmText.trim().toUpperCase() === 'DELETE';
 
-  const getPlatformBadge = (plat, pct, disc) => {
+  const getPlatformBadge = (plat, pct, disc, bookingRef) => {
     let icon = '🚶';
     let badgeClass = 'bg-slate-800 text-slate-300 border-slate-700';
     const platformName = plat || 'Direct / Walk-in';
@@ -96,10 +97,15 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
     else if (platformName.includes('Other')) { icon = '🏷️'; badgeClass = 'bg-amber-950/80 text-amber-300 border-amber-800'; }
 
     return (
-      <div className="space-y-0.5">
+      <div className="space-y-1">
         <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border inline-flex items-center gap-1 ${badgeClass}`}>
           <span>{icon}</span> {platformName}
         </span>
+        {bookingRef && bookingRef !== '-' && (
+          <div className="text-[10px] font-mono text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 w-fit">
+            ID: #{bookingRef}
+          </div>
+        )}
         {(pct > 0 || disc > 0) && (
           <div className="text-[10px] font-mono text-rose-400 font-extrabold">
             🏷️ {pct > 0 ? `${pct}% OFF` : `₹${disc} OFF`}
@@ -237,7 +243,7 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
                         <td className="p-3 font-mono text-slate-400">{log.timestamp}</td>
                         <td className="p-3 font-mono text-slate-400">#{log.order_number}</td>
                         <td className="p-3 font-extrabold text-slate-100">{log.table_number}</td>
-                        <td className="p-3">{getPlatformBadge(log.booking_platform, log.discount_percentage, disc)}</td>
+                        <td className="p-3">{getPlatformBadge(log.booking_platform, log.discount_percentage, disc, log.booking_reference_id)}</td>
                         <td className="p-3">
                           <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold font-mono uppercase inline-flex items-center gap-1 ${
                             log.payment_mode === 'CASH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :

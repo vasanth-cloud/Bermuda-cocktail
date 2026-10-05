@@ -21,6 +21,7 @@ export default function BarReception() {
   const [amountCollected, setAmountCollected] = useState('');
   const [cashierName, setCashierName] = useState('Receptionist');
   const [bookingPlatform, setBookingPlatform] = useState('Direct / Walk-in');
+  const [bookingReferenceId, setBookingReferenceId] = useState('');
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
 
@@ -105,6 +106,7 @@ export default function BarReception() {
     setActivePaymentOrder(ord);
     setPaymentMode('CASH');
     setBookingPlatform(ord.booking_platform || 'Direct / Walk-in');
+    setBookingReferenceId(ord.booking_reference_id && ord.booking_reference_id !== '-' ? ord.booking_reference_id : '');
     const pct = ord.discount_percentage || 0;
     const disc = ord.discount_amount || 0;
     const sub = ord.total_amount || 0;
@@ -152,7 +154,8 @@ export default function BarReception() {
       bookingPlatform,
       discountPercentage,
       discountAmount,
-      finalNetPayable
+      finalNetPayable,
+      bookingReferenceId.trim() || null
     );
 
     if (success) {
@@ -163,13 +166,15 @@ export default function BarReception() {
         final_amount: finalNetPayable,
         discount_percentage: discountPercentage,
         discount_amount: discountAmount,
-        booking_platform: bookingPlatform
+        booking_platform: bookingPlatform,
+        booking_reference_id: bookingReferenceId.trim() || null
       };
       setActivePaymentOrder(null);
       setAmountCollected('');
       setDiscountPercentage(0);
       setDiscountAmount(0);
       setBookingPlatform('Direct / Walk-in');
+      setBookingReferenceId('');
 
       // Auto-dispatched by backend to Rugtek RP327 billing machine (USB001). No manual modal selection needed!
       setPaymentFeedback({
@@ -494,36 +499,8 @@ export default function BarReception() {
                     )}
 
                     <button
-                      onClick={() => handleDirectPrintBill(order.id, order.table?.table_number || 'T-01')}
-                      className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
-                      title="Direct Print 80mm Bill to Rugtek RP327 (USB001)"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-amber-400" /> Bill
-                    </button>
-
-                    {barItems.length > 0 && (
-                      <button
-                        onClick={() => handleDirectPrintBOT(order.id, order.table?.table_number || 'T-01')}
-                        className="bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-800/60 text-cyan-300 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
-                        title="Direct Print Drinks to Posiflex (BAR BOT USB002)"
-                      >
-                        <Wine className="w-3.5 h-3.5 text-cyan-400" /> BOT
-                      </button>
-                    )}
-
-                    {kitchenItems.length > 0 && (
-                      <button
-                        onClick={() => handleDirectPrintKOT(order.id, order.table?.table_number || 'T-01')}
-                        className="bg-purple-950/70 hover:bg-purple-900 border border-purple-800/60 text-purple-300 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center gap-1 shadow transition shrink-0"
-                        title="Direct Send Food to Rugtek RP327 Kitchen (192.168.0.70)"
-                      >
-                        <Utensils className="w-3.5 h-3.5 text-purple-400" /> KOT
-                      </button>
-                    )}
-
-                    <button
                       onClick={() => openPaymentModal(order)}
-                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-3 py-2 rounded-xl text-xs flex items-center gap-1 shadow-md transition shrink-0"
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition shrink-0 cursor-pointer"
                     >
                       <DollarSign className="w-4 h-4" /> Settle Bill
                     </button>
@@ -586,6 +563,34 @@ export default function BarReception() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* 1.1 Booking Platform ID / Voucher Number */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <label className="font-bold text-slate-300 block mb-1 text-[11px] flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span>🆔</span>
+                    <span>Platform Booking ID / Voucher Code:</span>
+                  </span>
+                  {bookingPlatform !== 'Direct / Walk-in' ? (
+                    <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                      Required for {bookingPlatform.split(' ')[0]}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 text-[10px] font-mono">Optional</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  placeholder={
+                    bookingPlatform === 'Direct / Walk-in'
+                      ? 'Optional: Guest / Direct Reference'
+                      : `Enter ${bookingPlatform.split(' ')[0]} Booking ID (e.g. #${bookingPlatform.slice(0, 3).toUpperCase()}-98234)`
+                  }
+                  value={bookingReferenceId}
+                  onChange={(e) => setBookingReferenceId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                />
               </div>
 
               {/* 2. Quick Offer Discount % Calculator */}

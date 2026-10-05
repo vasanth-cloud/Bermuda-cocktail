@@ -84,6 +84,7 @@ def startup_event():
                 "collected_by": "ALTER TABLE orders ADD COLUMN collected_by VARCHAR",
                 "waiter_name": "ALTER TABLE orders ADD COLUMN waiter_name VARCHAR",
                 "booking_platform": "ALTER TABLE orders ADD COLUMN booking_platform VARCHAR DEFAULT 'Direct / Walk-in'",
+                "booking_reference_id": "ALTER TABLE orders ADD COLUMN booking_reference_id VARCHAR",
                 "discount_percentage": "ALTER TABLE orders ADD COLUMN discount_percentage FLOAT DEFAULT 0.0",
                 "discount_amount": "ALTER TABLE orders ADD COLUMN discount_amount FLOAT DEFAULT 0.0",
                 "final_amount": "ALTER TABLE orders ADD COLUMN final_amount FLOAT DEFAULT 0.0"
@@ -933,6 +934,7 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
     order.amount_collected = req.amount_collected
     order.collected_by = req.collected_by or "Waiter"
     order.booking_platform = req.booking_platform or "Direct / Walk-in"
+    order.booking_reference_id = req.booking_reference_id or None
     order.discount_percentage = req.discount_percentage or 0.0
     order.discount_amount = req.discount_amount or 0.0
     order.final_amount = req.final_amount or req.amount_collected
@@ -964,6 +966,7 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
                     "final_amount": order.final_amount or order.amount_collected or order.total_amount,
                     "payment_mode": order.payment_mode or "CASH",
                     "booking_platform": order.booking_platform or "Direct / Walk-in",
+                    "booking_reference_id": order.booking_reference_id,
                     "items": [
                         {
                             "product_name": it.product.name if it.product else f"Item #{it.product_id}",
@@ -994,12 +997,14 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
         "payment_mode": order.payment_mode,
         "amount_collected": order.amount_collected,
         "booking_platform": order.booking_platform,
+        "booking_reference_id": order.booking_reference_id,
         "discount_percentage": order.discount_percentage,
         "discount_amount": order.discount_amount,
         "collected_by": order.collected_by
     }
     await manager.broadcast_all(event_payload)
-    return {"message": f"Payment of ₹{order.amount_collected} collected via {order.payment_mode} ({order.booking_platform})", "order_id": order.id}
+    ref_str = f" [ID: {order.booking_reference_id}]" if order.booking_reference_id else ""
+    return {"message": f"Payment of ₹{order.amount_collected} collected via {order.payment_mode} ({order.booking_platform}{ref_str})", "order_id": order.id}
 
 @app.get("/api/payments/log")
 def get_payment_logs(db: Session = Depends(get_db)):
@@ -1040,6 +1045,7 @@ def get_payment_logs(db: Session = Depends(get_db)):
             "subtotal_amount": ord.total_amount,
             "payment_mode": mode,
             "booking_platform": platform,
+            "booking_reference_id": ord.booking_reference_id or "-",
             "discount_percentage": disc_pct,
             "discount_amount": disc_amt,
             "collected_by": ord.collected_by or "Staff",

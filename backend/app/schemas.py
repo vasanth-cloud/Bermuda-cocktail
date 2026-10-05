@@ -114,6 +114,7 @@ class OrderSchema(BaseModel):
     collected_by: Optional[str] = None
     waiter_name: Optional[str] = None
     booking_platform: Optional[str] = "Direct / Walk-in"
+    booking_reference_id: Optional[str] = None
     discount_percentage: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
     final_amount: Optional[float] = 0.0
@@ -136,6 +137,7 @@ class PaymentCollectRequest(BaseModel):
     amount_collected: float
     collected_by: Optional[str] = "Waiter / Cashier"
     booking_platform: Optional[str] = "Direct / Walk-in"
+    booking_reference_id: Optional[str] = None
     discount_percentage: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
     final_amount: Optional[float] = 0.0
