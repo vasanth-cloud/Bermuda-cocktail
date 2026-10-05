@@ -105,6 +105,8 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
     }, 80);
   };
 
+  const [isSendingToBarBot, setIsSendingToBarBot] = useState(false);
+
   const handleSendBillToLan = async () => {
     setIsSendingBillToLan(true);
     setNetworkPrintStatus(null);
@@ -116,17 +118,17 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setNetworkPrintStatus({ success: true, message: data.message || `Bill sent to Cashier LAN printer!` });
+        setNetworkPrintStatus({ success: true, message: data.message || `Bill sent to Rugtek RP327 Cashier (RP327 Printer USB001)!` });
       } else {
         setNetworkPrintStatus({
           success: false,
-          message: data.message || 'Could not connect to Cashier LAN printer. Use "Print (1-Click Browser)" to print via Windows!'
+          message: data.message || 'Could not connect to Cashier printer. Use "Print (1-Click Browser)" to print via Windows!'
         });
       }
     } catch (err) {
       setNetworkPrintStatus({
         success: false,
-        message: `LAN error: ${err.message}. Use "Print (1-Click Browser)" to print directly via Windows!`
+        message: `Print error: ${err.message}. Use "Print (1-Click Browser)" to print directly via Windows!`
       });
     } finally {
       setIsSendingBillToLan(false);
@@ -144,20 +146,48 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setNetworkPrintStatus({ success: true, message: data.message || 'KOT sent to Kitchen LAN printer (RUGTEK RP326)!' });
+        setNetworkPrintStatus({ success: true, message: data.message || 'KOT sent to Kitchen Ethernet printer (Rugtek 192.168.0.70)!' });
       } else {
         setNetworkPrintStatus({
           success: false,
-          message: data.message || 'Could not connect to Kitchen LAN printer. Use "Print KOT (1-Click Browser)" to print via Windows!'
+          message: data.message || 'Could not connect to Kitchen printer. Use "Print KOT (1-Click Browser)" to print via Windows!'
         });
       }
     } catch (err) {
       setNetworkPrintStatus({
         success: false,
-        message: `LAN error: ${err.message}. Use "Print KOT (1-Click Browser)" to print directly via Windows!`
+        message: `Print error: ${err.message}. Use "Print KOT (1-Click Browser)" to print directly via Windows!`
       });
     } finally {
       setIsSendingToRugtek(false);
+    }
+  };
+
+  const handleSendToBarBot = async () => {
+    setIsSendingToBarBot(true);
+    setNetworkPrintStatus(null);
+    try {
+      const res = await apiFetch(`/api/printers/print-bot/${order.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setNetworkPrintStatus({ success: true, message: data.message || 'BOT sent to Posiflex Bar printer (BAR BOT USB002)!' });
+      } else {
+        setNetworkPrintStatus({
+          success: false,
+          message: data.message || 'Could not connect to Posiflex Bar printer. Use "Print Bar BOT (1-Click)" to print via Windows!'
+        });
+      }
+    } catch (err) {
+      setNetworkPrintStatus({
+        success: false,
+        message: `Print error: ${err.message}. Use "Print Bar BOT (1-Click)" to print directly via Windows!`
+      });
+    } finally {
+      setIsSendingToBarBot(false);
     }
   };
 
@@ -207,11 +237,11 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
   if (mode === 'KITCHEN') {
     kotItems = foodItems.length > 0 ? foodItems : allItems;
     kotTitle = 'KITCHEN ORDER TICKET (FOOD)';
-    kotPrinterHint = 'Select "Kitchen KOT / RUGTEK RP326" in Chrome print box';
+    kotPrinterHint = 'Select "KITCHEN KOT" (Rugtek Ethernet 192.168.0.70)';
   } else if (mode === 'BAR') {
     kotItems = barItems.length > 0 ? barItems : allItems;
     kotTitle = 'BAR ORDER TICKET (DRINKS)';
-    kotPrinterHint = 'Select "Bar Printer / POSIFLEX" in Chrome print box';
+    kotPrinterHint = 'Select "BAR BOT" (Posiflex USB002)';
   } else if (mode === 'ALL_KOT') {
     kotItems = allItems;
     kotTitle = 'MASTER ORDER TICKET (ALL ITEMS)';
@@ -484,7 +514,13 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
           <div className="text-[11px] text-amber-300/90 font-medium flex items-center justify-between px-1">
             <span className="flex items-center gap-1">
               <Printer className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              {mode === 'BILL' ? 'Printer: POSIFLEX PP-8800 (Billing)' : `Printer: ${kotPrinterHint}`}
+              {mode === 'BILL' 
+                ? 'Target: Rugtek RP327 (Cashier USB001 → RP327 Printer)' 
+                : mode === 'BAR'
+                ? 'Target: Posiflex (Bar BOT USB002 → BAR BOT)'
+                : mode === 'KITCHEN'
+                ? 'Target: Rugtek RP327 (Kitchen LAN → 192.168.0.70 / KITCHEN KOT)'
+                : `Target: ${kotPrinterHint}`}
             </span>
             <span className="text-[10px] font-bold text-slate-400">80mm Thermal</span>
           </div>
@@ -501,7 +537,7 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                   <Printer className="w-4 h-4 text-slate-950" /> Print Bill (1-Click Instant)
                 </button>
 
-                {/* Print Bill over LAN Socket */}
+                {/* Print Bill over Bridge / Spooler */}
                 <button
                   type="button"
                   onClick={handleSendBillToLan}
@@ -509,28 +545,49 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                   className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition disabled:opacity-50"
                 >
                   <Wifi className="w-4 h-4 text-amber-400" />
-                  {isSendingBillToLan ? 'Relaying to LAN...' : 'Relay over LAN Socket'}
+                  {isSendingBillToLan ? 'Relaying to Cashier...' : 'Relay to Cashier (RP327 Printer)'}
+                </button>
+              </>
+            ) : mode === 'BAR' ? (
+              <>
+                {/* Browser 1-Click Print */}
+                <button
+                  type="button"
+                  onClick={handleBrowserPrint}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-lg transition"
+                >
+                  <Printer className="w-4 h-4 text-white" />
+                  Print Bar BOT (1-Click)
+                </button>
+
+                {/* Send BOT to Posiflex USB */}
+                <button
+                  type="button"
+                  onClick={handleSendToBarBot}
+                  disabled={isSendingToBarBot}
+                  className="bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition disabled:opacity-50"
+                >
+                  <Wifi className="w-4 h-4 text-cyan-400" />
+                  {isSendingToBarBot ? 'Relaying to Posiflex...' : 'Relay to Bar BOT (Posiflex USB)'}
                 </button>
               </>
             ) : (
               <>
-                {/* Browser 1-Click Print (Instant Iframe Print) */}
+                {/* Browser 1-Click Print */}
                 <button
                   type="button"
                   onClick={handleBrowserPrint}
                   className={`py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-lg transition ${
                     mode === 'KITCHEN'
                       ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                      : mode === 'BAR'
-                      ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                   }`}
                 >
                   <Printer className="w-4 h-4 text-white" />
-                  Print {mode === 'KITCHEN' ? 'Kitchen KOT' : mode === 'BAR' ? 'Bar KOT' : 'Master KOT'} (1-Click)
+                  Print {mode === 'KITCHEN' ? 'Kitchen KOT' : 'Master KOT'} (1-Click)
                 </button>
 
-                {/* Send KOT over LAN Socket */}
+                {/* Send KOT to Rugtek Ethernet */}
                 <button
                   type="button"
                   onClick={handleSendToRugtek}
@@ -538,7 +595,7 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                   className="bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition disabled:opacity-50"
                 >
                   <Wifi className="w-4 h-4 text-purple-400" />
-                  {isSendingToRugtek ? 'Relaying to Kitchen...' : 'Relay to Kitchen LAN'}
+                  {isSendingToRugtek ? 'Relaying to Kitchen...' : 'Relay to Kitchen (192.168.0.70)'}
                 </button>
               </>
             )}

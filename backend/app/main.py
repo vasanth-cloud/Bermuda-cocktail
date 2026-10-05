@@ -609,19 +609,59 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
     }
 
     # Route split orders to Bar Reception & Kitchen KDS / KOT machine
+    printer_cfg = thermal_printer.load_printer_config()
+    
     if bar_items_count > 0:
         await manager.broadcast_to_channel("bar", {**order_payload, "dept_filter": "BAR"})
+        
+        # Hardware ESC/POS Print to Posiflex Bar BOT Printer (BAR BOT USB002)
+        if printer_cfg.get("auto_print_bar_kot", True) and printer_cfg.get("bar_printer_enabled", True):
+            import asyncio
+            async def _auto_print_bot_job():
+                try:
+                    b_items = [
+                        {
+                            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                            "quantity": it.quantity,
+                            "unit_price": it.unit_price,
+                            "notes": it.notes
+                        }
+                        for it in order.items
+                        if (it.target_dept or "").upper() == "BAR"
+                    ]
+                    if b_items:
+                        t_label = order.table.table_number if order.table else "ST-01"
+                        z_label = order.table.zone.display_name if order.table and order.table.zone else ""
+                        full_tbl = f"{t_label} ({z_label})" if z_label else t_label
+                        bot_data = thermal_printer.build_kot_esc_pos(
+                            order_number=order.order_number,
+                            table_label=full_tbl,
+                            waiter_name=waiter_name or "Staff",
+                            items=b_items,
+                            dept="BAR"
+                        )
+                        bar_win = printer_cfg.get("bar_printer_windows_name", "BAR BOT")
+                        await thermal_printer.print_bridge.dispatch_print(
+                            target="BAR",
+                            windows_printer=bar_win,
+                            data=bot_data,
+                            job_title=f"BOT #{order.order_number}"
+                        )
+                except Exception as ex:
+                    print(f"[AutoPrintBOT] Notice: {ex}")
+            asyncio.create_task(_auto_print_bot_job())
+
     if kitchen_items_count > 0:
         await manager.broadcast_to_channel("kitchen", {**order_payload, "dept_filter": "KITCHEN", "trigger_kot_print": True})
         
-        # Hardware ESC/POS Print to RUGTEK RP326 Kitchen LAN Printer (if configured)
-        printer_cfg = thermal_printer.load_printer_config()
+        # Hardware ESC/POS Print to Rugtek RP327 Kitchen LAN Printer (192.168.0.70:9100 / KITCHEN KOT)
         if printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
             import asyncio
             async def _auto_print_job():
                 try:
-                    k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.1.200")
+                    k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.0.70")
                     k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
+                    k_win = printer_cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
                     k_items = [
                         {
                             "product_name": it.product.name if it.product else f"Item #{it.product_id}",
@@ -643,7 +683,14 @@ async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Wait
                             items=k_items,
                             dept="KITCHEN"
                         )
-                        await thermal_printer.print_bridge.dispatch_print(target="KITCHEN", ip=k_ip, port=k_port, data=kot_data, job_title=f"KOT #{order.order_number}")
+                        await thermal_printer.print_bridge.dispatch_print(
+                            target="KITCHEN",
+                            ip=k_ip,
+                            port=k_port,
+                            windows_printer=k_win,
+                            data=kot_data,
+                            job_title=f"KOT #{order.order_number}"
+                        )
                 except Exception as ex:
                     print(f"[AutoPrintKOT] Notice: {ex}")
             asyncio.create_task(_auto_print_job())
@@ -1312,25 +1359,37 @@ async def test_printer_connection(req: dict = {}):
     target = (req.get("target") or "KITCHEN").upper()
 
     if target == "CASHIER":
-        default_ip = cfg.get("cashier_printer_ip", "192.168.1.87")
+        default_name = cfg.get("cashier_printer_model", "Rugtek RP327 (Cashier / Billing)")
+        default_win = cfg.get("cashier_printer_windows_name", "RP327 Printer")
+        default_ip = cfg.get("cashier_printer_ip", "")
         default_port = cfg.get("cashier_printer_port", 9100)
-        default_name = cfg.get("cashier_printer_name", "POSIFLEX PP-8800 / RP327 (Cashier / Billing)")
+        conn_type = f"USB Type-B (Port: {cfg.get('cashier_printer_port_name', 'USB001')} -> {default_win})"
     elif target == "BAR":
-        default_ip = cfg.get("bar_printer_ip", "192.168.1.87")
+        default_name = cfg.get("bar_printer_model", "Posiflex (Bar BOT)")
+        default_win = cfg.get("bar_printer_windows_name", "BAR BOT")
+        default_ip = cfg.get("bar_printer_ip", "")
         default_port = cfg.get("bar_printer_port", 9100)
-        default_name = cfg.get("bar_printer_name", "POSIFLEX PP-8800 (Bar KOT)")
+        conn_type = f"USB Type-B (Port: {cfg.get('bar_printer_port_name', 'USB002')} -> {default_win})"
     else:
+        default_name = cfg.get("kitchen_printer_model", "Rugtek RP327 (Kitchen KOT)")
+        default_win = cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
         default_ip = cfg.get("kitchen_printer_ip", "192.168.0.70")
         default_port = cfg.get("kitchen_printer_port", 9100)
-        default_name = cfg.get("kitchen_printer_name", "RUGTEK RP327 / RP326 (Kitchen KOT)")
+        conn_type = f"Ethernet LAN ({default_ip}:{default_port})"
 
+    name = req.get("printer_name") or default_name
+    win_name = req.get("windows_printer") or default_win
     ip = req.get("ip") or default_ip
     port = int(req.get("port") or default_port)
-    name = req.get("printer_name") or default_name
 
-    test_slip_bytes = thermal_printer.build_test_slip(printer_name=name, ip=ip, port=port)
+    test_slip_bytes = thermal_printer.build_test_slip(printer_name=name, ip=ip, port=port, connection_type=conn_type)
     success, message = await thermal_printer.print_bridge.dispatch_print(
-        target=target, ip=ip, port=port, data=test_slip_bytes, job_title=f"{name} Test Slip"
+        target=target,
+        ip=ip,
+        port=port,
+        windows_printer=win_name,
+        data=test_slip_bytes,
+        job_title=f"{name} Hardware Test"
     )
 
     return {
@@ -1339,6 +1398,7 @@ async def test_printer_connection(req: dict = {}):
         "ip": ip,
         "port": port,
         "target": target,
+        "windows_printer": win_name,
         "bridge_active": thermal_printer.print_bridge.is_connected()
     }
 
@@ -1351,6 +1411,7 @@ async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(g
     cfg = thermal_printer.load_printer_config()
     ip = req.get("ip") or cfg.get("kitchen_printer_ip", "192.168.0.70")
     port = int(req.get("port") or cfg.get("kitchen_printer_port", 9100))
+    win_name = req.get("windows_printer") or cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
 
     # Filter kitchen food items
     kitchen_items = [
@@ -1389,13 +1450,81 @@ async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(g
     )
 
     success, message = await thermal_printer.print_bridge.dispatch_print(
-        target="KITCHEN", ip=ip, port=port, data=kot_bytes, job_title=f"KOT #{order.order_number}"
+        target="KITCHEN",
+        ip=ip,
+        port=port,
+        windows_printer=win_name,
+        data=kot_bytes,
+        job_title=f"KOT #{order.order_number}"
     )
     return {
         "success": success,
         "message": message,
         "order_number": order.order_number,
         "items_printed": len(kitchen_items),
+        "target": "KITCHEN",
+        "bridge_active": thermal_printer.print_bridge.is_connected()
+    }
+
+@app.post("/api/printers/print-bot/{order_id}")
+async def print_order_bot(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+    """Prints Bar Order Ticket (BOT) for cocktails & drinks to Posiflex (BAR BOT USB002)."""
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    cfg = thermal_printer.load_printer_config()
+    win_name = req.get("windows_printer") or cfg.get("bar_printer_windows_name", "BAR BOT")
+
+    # Filter bar drink items
+    bar_items = [
+        {
+            "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+            "quantity": it.quantity,
+            "unit_price": it.unit_price,
+            "notes": it.notes
+        }
+        for it in order.items
+        if (it.target_dept or "").upper() == "BAR"
+    ]
+
+    if not bar_items:
+        bar_items = [
+            {
+                "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "unit_price": it.unit_price,
+                "notes": it.notes
+            }
+            for it in order.items
+        ]
+
+    table_str = order.table.table_number if order.table else "T-01"
+    zone_str = order.table.zone.display_name if order.table and order.table.zone else ""
+    table_label = f"{table_str} ({zone_str})" if zone_str else table_str
+
+    bot_bytes = thermal_printer.build_kot_esc_pos(
+        order_number=order.order_number,
+        table_label=table_label,
+        waiter_name=order.waiter_name or order.collected_by or "Staff",
+        items=bar_items,
+        dept="BAR",
+        created_at_str=order.created_at.strftime("%d-%b-%Y %I:%M %p") if order.created_at else None
+    )
+
+    success, message = await thermal_printer.print_bridge.dispatch_print(
+        target="BAR",
+        windows_printer=win_name,
+        data=bot_bytes,
+        job_title=f"BOT #{order.order_number}"
+    )
+    return {
+        "success": success,
+        "message": message,
+        "order_number": order.order_number,
+        "items_printed": len(bar_items),
+        "target": "BAR",
+        "windows_printer": win_name,
         "bridge_active": thermal_printer.print_bridge.is_connected()
     }
 
@@ -1406,7 +1535,8 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Order not found")
 
     cfg = thermal_printer.load_printer_config()
-    ip = req.get("ip") or cfg.get("cashier_printer_ip", "192.168.1.87")
+    win_name = req.get("windows_printer") or cfg.get("cashier_printer_windows_name", "RP327 Printer")
+    ip = req.get("ip") or cfg.get("cashier_printer_ip", "")
     port = int(req.get("port") or cfg.get("cashier_printer_port", 9100))
 
     order_dict = {
@@ -1432,14 +1562,19 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
 
     bill_bytes = thermal_printer.build_bill_esc_pos(order_dict)
     success, message = await thermal_printer.print_bridge.dispatch_print(
-        target="CASHIER", ip=ip, port=port, data=bill_bytes, job_title=f"Bill #{order.order_number}"
+        target="CASHIER",
+        ip=ip,
+        port=port,
+        windows_printer=win_name,
+        data=bill_bytes,
+        job_title=f"Bill #{order.order_number}"
     )
     return {
         "success": success,
         "message": message,
         "order_number": order.order_number,
-        "ip": ip,
-        "port": port,
+        "target": "CASHIER",
+        "windows_printer": win_name,
         "bridge_active": thermal_printer.print_bridge.is_connected()
     }
 

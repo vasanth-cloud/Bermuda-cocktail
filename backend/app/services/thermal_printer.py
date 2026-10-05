@@ -7,18 +7,29 @@ from typing import Optional, Dict, Any, List, Tuple
 CONFIG_FILE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "printer_config.json"))
 
 DEFAULT_PRINTER_CONFIG = {
-    "kitchen_printer_name": "RUGTEK RP327 / RP326 (Kitchen KOT)",
+    "kitchen_printer_name": "KITCHEN KOT",
+    "kitchen_printer_model": "Rugtek RP327 (Kitchen KOT)",
+    "kitchen_printer_connection": "Ethernet",
     "kitchen_printer_ip": "192.168.0.70",
     "kitchen_printer_port": 9100,
+    "kitchen_printer_windows_name": "KITCHEN KOT",
     "kitchen_printer_enabled": True,
     "auto_print_kot": True,
-    "cashier_printer_name": "POSIFLEX PP-8800 / RP327 (Cashier / Bar Billing)",
-    "cashier_printer_ip": "192.168.1.87",
+    "cashier_printer_name": "RP327 Printer",
+    "cashier_printer_model": "Rugtek RP327 (Cashier / Billing)",
+    "cashier_printer_connection": "USB",
+    "cashier_printer_windows_name": "RP327 Printer",
+    "cashier_printer_port_name": "USB001",
+    "cashier_printer_ip": "",
     "cashier_printer_port": 9100,
     "cashier_printer_enabled": True,
     "auto_print_bill": True,
-    "bar_printer_name": "POSIFLEX PP-8800 (Bar KOT)",
-    "bar_printer_ip": "192.168.1.87",
+    "bar_printer_name": "BAR BOT",
+    "bar_printer_model": "Posiflex (Bar BOT)",
+    "bar_printer_connection": "USB",
+    "bar_printer_windows_name": "BAR BOT",
+    "bar_printer_port_name": "USB002",
+    "bar_printer_ip": "",
     "bar_printer_port": 9100,
     "bar_printer_enabled": True,
     "auto_print_bar_kot": True,
@@ -76,10 +87,54 @@ def save_printer_config(config: Dict[str, Any]) -> Dict[str, Any]:
         return config
 
 
+def send_to_windows_printer(printer_name: str, data: bytes, job_title: str = "Bermuda Print Job") -> Tuple[bool, str]:
+    """
+    Sends raw ESC/POS bytes directly to a Windows local USB or networked printer via win32print spooler.
+    Works for USB Type-B printers like Posiflex (BAR BOT USB002) and Rugtek RP327 (RP327 Printer USB001).
+    """
+    if not printer_name or not printer_name.strip():
+        return False, "Windows printer name is not specified"
+
+    try:
+        import win32print
+    except ImportError:
+        return False, "win32print module not installed (run: pip install pywin32)"
+
+    try:
+        installed = [p[2] for p in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)]
+        target_clean = printer_name.strip()
+        matched_printer = None
+        for p in installed:
+            if p.lower() == target_clean.lower():
+                matched_printer = p
+                break
+        if not matched_printer:
+            for p in installed:
+                if target_clean.lower() in p.lower():
+                    matched_printer = p
+                    break
+        actual_name = matched_printer or target_clean
+
+        hPrinter = win32print.OpenPrinter(actual_name)
+        try:
+            hJob = win32print.StartDocPrinter(hPrinter, 1, (job_title, None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                win32print.WritePrinter(hPrinter, data)
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
+        return True, f"Printed successfully to Windows printer '{actual_name}'"
+    except Exception as e:
+        return False, f"Windows printer '{printer_name}' error: {str(e)}"
+
+
 def send_raw_esc_pos(ip: str, port: int, data: bytes, timeout: float = 3.0) -> Tuple[bool, str]:
     """
     Sends raw ESC/POS command bytes to a network thermal printer over TCP socket.
-    Works for RUGTEK RP326 and any standard ESC/POS Ethernet/Wi-Fi printer.
+    Works for Rugtek RP327 Kitchen KOT (192.168.0.70:9100) and any standard ESC/POS Ethernet printer.
     """
     if not ip or not ip.strip():
         return False, "Printer IP address is not specified"
@@ -102,8 +157,9 @@ def send_raw_esc_pos(ip: str, port: int, data: bytes, timeout: float = 3.0) -> T
 class PrintBridgeManager:
     """
     Manages WebSocket connections to local POS counter machines inside the pub.
-    Allows the cloud backend (elitedominators.com) to print over raw LAN sockets (192.168.x.x)
-    via a lightweight relay running on the counter PC.
+    Allows the cloud backend (elitedominators.com) to print over:
+    - USB Type-B via Windows Spooler (Posiflex -> BAR BOT USB002, Rugtek RP327 -> RP327 Printer USB001)
+    - LAN socket (Rugtek RP327 -> 192.168.0.70:9100 / KITCHEN KOT)
     """
     def __init__(self):
         self.active_bridges: Dict[str, Any] = {}
@@ -124,11 +180,20 @@ class PrintBridgeManager:
     def get_connected_bridges(self) -> List[str]:
         return list(self.active_bridges.keys())
 
-    async def dispatch_print(self, target: str, ip: str, port: int, data: bytes, job_title: str) -> Tuple[bool, str]:
+    async def dispatch_print(
+        self,
+        target: str,
+        ip: str = "",
+        port: int = 9100,
+        windows_printer: str = "",
+        data: bytes = b"",
+        job_title: str = "Bermuda Job"
+    ) -> Tuple[bool, str]:
         """
         Dispatches print jobs:
-        1. If a local print bridge is connected (POS machine in pub), forwards job via WebSocket.
-        2. Otherwise, attempts direct LAN socket connection (works when running locally in pub).
+        1. If local print bridge is connected (POS machine in pub), forwards job via WebSocket.
+        2. Otherwise, if on Windows and windows_printer specified, prints via Windows Spooler.
+        3. If IP is specified, attempts direct TCP socket connection (e.g. Kitchen 192.168.0.70).
         """
         import base64
 
@@ -139,6 +204,7 @@ class PrintBridgeManager:
                 "target": target,
                 "ip": ip,
                 "port": port,
+                "windows_printer": windows_printer,
                 "job_title": job_title,
                 "data_b64": b64_data
             }
@@ -153,18 +219,31 @@ class PrintBridgeManager:
             for d in dead:
                 self.unregister(d)
             if sent:
-                return True, f"Print job '{job_title}' relayed to local POS bridge ({', '.join(self.active_bridges.keys())}) for direct LAN delivery to {ip}:{port}"
+                dest = f"Windows '{windows_printer}'" if windows_printer else f"{ip}:{port}"
+                return True, f"Print job '{job_title}' relayed to local POS bridge ({', '.join(self.active_bridges.keys())}) -> {dest}"
 
-        # Direct LAN socket attempt (works when backend is running on local pub network)
-        return send_raw_esc_pos(ip=ip, port=port, data=data)
+        # If backend is running directly on Windows PC, try Windows Spooler first for USB printers
+        if windows_printer and os.name == 'nt':
+            win_ok, win_msg = send_to_windows_printer(windows_printer, data, job_title)
+            if win_ok:
+                return True, win_msg
+
+        # Direct LAN socket attempt for network printer (e.g. Kitchen 192.168.0.70)
+        if ip and ip.strip():
+            return send_raw_esc_pos(ip=ip, port=port, data=data)
+
+        # Fallback error
+        if windows_printer:
+            return False, f"Print bridge offline and cannot reach Windows printer '{windows_printer}'. Start Start_Print_Bridge.bat on counter PC."
+        return False, "No valid printer destination or bridge available."
 
 
 print_bridge = PrintBridgeManager()
 
 
-def build_test_slip(printer_name: str, ip: str, port: int) -> bytes:
+def build_test_slip(printer_name: str, ip: str = "", port: int = 9100, connection_type: str = "Thermal 80mm") -> bytes:
     """
-    Constructs a test page to verify network receipt printer functionality.
+    Constructs a test page to verify printer functionality.
     """
     now = datetime.now().strftime("%d-%b-%Y %I:%M %p")
     cfg = load_printer_config()
@@ -182,18 +261,21 @@ def build_test_slip(printer_name: str, ip: str, port: int) -> bytes:
     b.extend(b"------------------------------------------\n")
     b.extend(CMD_ALIGN_LEFT)
     b.extend(f"Printer:  {printer_name}\n".encode('latin-1', 'replace'))
-    b.extend(f"IP:       {ip}:{port}\n".encode('latin-1', 'replace'))
+    b.extend(f"Type:     {connection_type}\n".encode('latin-1', 'replace'))
+    if ip:
+        b.extend(f"Network:  {ip}:{port}\n".encode('latin-1', 'replace'))
     b.extend(f"Time:     {now}\n".encode('latin-1', 'replace'))
-    b.extend(f"Status:   ONLINE & READY TO PRINT\n".encode('latin-1', 'replace'))
+    b.extend(f"Status:   ONLINE & TEST VERIFIED\n".encode('latin-1', 'replace'))
     b.extend(b"------------------------------------------\n")
     b.extend(CMD_ALIGN_CENTER)
     b.extend(CMD_BOLD_ON)
-    b.extend(b"RUGTEK RP326 & POSIFLEX INTEGRATION\n")
+    b.extend(b"HARDWARE INTEGRATION ACTIVE\n")
     b.extend(CMD_BOLD_OFF)
-    b.extend(b"KOT Routing: Auto-Split to Kitchen\n")
-    b.extend(b"Bill Printing: 80mm High Precision\n")
+    b.extend(b"- Posiflex (Bar BOT): USB002\n")
+    b.extend(b"- Rugtek RP327 (Cashier): USB001\n")
+    b.extend(b"- Rugtek RP327 (Kitchen): 192.168.0.70\n")
     b.extend(b"==========================================\n")
-    b.extend(b"Enjoy seamless service!\n")
+    b.extend(b"Print Test Passed Successfully!\n")
     b.extend(CMD_FEED_AND_CUT)
     return bytes(b)
 
