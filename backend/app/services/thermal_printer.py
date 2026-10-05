@@ -380,7 +380,18 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     subtotal = float(order_dict.get("total_amount") or 0.0)
     discount_pct = float(order_dict.get("discount_percentage") or 0.0)
     discount_amt = float(order_dict.get("discount_amount") or 0.0)
-    final_amt = float(order_dict.get("final_amount") or (subtotal - discount_amt))
+    
+    # Ensure discount_amt is calculated if discount_pct is provided
+    if discount_amt <= 0.0 and discount_pct > 0.0:
+        discount_amt = round((subtotal * discount_pct) / 100.0, 2)
+        
+    # Accurate Net Payable: Subtotal minus Discount
+    if discount_amt > 0.0:
+        final_amt = max(0.0, subtotal - discount_amt)
+    elif order_dict.get("final_amount") is not None:
+        final_amt = max(0.0, float(order_dict.get("final_amount")))
+    else:
+        final_amt = subtotal
     
     b = bytearray()
     b.extend(CMD_INIT)

@@ -113,7 +113,7 @@ export default function BarReception() {
     setDiscountPercentage(pct);
     setDiscountAmount(disc);
     const calculatedNet = disc > 0 ? sub - disc : (pct > 0 ? sub - (sub * pct)/100 : sub);
-    setAmountCollected(calculatedNet > 0 ? calculatedNet.toFixed(2) : sub.toString());
+    setAmountCollected(Math.max(0, calculatedNet).toFixed(2));
   };
 
   // Only show orders that have been reviewed and accepted by a waiter!
@@ -142,9 +142,9 @@ export default function BarReception() {
 
   const handleRecordPayment = async (e) => {
     e.preventDefault();
-    if (!activePaymentOrder || !amountCollected) return;
+    if (!activePaymentOrder || amountCollected === '' || amountCollected === undefined) return;
 
-    const finalNetPayable = parseFloat(amountCollected);
+    const finalNetPayable = parseFloat(amountCollected || 0);
 
     const success = await collectPayment(
       activePaymentOrder.id,

@@ -557,22 +557,32 @@ export const OrderProvider = ({ children }) => {
     bookingPlatform = "Direct / Walk-in",
     discountPercentage = 0.0,
     discountAmount = 0.0,
-    finalAmount = 0.0,
+    finalAmount = null,
     bookingReferenceId = null
   ) => {
     try {
+      const parsedSubtotal = parseFloat(amount || 0);
+      const parsedDiscountPct = parseFloat(discountPercentage || 0);
+      let parsedDiscountAmt = parseFloat(discountAmount || 0);
+      if (parsedDiscountAmt <= 0 && parsedDiscountPct > 0) {
+        parsedDiscountAmt = parseFloat(((parsedSubtotal * parsedDiscountPct) / 100).toFixed(2));
+      }
+      const computedFinal = (finalAmount !== null && finalAmount !== undefined && !isNaN(finalAmount))
+        ? parseFloat(finalAmount)
+        : (parsedDiscountAmt > 0 ? Math.max(0, parsedSubtotal - parsedDiscountAmt) : parsedSubtotal);
+
       const res = await apiFetch(`/api/orders/${orderId}/collect-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payment_mode: paymentMode,
-          amount_collected: parseFloat(amount),
+          amount_collected: computedFinal,
           collected_by: collectedBy,
           booking_platform: bookingPlatform,
           booking_reference_id: bookingReferenceId || null,
-          discount_percentage: parseFloat(discountPercentage || 0),
-          discount_amount: parseFloat(discountAmount || 0),
-          final_amount: parseFloat(finalAmount || amount)
+          discount_percentage: parsedDiscountPct,
+          discount_amount: parsedDiscountAmt,
+          final_amount: computedFinal
         })
       });
       if (!res.ok) throw new Error("Payment collection failed");

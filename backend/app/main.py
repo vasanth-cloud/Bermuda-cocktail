@@ -938,13 +938,24 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
 
     order.payment_status = "COLLECTED"
     order.payment_mode = req.payment_mode
-    order.amount_collected = req.amount_collected
     order.collected_by = req.collected_by or "Waiter"
     order.booking_platform = req.booking_platform or "Direct / Walk-in"
     order.booking_reference_id = req.booking_reference_id or None
-    order.discount_percentage = req.discount_percentage or 0.0
-    order.discount_amount = req.discount_amount or 0.0
-    order.final_amount = req.final_amount or req.amount_collected
+    order.discount_percentage = float(req.discount_percentage or 0.0)
+    order.discount_amount = float(req.discount_amount or 0.0)
+
+    sub = float(order.total_amount or 0.0)
+    if order.discount_amount <= 0.0 and order.discount_percentage > 0.0:
+        order.discount_amount = round((sub * order.discount_percentage) / 100.0, 2)
+
+    if order.discount_amount > 0.0:
+        order.final_amount = max(0.0, sub - order.discount_amount)
+    elif req.final_amount is not None:
+        order.final_amount = float(req.final_amount)
+    else:
+        order.final_amount = sub
+
+    order.amount_collected = order.final_amount
     order.status = "BILLED"
 
     if order.table:
@@ -967,10 +978,10 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
                     "table_number": f"{order.table.table_number} ({order.table.zone.display_name})" if order.table and order.table.zone else (order.table.table_number if order.table else "T-01"),
                     "customer_name": order.customer_name or "Guest",
                     "waiter_name": order.waiter_name or order.collected_by or "Staff",
-                    "total_amount": order.total_amount,
-                    "discount_percentage": order.discount_percentage or 0.0,
-                    "discount_amount": order.discount_amount or 0.0,
-                    "final_amount": order.final_amount or order.amount_collected or order.total_amount,
+                    "total_amount": float(order.total_amount or 0.0),
+                    "discount_percentage": float(order.discount_percentage or 0.0),
+                    "discount_amount": float(order.discount_amount or 0.0),
+                    "final_amount": float(order.final_amount if order.final_amount is not None else max(0.0, (order.total_amount or 0.0) - (order.discount_amount or 0.0))),
                     "payment_mode": order.payment_mode or "CASH",
                     "booking_platform": order.booking_platform or "Direct / Walk-in",
                     "booking_reference_id": order.booking_reference_id,
@@ -1669,10 +1680,10 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
         "table_number": f"{order.table.table_number} ({order.table.zone.display_name})" if order.table and order.table.zone else (order.table.table_number if order.table else "T-01"),
         "customer_name": order.customer_name or "Guest",
         "waiter_name": order.waiter_name or order.collected_by or "Staff",
-        "total_amount": order.total_amount,
-        "discount_percentage": order.discount_percentage or 0.0,
-        "discount_amount": order.discount_amount or 0.0,
-        "final_amount": order.final_amount or order.amount_collected or order.total_amount,
+        "total_amount": float(order.total_amount or 0.0),
+        "discount_percentage": float(order.discount_percentage or 0.0),
+        "discount_amount": float(order.discount_amount or 0.0),
+        "final_amount": float(order.final_amount if order.final_amount is not None else max(0.0, (order.total_amount or 0.0) - (order.discount_amount or 0.0))),
         "payment_mode": order.payment_mode or "PENDING",
         "booking_platform": order.booking_platform or "Direct / Walk-in",
         "items": [

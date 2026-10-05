@@ -15,7 +15,9 @@ import {
   Sun, 
   Sparkles,
   Menu,
-  ChevronLeft
+  ChevronLeft,
+  Mail,
+  Phone
 } from 'lucide-react';
 
 export default function TopHeader() {
@@ -101,6 +103,47 @@ export default function TopHeader() {
               </>
             )}
           </button>
+        </div>
+
+        {/* Top Center: Powered by Harvid Tech */}
+        <div className="pointer-events-auto hidden sm:flex items-center gap-2 lg:gap-3 px-3.5 py-1.5 rounded-full bg-slate-900/90 light:bg-white/95 backdrop-blur-md border border-amber-500/40 shadow-xl shadow-black/40 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" />
+            <span className="text-[11px] text-slate-400 font-medium">Powered by</span>
+            <span className="text-amber-400 light:text-amber-600 font-black tracking-wide">Harvid Tech</span>
+          </div>
+
+          <span className="text-slate-600 font-bold">•</span>
+
+          <a 
+            href="mailto:harvidtech@gmail.com" 
+            className="flex items-center gap-1.5 text-slate-300 light:text-slate-700 hover:text-amber-300 transition text-[11px] font-mono group"
+            title="Email Harvid Tech"
+          >
+            <Mail className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span className="underline decoration-slate-600 group-hover:decoration-amber-400">harvidtech@gmail.com</span>
+          </a>
+
+          <span className="text-slate-600 font-bold">•</span>
+
+          <a 
+            href="tel:6381901759" 
+            className="flex items-center gap-1.5 text-slate-300 light:text-slate-700 hover:text-emerald-400 transition text-[11px] font-mono font-bold group"
+            title="Call Harvid Tech"
+          >
+            <Phone className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <span className="underline decoration-slate-600 group-hover:decoration-emerald-400">6381901759</span>
+          </a>
+        </div>
+
+        {/* Mobile Compact View */}
+        <div className="pointer-events-auto flex sm:hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/90 backdrop-blur-md border border-amber-500/30 text-[10px] shadow-lg">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-amber-300 font-black">Harvid Tech</span>
+          <span className="text-slate-600">•</span>
+          <a href="tel:6381901759" className="text-emerald-400 font-mono font-bold flex items-center gap-0.5">
+            <Phone className="w-2.5 h-2.5" /> 6381901759
+          </a>
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2 sm:gap-3 bg-slate-900/80 light:bg-white/90 backdrop-blur-xl border border-amber-500/30 p-1.5 rounded-2xl shadow-xl">

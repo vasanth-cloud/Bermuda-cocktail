@@ -219,9 +219,14 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
   });
 
   const subtotal = Number(order.total_amount || 0);
-  const discountAmt = Number(order.discount_amount || 0);
+  let discountAmt = Number(order.discount_amount || 0);
   const discountPct = Number(order.discount_percentage || 0);
-  const finalTotal = Number(order.final_amount || (subtotal - discountAmt));
+  if (discountAmt <= 0 && discountPct > 0) {
+    discountAmt = Number(((subtotal * discountPct) / 100).toFixed(2));
+  }
+  const finalTotal = discountAmt > 0 
+    ? Math.max(0, subtotal - discountAmt) 
+    : (order.final_amount !== undefined && order.final_amount !== null ? Number(order.final_amount) : subtotal);
 
   const allItems = order.items || [];
 
