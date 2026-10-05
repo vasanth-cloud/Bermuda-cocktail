@@ -47,21 +47,21 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
             }
             @media print {
               html, body {
-                width: 68mm !important;
-                max-width: 68mm !important;
+                width: 63mm !important;
+                max-width: 63mm !important;
                 margin: 0 auto !important;
-                padding: 1mm 1.5mm !important;
+                padding: 1mm 2.5mm 1mm 1mm !important;
               }
             }
             html, body {
               margin: 0 auto;
-              padding: 1mm 1.5mm;
-              width: 68mm;
-              max-width: 68mm;
+              padding: 1mm 2.5mm 1mm 1mm;
+              width: 63mm;
+              max-width: 63mm;
               background: #ffffff !important;
               color: #000000 !important;
               font-family: Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-              font-size: 11.5px !important;
+              font-size: 11px !important;
               font-weight: 700 !important;
               line-height: 1.25 !important;
               -webkit-print-color-adjust: exact;
@@ -90,10 +90,10 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
             .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             table.receipt-table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
             table.receipt-table th, table.receipt-table td { padding: 2px 0px !important; overflow: hidden !important; word-wrap: break-word !important; }
-            .col-item { width: 46% !important; text-align: left !important; }
-            .col-qty  { width: 12% !important; text-align: center !important; }
-            .col-rate { width: 21% !important; text-align: right !important; }
-            .col-amt  { width: 21% !important; text-align: right !important; }
+            .col-item { width: 43% !important; text-align: left !important; }
+            .col-qty  { width: 11% !important; text-align: center !important; }
+            .col-rate { width: 22% !important; text-align: right !important; }
+            .col-amt  { width: 24% !important; text-align: right !important; padding-right: 2mm !important; }
             .rounded { border-radius: 4px; }
             .p-1 { padding: 4px; }
             .p-2 { padding: 8px; }
@@ -373,7 +373,7 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
             <div
               id="printable-thermal-content"
               className="printable-thermal-receipt bg-white text-black p-3 rounded-lg font-sans font-bold text-[11px] shadow-sm leading-tight select-none"
-              style={{ maxWidth: '68mm', margin: '0 auto' }}
+              style={{ maxWidth: '63mm', margin: '0 auto' }}
             >
               {mode === 'BILL' ? (
                 /* --- 80mm CUSTOMER FINAL BILL (Includes Food & Drinks Together) --- */

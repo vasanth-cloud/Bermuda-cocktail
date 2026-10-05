@@ -39,6 +39,10 @@ export default function StaffPanel() {
   const [modalCategoryFilter, setModalCategoryFilter] = useState('ALL');
   const [itemsToAdd, setItemsToAdd] = useState([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [orderFeedback, setOrderFeedback] = useState(null);
+
+
+
 
   // Format table label (e.g. DN-15 -> D15, SZ-10 -> S10, C1 -> C1)
   const formatTableLabel = (num) => {
@@ -150,8 +154,18 @@ export default function StaffPanel() {
   const handleConfirmOrder = async (orderId) => {
     setConfirmingOrderId(orderId);
     const claimingWaiter = currentUser?.name || waiterName || 'Waiter';
-    await confirmOrderAsWaiter(orderId, claimingWaiter);
+    const targetOrd = allOrders.find(o => o.id === orderId);
+    const success = await confirmOrderAsWaiter(orderId, claimingWaiter);
     setConfirmingOrderId(null);
+    if (success) {
+      const tblStr = targetOrd?.table?.table_number || 'ST-01';
+      setOrderFeedback({
+        type: 'order_accepted',
+        title: `Order Accepted for Table ${tblStr}!`,
+        message: `⚡ Automatic Hardware Routing Active: Food sent to Kitchen KOT (Ethernet 192.168.0.70), Drinks sent to Posiflex (BAR BOT USB002). No manual selection needed!`
+      });
+      setTimeout(() => setOrderFeedback(null), 6000);
+    }
   };
 
   const handleConfirmPayment = async (e) => {
@@ -175,9 +189,17 @@ export default function StaffPanel() {
 
     if (success) {
       const orderJustPaid = { ...activePaymentOrder, payment_status: 'COLLECTED', payment_mode: paymentMode };
+      const tblStr = orderJustPaid.table?.table_number || 'T-01';
       setActivePaymentOrder(null);
       setAmountCollected('');
-      setActivePrintOrder(orderJustPaid);
+      // Auto-dispatched by backend to RP327 Printer USB001! No manual modal selection needed.
+      setOrderFeedback({
+        type: 'bill_paid',
+        title: `Payment Collected for Table ${tblStr}!`,
+        message: `💰 Final Bill (Food + Drinks unified) auto-dispatched to Rugtek RP327 billing machine (USB001). No manual selection needed!`,
+        order: orderJustPaid
+      });
+      setTimeout(() => setOrderFeedback(null), 8000);
     }
   };
 
@@ -246,6 +268,39 @@ export default function StaffPanel() {
             <span>Category & Sales Reports</span>
           </button>
         </div>
+
+        {/* Dynamic Hardware Auto-Print Feedback Banner */}
+        {orderFeedback && (
+          <div className={`p-4 rounded-2xl border-2 shadow-2xl flex items-center justify-between transition-all animate-in fade-in duration-300 ${
+            orderFeedback.type === 'order_accepted' 
+              ? 'bg-gradient-to-r from-emerald-950/95 via-slate-900 to-emerald-950/95 border-emerald-500 text-emerald-100' 
+              : 'bg-gradient-to-r from-amber-950/95 via-slate-900 to-amber-950/95 border-amber-500 text-amber-100'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${
+                orderFeedback.type === 'order_accepted' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+              }`}>
+                {orderFeedback.type === 'order_accepted' ? '🚀' : '💰'}
+              </div>
+              <div>
+                <h4 className="font-black text-sm text-white flex items-center gap-2">
+                  {orderFeedback.title}
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-black/40 text-emerald-400 border border-emerald-500/30">
+                    AUTOMATIC HARDWARE ROUTING
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-200 mt-0.5">{orderFeedback.message}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setOrderFeedback(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition text-sm font-bold ml-4"
+              title="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Customer QR Order Requests Awaiting Waiter Confirmation */}
         {pendingCustomerOrderRequests.length > 0 && (
@@ -987,9 +1042,16 @@ export default function StaffPanel() {
                       await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, claimingWaiter);
                       setItemsToAdd([]);
                     }
+                    const tblStr = editingOrderForWaiter.table?.table_number || 'ST-01';
                     await confirmOrderAsWaiter(editingOrderForWaiter.id, claimingWaiter);
                     setIsSavingEdit(false);
                     setEditingOrderForWaiter(null);
+                    setOrderFeedback({
+                      type: 'order_accepted',
+                      title: `Order Accepted for Table ${tblStr}!`,
+                      message: `⚡ Automatic Hardware Routing Active: Food sent to Kitchen KOT (Ethernet 192.168.0.70), Drinks sent to Posiflex (BAR BOT USB002). No manual selection needed!`
+                    });
+                    setTimeout(() => setOrderFeedback(null), 8000);
                   }}
                   className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
                 >

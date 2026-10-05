@@ -26,6 +26,7 @@ export default function BarReception() {
   // Thermal Printing & Settings State
   const [activePrintOrder, setActivePrintOrder] = useState(null);
   const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
+  const [paymentFeedback, setPaymentFeedback] = useState(null);
 
   const openPaymentModal = (ord) => {
     setActivePaymentOrder(ord);
@@ -97,8 +98,12 @@ export default function BarReception() {
       setDiscountAmount(0);
       setBookingPlatform('Direct / Walk-in');
 
-      // Automatically open 80mm thermal receipt preview for POSIFLEX USB printing
-      setActivePrintOrder({ ...settledOrder, initialMode: 'BILL' });
+      // Auto-dispatched by backend to Rugtek RP327 billing machine (USB001). No manual modal selection needed!
+      setPaymentFeedback({
+        title: `Payment Settled for Table ${settledOrder.table?.table_number || 'T-01'}!`,
+        message: `💰 Final Bill (Food + Drinks unified) auto-dispatched to Rugtek RP327 billing machine (USB001). Zero manual selection needed!`
+      });
+      setTimeout(() => setPaymentFeedback(null), 8000);
     }
   };
 
@@ -179,6 +184,32 @@ export default function BarReception() {
           </div>
         </div>
       </div>
+
+      {/* Payment Auto-Print Feedback Banner */}
+      {paymentFeedback && (
+        <div className="mb-6 p-4 rounded-2xl border-2 border-emerald-500 bg-gradient-to-r from-emerald-950/95 via-slate-900 to-emerald-950/95 shadow-2xl flex items-center justify-between text-emerald-100 animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xl shrink-0">
+              💰
+            </div>
+            <div>
+              <h4 className="font-black text-sm text-white flex items-center gap-2">
+                {paymentFeedback.title}
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-black/40 text-emerald-400 border border-emerald-500/30">
+                  AUTO-PRINTED TO BILLING MACHINE
+                </span>
+              </h4>
+              <p className="text-xs text-slate-200 mt-0.5">{paymentFeedback.message}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setPaymentFeedback(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition text-sm font-bold ml-4"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Station Selector Bar (ALL, BAR DRINKS, KITCHEN FOOD) */}
       <div className="flex items-center gap-2 mb-6 bg-slate-900/80 p-2 rounded-2xl border border-slate-800">

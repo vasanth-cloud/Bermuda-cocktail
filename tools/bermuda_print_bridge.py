@@ -50,18 +50,13 @@ DEFAULT_PRINTER_MAPPING = {
 }
 
 
-def get_server_url():
-    if len(sys.argv) > 1:
-        return sys.argv[1]
-    return os.environ.get("BERMUDA_BACKEND_WS_URL", DEFAULT_CLOUD_WS_URL)
-
-
-def print_banner(server_url):
+def print_banner(server_urls):
     print("\n" + "=" * 68)
     print("   THE BERMUDA COCKTAIL - CLOUD-TO-HARDWARE MULTI-PRINTER BRIDGE")
     print("=" * 68)
-    print(f" [*] Cloud Server:          {server_url}")
     print(f" [*] Machine Hostname:      {socket.gethostname()}")
+    for u in server_urls:
+        print(f" [*] Server Listening:      {u}")
     print(" [*] BAR BOT (Posiflex):    USB Type-B  -> 'BAR BOT' (USB002)")
     print(" [*] Cashier (Rugtek RP327): USB Type-B  -> 'RP327 Printer' (USB001)")
     print(" [*] Kitchen (Rugtek RP327): Ethernet    -> 192.168.0.70:9100 / 'KITCHEN KOT'")
@@ -69,7 +64,8 @@ def print_banner(server_url):
         print(" [*] Windows Spooler:       ACTIVE (win32print loaded)")
     else:
         print(" [!] Windows Spooler:       NOT LOADED (run: pip install pywin32)")
-    print("=" * 68 + "\n")
+    print("=" * 68)
+    print(" >>> AUTO-PRINT ACTIVE: Orders will print automatically to target machines! <<<\n")
 
 
 def find_windows_printer(target_name: str):
@@ -194,18 +190,17 @@ def dispatch_local_print(job: dict):
         return False
 
 
-async def run_bridge():
-    server_url = get_server_url()
-    client_name = socket.gethostname()
+async def listen_to_server(server_url: str, client_name: str):
     full_url = f"{server_url}?client_id={client_name}"
-
-    print_banner(server_url)
-
+    tag = "LOCAL" if ("localhost" in server_url or "127.0.0.1" in server_url) else "CLOUD"
+    is_first_attempt = True
     while True:
         try:
-            print(f"[{time.strftime('%H:%M:%S')}] Connecting to Bermuda Cloud Server...")
+            if is_first_attempt:
+                print(f"[{time.strftime('%H:%M:%S')}] [{tag}] Connecting to {server_url}...")
             async with websockets.connect(full_url, ping_interval=20, ping_timeout=20) as ws:
-                print(f"[{time.strftime('%H:%M:%S')}] >>> BRIDGE ONLINE! Listening for print orders from cloud/LAN <<<\n")
+                print(f"[{time.strftime('%H:%M:%S')}] [{tag} ONLINE] >>> BRIDGE CONNECTED TO {server_url} <<<\n")
+                is_first_attempt = False
                 
                 await ws.send(json.dumps({
                     "status": "READY",
@@ -225,14 +220,30 @@ async def run_bridge():
                         if action == "PRINT":
                             dispatch_local_print(job)
                     except Exception as err:
-                        print(f" [!] Error processing job: {err}")
+                        print(f" [!] Error processing job from {tag}: {err}")
 
-        except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError, OSError) as ex:
-            print(f"[{time.strftime('%H:%M:%S')}] Connection dropped ({ex}). Reconnecting in 5 seconds...")
+        except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError, OSError):
+            is_first_attempt = False
             await asyncio.sleep(5)
         except Exception as ex:
-            print(f"[{time.strftime('%H:%M:%S')}] Unexpected error: {ex}. Retrying in 5 seconds...")
+            is_first_attempt = False
             await asyncio.sleep(5)
+
+
+async def run_bridge():
+    client_name = socket.gethostname()
+    urls = []
+    if len(sys.argv) > 1:
+        urls.append(sys.argv[1])
+    else:
+        urls = [DEFAULT_CLOUD_WS_URL, LOCAL_FALLBACK_WS_URL]
+        custom = os.environ.get("BERMUDA_BACKEND_WS_URL")
+        if custom and custom not in urls:
+            urls.insert(0, custom)
+
+    print_banner(urls)
+    tasks = [listen_to_server(url, client_name) for url in urls]
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
