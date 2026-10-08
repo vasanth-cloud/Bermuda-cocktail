@@ -1,6 +1,10 @@
 import React from 'react';
+import { useOrder } from '../context/OrderContext';
 
 export default function BermudaLogo({ size = 'md', variant = 'dashboard', className = '' }) {
+  const { theme } = useOrder?.() || {};
+  const isLight = theme === 'light' || (typeof document !== 'undefined' && document.documentElement.classList.contains('light'));
+
   const sizeClasses = {
     sm: 'w-24 sm:w-28',
     md: 'w-36 sm:w-44',
@@ -8,7 +12,9 @@ export default function BermudaLogo({ size = 'md', variant = 'dashboard', classN
     xl: 'w-56 sm:w-64',
   };
 
-  const logoSrc = variant === 'login' ? '/login_logo.png' : '/dashboard_logo.png';
+  const logoSrc = isLight
+    ? '/dashboard_logo_light.png'
+    : (variant === 'login' ? '/login_logo.png' : '/dashboard_logo.png');
 
   return (
     <div className={`inline-flex items-center justify-center shrink-0 ${className}`}>
@@ -16,7 +22,7 @@ export default function BermudaLogo({ size = 'md', variant = 'dashboard', classN
         <img
           src={logoSrc}
           alt="The BerMuda - A Cocktail Commune"
-          className={`${sizeClasses[size] || sizeClasses.md} h-auto object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-lg`}
+          className={`${sizeClasses[size] || sizeClasses.md} h-auto object-contain transition-transform duration-300 group-hover:scale-105 ${isLight ? 'drop-shadow-sm' : 'drop-shadow-lg'}`}
         />
       </div>
     </div>
