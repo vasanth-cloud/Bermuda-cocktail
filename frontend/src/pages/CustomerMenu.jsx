@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useOrder } from '../context/OrderContext';
 import { getAssetUrl } from '../config';
 import BermudaLogo from '../components/BermudaLogo';
+import WaiterAddonModal from '../components/WaiterAddonModal';
 import { 
   ShoppingBag, Plus, Minus, Check, Wine, Utensils, Search, 
-  Sparkles, Clock, ChevronDown, ChevronUp, AlertCircle, Receipt, X 
+  Sparkles, Clock, ChevronDown, ChevronUp, AlertCircle, Receipt, X, Tag
 } from 'lucide-react';
 
 const productThumbnails = {
@@ -60,6 +61,7 @@ export default function CustomerMenu() {
     cart,
     addToCart,
     updateCartQuantity,
+    updateCartItemNotes,
     submitOrder,
     activeCustomerOrder,
     allOrders,
@@ -76,6 +78,7 @@ export default function CustomerMenu() {
   const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(true);
   const [customerName, setCustomerName] = useState('Guest');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeAddonCartItem, setActiveAddonCartItem] = useState(null);
 
   const tableActiveOrder = allOrders?.find(o => o.table_id === selectedTable?.id && o.status !== 'BILLED');
 
@@ -516,34 +519,73 @@ export default function CustomerMenu() {
               {/* Cart Items List */}
               <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
                 {cart.map((item) => (
-                  <div key={item.product_id} className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-200 flex items-center gap-1.5">
-                        {item.product.name}
-                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                          (item.product?.target_dept || '').toUpperCase() === 'BAR' ? 'bg-purple-900 text-purple-300' : 'bg-emerald-900 text-emerald-300'
-                        }`}>
-                          {(item.product?.target_dept || '').toUpperCase() === 'BAR' ? 'Bar' : 'Kitchen'}
-                        </span>
+                  <div key={item.product_id} className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                          {item.product.name}
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                            (item.product?.target_dept || '').toUpperCase() === 'BAR' ? 'bg-purple-900 text-purple-300' : 'bg-emerald-900 text-emerald-300'
+                          }`}>
+                            {(item.product?.target_dept || '').toUpperCase() === 'BAR' ? 'Bar' : 'Kitchen'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">₹{item.product.price} x {item.quantity} = ₹{item.product.price * item.quantity}</div>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">₹{item.product.price} x {item.quantity} = ₹{item.product.price * item.quantity}</div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => updateCartQuantity(item.product_id, -1)}
+                          className="w-6 h-6 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center justify-center text-xs font-bold"
+                        >
+                          -
+                        </button>
+                        <span className="font-black text-xs text-amber-400 w-4 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => updateCartQuantity(item.product_id, 1)}
+                          className="w-6 h-6 rounded bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-xs"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => updateCartQuantity(item.product_id, -1)}
-                        className="w-6 h-6 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center justify-center text-xs font-bold"
-                      >
-                        -
-                      </button>
-                      <span className="font-black text-xs text-amber-400 w-4 text-center">{item.quantity}</span>
-                      <button
-                        onClick={() => updateCartQuantity(item.product_id, 1)}
-                        className="w-6 h-6 rounded bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-xs"
-                      >
-                        +
-                      </button>
-                    </div>
+                    {/* Waiter-Only Add-on Configuration Row */}
+                    {currentUser && (
+                      <div className="pt-1.5 border-t border-slate-900 flex items-center justify-between">
+                        {item.notes ? (
+                          <div className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                            <Tag className="w-3 h-3 text-amber-400" />
+                            <span>Add-on:</span>
+                            <strong className="text-amber-200">{item.notes}</strong>
+                            <button
+                              type="button"
+                              onClick={() => setActiveAddonCartItem(item)}
+                              className="text-amber-400 hover:text-white underline ml-1 text-[9px]"
+                            >
+                              Change
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateCartItemNotes(item.product_id, '')}
+                              className="text-rose-400 hover:text-rose-300 ml-0.5 p-0.5"
+                              title="Remove Add-on"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setActiveAddonCartItem(item)}
+                            className="text-[10px] bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1.5 active:scale-95"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add Add-on (1/2, Quarter, Spicy...)</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -566,6 +608,22 @@ export default function CustomerMenu() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Waiter Addon Modal for Menu Cart */}
+      {currentUser && (
+        <WaiterAddonModal
+          isOpen={Boolean(activeAddonCartItem)}
+          onClose={() => setActiveAddonCartItem(null)}
+          itemName={activeAddonCartItem?.product?.name || 'Item'}
+          currentNotes={activeAddonCartItem?.notes || ''}
+          onApply={(notes) => {
+            if (activeAddonCartItem) {
+              updateCartItemNotes(activeAddonCartItem.product_id, notes);
+            }
+            setActiveAddonCartItem(null);
+          }}
+        />
       )}
     </div>
   );

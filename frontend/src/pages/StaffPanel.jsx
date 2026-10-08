@@ -3,18 +3,20 @@ import { useOrder } from '../context/OrderContext';
 import { apiFetch } from '../config';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
 import ThermalReceiptModal from '../components/ThermalReceiptModal';
+import WaiterAddonModal from '../components/WaiterAddonModal';
 import { 
   Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, 
   ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check, Edit2, 
-  Trash2, Search, X, Printer, Eye, LogOut, HelpCircle, RefreshCw, Layers, BarChart3
+  Trash2, Search, X, Printer, Eye, LogOut, HelpCircle, RefreshCw, Layers, BarChart3, Tag
 } from 'lucide-react';
 
 export default function StaffPanel() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const { 
     tables, zones, setSelectedTable, setActiveTab, allOrders, 
-    collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter, 
-    addItemsToOrder, deleteOrderItem, products, categories, logoutUser, currentUser 
+    collectPayment, updateOrderStatus, updateItemStatus, confirmOrderAsWaiter, claimOrderAsWaiter,
+    addItemsToOrder, deleteOrderItem, updateOrderItemNotes, products, categories, logoutUser, currentUser,
+    staffUsers
   } = useOrder();
 
   // Search & Filter state for POS Top Bar
@@ -31,6 +33,24 @@ export default function StaffPanel() {
   const [waiterName, setWaiterName] = useState(currentUser?.name || 'Waiter');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
+  const [claimingOrderId, setClaimingOrderId] = useState(null);
+  const [orderAssignedWaiters, setOrderAssignedWaiters] = useState({});
+
+  // Active Floor Waiters for multi-waiter assignment (6-10 staff members on floor)
+  const activeWaitersList = React.useMemo(() => {
+    const names = new Set();
+    if (currentUser?.name) names.add(currentUser.name);
+    if (waiterName) names.add(waiterName);
+    if (staffUsers && staffUsers.length > 0) {
+      staffUsers
+        .filter(u => u.is_active !== false && (u.role === 'WAITER' || u.role === 'ADMIN' || u.role === 'STAFF'))
+        .forEach(u => names.add(u.name));
+    }
+    names.add('Vasanth Admin');
+    names.add('PADMESH');
+    names.add('Ajaykumar');
+    return Array.from(names).filter(Boolean);
+  }, [currentUser, waiterName, staffUsers]);
 
   // Print Bill / KOT Modal State
   const [activePrintOrder, setActivePrintOrder] = useState(null);
@@ -41,6 +61,16 @@ export default function StaffPanel() {
   const [itemsToAdd, setItemsToAdd] = useState([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [orderFeedback, setOrderFeedback] = useState(null);
+
+  // Waiter EDC Add-ons Modal State
+  const [activeAddonTarget, setActiveAddonTarget] = useState(null);
+  const [pendingItemNotes, setPendingItemNotes] = useState({});
+
+  const openOrderEditModal = (order) => {
+    setEditingOrderForWaiter(order);
+    setItemsToAdd([]);
+    setPendingItemNotes({});
+  };
 
 
 
@@ -79,6 +109,14 @@ export default function StaffPanel() {
           label: 'PENDING ACCEPT',
           type: 'PENDING_WAITER',
           cardClass: 'bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-slate-950 border-4 border-amber-200 shadow-xl shadow-amber-500/60 animate-pulse font-black'
+        };
+      }
+
+      if (activeOrder.status === 'ATTENDING' || activeOrder.status === 'CLAIMED') {
+        return {
+          label: `ATTENDING (${activeOrder.waiter_name || 'WAITER'})`,
+          type: 'ATTENDING',
+          cardClass: 'bg-gradient-to-br from-indigo-800 via-indigo-700 to-slate-900 text-indigo-100 border-2 border-indigo-400 shadow-lg shadow-indigo-950/50 font-bold'
         };
       }
 
@@ -131,9 +169,9 @@ export default function StaffPanel() {
     };
   };
 
-  // Customer order requests awaiting Waiter confirmation at table
+  // Customer order requests awaiting Waiter confirmation at table (new or attending)
   const pendingCustomerOrderRequests = allOrders.filter(
-    (ord) => ord.status === 'PENDING' || ord.status === 'PENDING_WAITER'
+    (ord) => ord.status === 'PENDING' || ord.status === 'PENDING_WAITER' || ord.status === 'ATTENDING' || ord.status === 'CLAIMED'
   );
 
   // Find all items that are READY for pickup across all active orders
@@ -207,18 +245,38 @@ export default function StaffPanel() {
     }
   };
 
-  const handleConfirmOrder = async (orderId) => {
+  const handleClaimOrder = async (orderId, explicitWaiter = null) => {
+    setClaimingOrderId(orderId);
+    const chosenWaiter = explicitWaiter || orderAssignedWaiters[orderId] || currentUser?.name || waiterName || activeWaitersList[0] || 'Waiter';
+    const success = await claimOrderAsWaiter(orderId, chosenWaiter);
+    setClaimingOrderId(null);
+    if (success) {
+      const targetOrd = allOrders.find(o => o.id === orderId);
+      const tblStr = targetOrd?.table?.table_number || 'ST-01';
+      setOrderFeedback({
+        type: 'order_accepted',
+        title: `Table ${tblStr} Assigned to ${chosenWaiter}!`,
+        message: `Order marked as Attending. Walk to customer table, review items, and configure add-ons (1/2, Quarter, Spicy...) before sending to Bar & Kitchen.`
+      });
+      setTimeout(() => setOrderFeedback(null), 5000);
+      if (targetOrd) {
+        openOrderEditModal({ ...targetOrd, waiter_name: chosenWaiter, status: 'ATTENDING' });
+      }
+    }
+  };
+
+  const handleConfirmOrder = async (orderId, explicitWaiter = null) => {
     setConfirmingOrderId(orderId);
-    const claimingWaiter = currentUser?.name || waiterName || 'Waiter';
     const targetOrd = allOrders.find(o => o.id === orderId);
+    const claimingWaiter = explicitWaiter || targetOrd?.waiter_name || orderAssignedWaiters[orderId] || currentUser?.name || waiterName || 'Waiter';
     const success = await confirmOrderAsWaiter(orderId, claimingWaiter);
     setConfirmingOrderId(null);
     if (success) {
       const tblStr = targetOrd?.table?.table_number || 'ST-01';
       setOrderFeedback({
         type: 'order_accepted',
-        title: `Order Accepted for Table ${tblStr}!`,
-        message: `⚡ Automatic Hardware Routing Active: Food sent to Kitchen KOT (Ethernet 192.168.0.70), Drinks sent to Posiflex (BAR BOT USB002). No manual selection needed!`
+        title: `Order Confirmed for Table ${tblStr}!`,
+        message: `⚡ Automatic Hardware Routing Active: Food sent to Kitchen KOT (Ethernet 192.168.0.70), Drinks sent to Posiflex (BAR BOT USB002). Handled by ${claimingWaiter}.`
       });
       setTimeout(() => setOrderFeedback(null), 6000);
     }
@@ -379,68 +437,145 @@ export default function StaffPanel() {
           </div>
         )}
 
-        {/* Customer QR Order Requests Awaiting Waiter Confirmation */}
-        {pendingCustomerOrderRequests.length > 0 && (
-          <div className="bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500 p-4 rounded-xl shadow-2xl space-y-3 animate-pulse">
-            <div className="flex items-center justify-between border-b border-amber-500/40 pb-2">
-              <div className="flex items-center gap-2 font-black text-amber-300 text-xs uppercase tracking-wider">
-                <Bell className="w-5 h-5 text-amber-400 animate-bounce" />
-                <span>📩 {pendingCustomerOrderRequests.length} Customer QR Order(s) Awaiting Waiter Acceptance</span>
+        {/* Customer QR Order Requests Awaiting Waiter Confirmation & Add-ons */}
+        {pendingCustomerOrderRequests.length > 0 && (() => {
+          const unacceptedCount = pendingCustomerOrderRequests.filter(o => o.status === 'PENDING' || o.status === 'PENDING_WAITER').length;
+          const attendingCount = pendingCustomerOrderRequests.filter(o => o.status === 'ATTENDING' || o.status === 'CLAIMED').length;
+
+          return (
+            <div className={`p-4 rounded-xl shadow-2xl space-y-3 border-2 transition ${
+              unacceptedCount > 0 
+                ? 'bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-amber-500' 
+                : 'bg-gradient-to-r from-indigo-950/90 via-slate-900 to-indigo-950/90 border-indigo-500'
+            }`}>
+              <div className="flex items-center justify-between border-b border-white/10 pb-2 flex-wrap gap-2">
+                <div className="flex items-center gap-2 font-black text-amber-300 text-xs uppercase tracking-wider">
+                  <Bell className="w-5 h-5 text-amber-400 animate-bounce" />
+                  <span>
+                    📩 {pendingCustomerOrderRequests.length} Customer QR Order(s) Awaiting Waiter Action 
+                    <span className="text-[11px] font-mono text-slate-300 ml-1.5 lowercase">
+                      ({unacceptedCount} new, {attendingCount} attending table)
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-amber-200 bg-amber-900/60 px-2.5 py-1 rounded-full border border-amber-500/50">
+                    Logged in Waiter: <strong className="text-white font-extrabold">{currentUser?.name || waiterName || 'Waiter'}</strong>
+                  </span>
+                </div>
               </div>
-              <span className="text-[11px] font-bold text-amber-200 bg-amber-900/60 px-2.5 py-1 rounded-full border border-amber-500/50">
-                Logged in Waiter: <strong className="text-white font-extrabold">{currentUser?.name || waiterName || 'Waiter'}</strong>
-              </span>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {pendingCustomerOrderRequests.map((ord) => {
-                const itemsSummary = ord.items ? ord.items.map(i => `${i.quantity}x ${i.product?.name || i.product_name || 'Item'}`).join(', ') : '';
-                return (
-                  <div key={ord.id} className="bg-slate-950 border-2 border-amber-400 p-3.5 rounded-xl space-y-2.5 text-xs shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] text-amber-400 font-mono font-bold">{ord.order_number}</span>
-                        <h4 className="font-black text-slate-100 text-base">Table {ord.table?.table_number || 'ST-01'}</h4>
-                        <span className="text-[11px] text-slate-300">Customer: <strong>{ord.customer_name || 'Guest'}</strong></span>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {pendingCustomerOrderRequests.map((ord) => {
+                  const isAttending = ord.status === 'ATTENDING' || ord.status === 'CLAIMED';
+                  const assignedWaiter = orderAssignedWaiters[ord.id] || ord.waiter_name || currentUser?.name || waiterName || activeWaitersList[0] || 'Waiter';
+                  const itemsSummary = ord.items ? ord.items.map(i => `${i.quantity}x ${i.product?.name || i.product_name || 'Item'}${i.notes ? ` [🏷️ ${i.notes}]` : ''}`).join(', ') : '';
+
+                  return (
+                    <div 
+                      key={ord.id} 
+                      className={`p-3.5 rounded-xl space-y-2.5 text-xs shadow-lg transition border-2 ${
+                        isAttending 
+                          ? 'bg-slate-950 border-indigo-500/80 shadow-indigo-950/50' 
+                          : 'bg-slate-950 border-amber-400 shadow-amber-950/50'
+                      }`}
+                    >
+                      {/* Top Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] text-amber-400 font-mono font-bold">{ord.order_number}</span>
+                            {isAttending ? (
+                              <span className="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-1.5 py-0.5 rounded font-black uppercase">
+                                🟢 Attending Table
+                              </span>
+                            ) : (
+                              <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-black uppercase">
+                                🚨 Awaiting Waiter
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-black text-slate-100 text-base mt-0.5">Table {ord.table?.table_number || 'ST-01'}</h4>
+                          <span className="text-[11px] text-slate-300">Customer: <strong>{ord.customer_name || 'Guest'}</strong></span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-black text-amber-400 text-base">₹{ord.total_amount}</div>
+                          <span className="text-[10px] text-amber-300/80 font-mono">{getElapsedTimeStr(ord.created_at)} ago</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-black text-amber-400 text-base">₹{ord.total_amount}</div>
-                        <span className="text-[10px] text-amber-300/80 font-mono">{getElapsedTimeStr(ord.created_at)} ago</span>
+
+                      {/* Items Summary */}
+                      {itemsSummary && (
+                        <div className="bg-slate-900 border border-slate-800 p-2 rounded text-[11px] text-slate-200 line-clamp-2">
+                          <strong>Items:</strong> {itemsSummary}
+                        </div>
+                      )}
+
+                      {/* Multi-Waiter Selection Dropdown (6-10 Staff Floor Routing) */}
+                      <div className="flex items-center justify-between gap-2 bg-slate-900/90 border border-slate-800 p-1.5 rounded-lg">
+                        <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                          {isAttending ? '👤 Attended By:' : '👤 Assign Waiter:'}
+                        </span>
+                        <select
+                          value={assignedWaiter}
+                          onChange={(e) => {
+                            const newW = e.target.value;
+                            setOrderAssignedWaiters(prev => ({ ...prev, [ord.id]: newW }));
+                            if (isAttending) {
+                              claimOrderAsWaiter(ord.id, newW);
+                            }
+                          }}
+                          className="bg-slate-950 text-amber-300 border border-slate-700 hover:border-amber-400 rounded px-2 py-0.5 text-xs font-bold w-full max-w-[170px] focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          {activeWaitersList.map(w => (
+                            <option key={w} value={w}>{w}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => openOrderEditModal({ ...ord, waiter_name: assignedWaiter })}
+                          className="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/50 px-3 py-2 rounded-lg text-xs font-black transition flex items-center gap-1.5 shadow"
+                          title="Configure Waiter Add-ons (Half, Quarter, Spicy, etc.)"
+                        >
+                          <Tag className="w-3.5 h-3.5 text-amber-400" />
+                          <span>🏷️ {isAttending ? 'Review Add-ons' : 'Edit & Add-ons'}</span>
+                        </button>
+
+                        {!isAttending ? (
+                          <button
+                            type="button"
+                            disabled={claimingOrderId === ord.id}
+                            onClick={() => handleClaimOrder(ord.id, assignedWaiter)}
+                            className="flex-1 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 px-3 py-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md active:scale-95"
+                            title="Accept this order, mark attending, and open add-on options to ask customer at table"
+                          >
+                            <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
+                            {claimingOrderId === ord.id ? 'Claiming...' : `🙋 Accept & Take Order (${assignedWaiter})`}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={confirmingOrderId === ord.id}
+                            onClick={() => handleConfirmOrder(ord.id, assignedWaiter)}
+                            className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 px-3 py-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95"
+                            title="Add-ons verified with customer. Dispatch KOT to Kitchen & Bar printers"
+                          >
+                            <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
+                            {confirmingOrderId === ord.id ? 'Routing...' : `⚡ Confirm & Send KOT (${assignedWaiter})`}
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    {itemsSummary && (
-                      <div className="bg-slate-900 border border-slate-800 p-2 rounded text-[11px] text-slate-200 line-clamp-2">
-                        <strong>Items:</strong> {itemsSummary}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingOrderForWaiter(ord);
-                          setItemsToAdd([]);
-                        }}
-                        className="bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" /> Edit
-                      </button>
-
-                      <button
-                        disabled={confirmingOrderId === ord.id}
-                        onClick={() => handleConfirmOrder(ord.id)}
-                        className="flex-1 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 px-3 py-2 rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md"
-                      >
-                        <Check className="w-4 h-4 text-slate-950" />
-                        {confirmingOrderId === ord.id ? 'Routing...' : `⚡ ACCEPT ORDER (${currentUser?.name || waiterName || 'Waiter'})`}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Live Pickup Alert Banner for Waiters */}
         {readyItemsForPickup.length > 0 && (
@@ -524,10 +659,7 @@ export default function StaffPanel() {
                         <div
                           key={table.id}
                           onClick={() => {
-                            if (activeOrder) {
-                              setEditingOrderForWaiter(activeOrder);
-                              setItemsToAdd([]);
-                            }
+                            if (activeOrder) openOrderEditModal(activeOrder);
                           }}
                           className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
                           title={`Customer order awaiting acceptance at Table ${table.table_number}`}
@@ -535,7 +667,7 @@ export default function StaffPanel() {
                           <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
                             <span className="font-extrabold text-slate-950">{getElapsedTimeStr(activeOrder.created_at)}</span>
                             <span className="font-black bg-slate-950 text-amber-300 px-1 py-0.5 rounded text-[8px] uppercase">
-                              📩 ACCEPT
+                              📩 NEW
                             </span>
                           </div>
 
@@ -550,16 +682,66 @@ export default function StaffPanel() {
 
                           <button
                             type="button"
-                            disabled={confirmingOrderId === activeOrder?.id}
+                            disabled={claimingOrderId === activeOrder?.id}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (activeOrder) handleConfirmOrder(activeOrder.id);
+                              if (activeOrder) handleClaimOrder(activeOrder.id);
                             }}
                             className="w-full bg-slate-950 hover:bg-slate-900 text-amber-400 py-1 rounded text-[10px] font-black transition flex items-center justify-center gap-1 shadow"
                           >
                             <Check className="w-3 h-3 text-amber-400" />
-                            {confirmingOrderId === activeOrder?.id ? 'Routing...' : 'ACCEPT'}
+                            {claimingOrderId === activeOrder?.id ? 'Claiming...' : 'TAKE ORDER'}
                           </button>
+                        </div>
+                      );
+                    }
+
+                    // 2b. ATTENDING TABLE CARD (INDIGO GLOW)
+                    if (statusStyle.type === 'ATTENDING') {
+                      return (
+                        <div
+                          key={table.id}
+                          onClick={() => {
+                            if (activeOrder) openOrderEditModal(activeOrder);
+                          }}
+                          className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
+                          title={`Order being attended by ${activeOrder?.waiter_name || 'Waiter'} at Table ${table.table_number}`}
+                        >
+                          <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
+                            <span className="font-extrabold text-indigo-200">{getElapsedTimeStr(activeOrder.created_at)}</span>
+                            <span className="font-bold truncate max-w-[65px] text-amber-300">
+                              👤 {activeOrder?.waiter_name || 'Waiter'}
+                            </span>
+                          </div>
+
+                          <div className="text-center my-0.5">
+                            <div className="text-base font-black leading-tight tracking-tight text-white">
+                              {tableLabel}
+                            </div>
+                            <div className="text-[11px] font-extrabold leading-none text-indigo-200">
+                              ₹{activeOrder?.total_amount || 0}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => openOrderEditModal(activeOrder)}
+                              className="flex-1 bg-slate-950/80 hover:bg-slate-900 text-amber-400 py-1 rounded text-[9px] font-black transition flex items-center justify-center gap-0.5 border border-amber-500/40"
+                              title="Review / Edit Add-ons"
+                            >
+                              <Tag className="w-2.5 h-2.5" /> ADD-ON
+                            </button>
+                            <button
+                              type="button"
+                              disabled={confirmingOrderId === activeOrder?.id}
+                              onClick={() => handleConfirmOrder(activeOrder.id)}
+                              className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-1 rounded text-[9px] font-black transition flex items-center justify-center gap-0.5 shadow"
+                              title="Confirm & Send to Kitchen/Bar"
+                            >
+                              <Check className="w-2.5 h-2.5 stroke-[3]" /> KOT
+                            </button>
+                          </div>
                         </div>
                       );
                     }
@@ -573,8 +755,7 @@ export default function StaffPanel() {
                         key={table.id}
                         onClick={() => {
                           if (activeOrder) {
-                            setEditingOrderForWaiter(activeOrder);
-                            setItemsToAdd([]);
+                            openOrderEditModal(activeOrder);
                           } else {
                             setSelectedTable(table);
                             setActiveTab('customer');
@@ -619,15 +800,14 @@ export default function StaffPanel() {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (activeOrder) {
-                                setEditingOrderForWaiter(activeOrder);
-                                setItemsToAdd([]);
+                                openOrderEditModal(activeOrder);
                               } else {
                                 setSelectedTable(table);
                                 setActiveTab('customer');
                               }
                             }}
                             className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-white"
-                            title="View / Edit Order Items"
+                            title="View / Edit Order Items & Add-ons"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
@@ -806,7 +986,7 @@ export default function StaffPanel() {
         <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl relative my-auto overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 shrink-0 bg-slate-900">
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 shrink-0 bg-slate-900 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
                   <Edit2 className="w-5 h-5" />
@@ -814,45 +994,130 @@ export default function StaffPanel() {
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
                     Edit & Add Items — Table {formatTableLabel(editingOrderForWaiter.table?.table_number || 'D1')}
+                    <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded font-mono font-bold">
+                      {editingOrderForWaiter.status || 'ATTENDING'}
+                    </span>
                   </h3>
-                  <p className="text-[11px] sm:text-xs text-slate-400">Add extra drinks/dishes requested by customer at table before confirming.</p>
+                  <p className="text-[11px] sm:text-xs text-slate-400">Ask customer for portions (1/2, Quarter), spices, or add-ons before sending to Bar & Kitchen.</p>
                 </div>
               </div>
-              <button
-                onClick={() => setEditingOrderForWaiter(null)}
-                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100 shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                {/* Waiter Selection in Modal */}
+                <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-700 px-2.5 py-1 rounded-xl text-xs font-bold text-amber-300 shadow-sm">
+                  <span className="text-slate-400 text-[10px] shrink-0">👤 Waiter:</span>
+                  <select
+                    value={editingOrderForWaiter.waiter_name || currentUser?.name || waiterName || activeWaitersList[0] || 'Waiter'}
+                    onChange={(e) => {
+                      const newW = e.target.value;
+                      setEditingOrderForWaiter(prev => ({ ...prev, waiter_name: newW }));
+                      if (editingOrderForWaiter.id) {
+                        setOrderAssignedWaiters(prev => ({ ...prev, [editingOrderForWaiter.id]: newW }));
+                      }
+                    }}
+                    className="bg-transparent text-amber-300 font-bold focus:outline-none cursor-pointer"
+                  >
+                    {activeWaitersList.map(w => (
+                      <option key={w} value={w} className="bg-slate-900 text-slate-100">{w}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => setEditingOrderForWaiter(null)}
+                  className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-slate-100 shrink-0"
+                  title="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Body */}
             <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-4 text-xs">
 
             {/* Current Items in Order */}
-            <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Requested Items:</div>
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                {editingOrderForWaiter.items.map((it) => (
-                  <div key={it.id} className="flex items-center justify-between bg-slate-900 p-2.5 rounded-lg text-xs border border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-amber-400 font-bold">{it.quantity}x</span>
-                      <span className="font-bold text-slate-200">{it.product?.name || `Product #${it.product_id}`}</span>
-                      <span className="text-slate-400">₹{it.unit_price * it.quantity}</span>
+            <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <span className="flex items-center gap-1.5">
+                  <Utensils className="w-3.5 h-3.5 text-amber-400" /> Current Requested Items:
+                </span>
+                <span className="text-[10px] text-amber-300 font-mono font-normal">
+                  Tap + Add-on to set 1/2, Quarter, Spicy...
+                </span>
+              </div>
+              <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                {editingOrderForWaiter.items.map((it) => {
+                  const effectiveNote = pendingItemNotes[it.id] !== undefined ? pendingItemNotes[it.id] : (it.notes || '');
+                  const pName = it.product?.name || `Product #${it.product_id}`;
+                  return (
+                    <div key={it.id} className="bg-slate-900 p-2.5 rounded-xl text-xs border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-amber-400 font-extrabold">{it.quantity}x</span>
+                          <span className="font-bold text-slate-100">{pName}</span>
+                          <span className="text-slate-400 font-mono">₹{it.unit_price * it.quantity}</span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            await deleteOrderItem(it.id);
+                            const updated = allOrders.find(o => o.id === editingOrderForWaiter.id);
+                            if (updated) setEditingOrderForWaiter(updated);
+                          }}
+                          className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/10 transition"
+                          title="Remove item from order"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Waiter Add-on Selection Row */}
+                      <div className="flex items-center gap-2 pt-1.5 border-t border-slate-800/80">
+                        {effectiveNote ? (
+                          <div className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-sm">
+                            <Tag className="w-3 h-3 text-amber-400" />
+                            <span>Add-on:</span>
+                            <strong className="text-amber-200">{effectiveNote}</strong>
+                            <button
+                              type="button"
+                              onClick={() => setActiveAddonTarget({
+                                type: 'existing',
+                                item: it,
+                                itemName: pName,
+                                initialNotes: effectiveNote
+                              })}
+                              className="text-amber-400 hover:text-white ml-1.5 underline text-[10px]"
+                            >
+                              Change
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPendingItemNotes(prev => ({ ...prev, [it.id]: '' }))}
+                              className="text-rose-400 hover:text-rose-300 ml-1 p-0.5 rounded hover:bg-rose-500/10"
+                              title="Remove Add-on"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setActiveAddonTarget({
+                              type: 'existing',
+                              item: it,
+                              itemName: pName,
+                              initialNotes: ''
+                            })}
+                            className="bg-slate-950 hover:bg-slate-800 border border-amber-500/40 text-amber-400 hover:text-amber-300 px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Add-on (1/2, Quarter, Spicy...)</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <button
-                      onClick={async () => {
-                        await deleteOrderItem(it.id);
-                        const updated = allOrders.find(o => o.id === editingOrderForWaiter.id);
-                        if (updated) setEditingOrderForWaiter(updated);
-                      }}
-                      className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/10"
-                      title="Remove item from order"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -860,13 +1125,71 @@ export default function StaffPanel() {
             {itemsToAdd.length > 0 && (
               <div className="bg-amber-950/30 border border-amber-500/40 p-3 rounded-xl space-y-2">
                 <div className="text-xs font-bold text-amber-300 uppercase tracking-wider">New Items Being Added:</div>
-                <div className="space-y-1 text-xs">
+                <div className="space-y-2 text-xs">
                   {itemsToAdd.map((newItem, idx) => {
                     const p = products.find(prod => prod.id === newItem.product_id);
+                    const pName = p?.name || 'Item';
                     return (
-                      <div key={idx} className="flex items-center justify-between text-amber-200">
-                        <span>{newItem.quantity}x {p?.name}</span>
-                        <span>₹{(p?.price || 0) * newItem.quantity}</span>
+                      <div key={idx} className="bg-slate-900 p-2.5 rounded-xl border border-amber-500/30 space-y-2 text-amber-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-amber-400">{newItem.quantity}x</span>
+                            <span className="font-bold text-slate-100">{pName}</span>
+                            <span className="text-amber-300/80 font-mono">₹{(p?.price || 0) * newItem.quantity}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setItemsToAdd(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/10"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+                          {newItem.notes ? (
+                            <div className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/50 text-amber-300 px-2.5 py-1 rounded-lg text-[11px] font-bold">
+                              <Tag className="w-3 h-3 text-amber-400" />
+                              <span>Add-on:</span>
+                              <strong className="text-amber-200">{newItem.notes}</strong>
+                              <button
+                                type="button"
+                                onClick={() => setActiveAddonTarget({
+                                  type: 'new',
+                                  index: idx,
+                                  item: newItem,
+                                  itemName: pName,
+                                  initialNotes: newItem.notes
+                                })}
+                                className="text-amber-400 hover:text-white ml-1.5 underline text-[10px]"
+                              >
+                                Change
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setItemsToAdd(prev => prev.map((it, i) => i === idx ? { ...it, notes: '' } : it))}
+                                className="text-rose-400 hover:text-rose-300 ml-1 p-0.5"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setActiveAddonTarget({
+                                type: 'new',
+                                index: idx,
+                                item: newItem,
+                                itemName: pName,
+                                initialNotes: ''
+                              })}
+                              className="bg-slate-950 hover:bg-slate-800 border border-amber-500/40 text-amber-400 hover:text-amber-300 px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Add-on (1/2, Quarter, Spicy...)</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -923,7 +1246,7 @@ export default function StaffPanel() {
                                 if (existing) {
                                   return prev.map(item => item.product_id === p.id ? { ...item, quantity: item.quantity + 1 } : item);
                                 }
-                                return [...prev, { product_id: p.id, quantity: 1 }];
+                                return [...prev, { product_id: p.id, quantity: 1, notes: '' }];
                               });
                             }}
                             className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 py-1 rounded-lg text-xs font-black transition flex items-center gap-1"
@@ -947,29 +1270,55 @@ export default function StaffPanel() {
             <div className="p-3.5 sm:p-4 border-t border-slate-800 shrink-0 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => setEditingOrderForWaiter(null)}
+                onClick={() => {
+                  setEditingOrderForWaiter(null);
+                  setPendingItemNotes({});
+                }}
                 className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-slate-100 text-xs font-bold"
               >
                 Close
               </button>
 
               <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-                {/* OPTION 1: EDIT ORDER (Save Items Added/Removed) */}
+                {/* OPTION 1: SAVE CHANGES & ADD-ONS (KEEP ATTENDING) */}
                 <button
                   type="button"
                   disabled={isSavingEdit}
                   onClick={async () => {
                     setIsSavingEdit(true);
+                    const claimingWaiter = editingOrderForWaiter.waiter_name || currentUser?.name || waiterName || activeWaitersList[0] || 'Waiter';
+                    
+                    // 1. Ensure order is claimed / attending under this waiter
+                    await claimOrderAsWaiter(editingOrderForWaiter.id, claimingWaiter);
+
+                    // 2. Save modified notes on existing items
+                    for (const [itmId, noteVal] of Object.entries(pendingItemNotes)) {
+                      await updateOrderItemNotes(editingOrderForWaiter.id, Number(itmId), noteVal);
+                    }
+                    setPendingItemNotes({});
+
+                    // 3. Add extra items if any
                     if (itemsToAdd.length > 0) {
-                      await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, currentUser?.name || waiterName || 'Waiter');
+                      await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, claimingWaiter);
                       setItemsToAdd([]);
                     }
+
+                    const tblStr = editingOrderForWaiter.table?.table_number || 'ST-01';
+                    setOrderFeedback({
+                      type: 'order_accepted',
+                      title: `Add-ons Saved for Table ${tblStr}!`,
+                      message: `Items & EDC add-ons saved. Order remains in Attending state under ${claimingWaiter}.`
+                    });
+                    setTimeout(() => setOrderFeedback(null), 5000);
+
+                    const updated = allOrders.find(o => o.id === editingOrderForWaiter.id);
+                    if (updated) setEditingOrderForWaiter({ ...updated, waiter_name: claimingWaiter });
                     setIsSavingEdit(false);
                   }}
                   className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1.5"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
-                  {isSavingEdit ? 'Saving...' : '✏️ 1. Edit / Add Items'}
+                  {isSavingEdit ? 'Saving...' : '✏️ 1. Save Changes & Add-ons (Keep Attending)'}
                 </button>
 
                 {/* OPTION 2: CONFIRM ORDER & SEND TO BAR / KITCHEN */}
@@ -978,32 +1327,65 @@ export default function StaffPanel() {
                   disabled={isSavingEdit}
                   onClick={async () => {
                     setIsSavingEdit(true);
-                    const claimingWaiter = currentUser?.name || waiterName || 'Waiter';
+                    const claimingWaiter = editingOrderForWaiter.waiter_name || currentUser?.name || waiterName || activeWaitersList[0] || 'Waiter';
+                    
+                    // 1. Prepare updated notes list for all items in order
+                    const updatedNotesList = editingOrderForWaiter.items.map(it => ({
+                      item_id: it.id,
+                      notes: pendingItemNotes[it.id] !== undefined ? pendingItemNotes[it.id] : (it.notes || '')
+                    }));
+
+                    // 2. Add extra items if any
                     if (itemsToAdd.length > 0) {
                       await addItemsToOrder(editingOrderForWaiter.id, itemsToAdd, claimingWaiter);
                       setItemsToAdd([]);
                     }
+
+                    // 3. Confirm order with updated notes & selected waiter
                     const tblStr = editingOrderForWaiter.table?.table_number || 'ST-01';
-                    await confirmOrderAsWaiter(editingOrderForWaiter.id, claimingWaiter);
+                    await confirmOrderAsWaiter(editingOrderForWaiter.id, claimingWaiter, updatedNotesList);
                     setIsSavingEdit(false);
                     setEditingOrderForWaiter(null);
+                    setPendingItemNotes({});
                     setOrderFeedback({
                       type: 'order_accepted',
-                      title: `Order Accepted for Table ${tblStr}!`,
-                      message: `⚡ Automatic Hardware Routing Active: Food sent to Kitchen KOT (Ethernet 192.168.0.70), Drinks sent to Posiflex (BAR BOT USB002). No manual selection needed!`
+                      title: `Order Confirmed for Table ${tblStr}!`,
+                      message: `⚡ Automatic Hardware Routing Active: Food sent to Kitchen KOT (Ethernet 192.168.0.70), Drinks sent to Posiflex (BAR BOT USB002). Handled by ${claimingWaiter}.`
                     });
                     setTimeout(() => setOrderFeedback(null), 8000);
                   }}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95"
                 >
                   <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
-                  ⚡ 2. Confirm Order & Send to Bar/Kitchen ({currentUser?.name || waiterName || 'Waiter'})
+                  ⚡ 2. Confirm Order & Send to Bar/Kitchen ({editingOrderForWaiter.waiter_name || currentUser?.name || waiterName || 'Waiter'})
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Waiter EDC Addon Selection Modal */}
+      <WaiterAddonModal
+        isOpen={Boolean(activeAddonTarget)}
+        onClose={() => setActiveAddonTarget(null)}
+        itemName={activeAddonTarget?.itemName || activeAddonTarget?.item?.product?.name || 'Item'}
+        currentNotes={activeAddonTarget?.initialNotes || ''}
+        onApply={(notes) => {
+          if (!activeAddonTarget) return;
+          if (activeAddonTarget.type === 'existing') {
+            setPendingItemNotes(prev => ({
+              ...prev,
+              [activeAddonTarget.item.id]: notes
+            }));
+          } else if (activeAddonTarget.type === 'new') {
+            setItemsToAdd(prev => prev.map((it, idx) => 
+              idx === activeAddonTarget.index ? { ...it, notes } : it
+            ));
+          }
+          setActiveAddonTarget(null);
+        }}
+      />
 
       {/* Category Sales & Department Revenue Report Modal */}
       <CategorySalesReportModal

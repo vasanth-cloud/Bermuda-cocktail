@@ -21,6 +21,9 @@ export const OrderProvider = ({ children }) => {
   const [kitchenOrders, setKitchenOrders] = useState([]);
   const [allOrders, setAllOrders] = useState([]);
   
+  // EDC Addons Master Data
+  const [addonsData, setAddonsData] = useState({ total: 0, quick_categories: {}, items: [] });
+  
   // Offline Sync State & Connection
   const [syncStatus, setSyncStatus] = useState({ pending_sync_count: 0, connection_mode: 'OFFLINE_LOCAL_SERVER' });
   const [wsConnected, setWsConnected] = useState(false);
@@ -269,13 +272,14 @@ export const OrderProvider = ({ children }) => {
   // Fetch initial metadata
   const fetchData = async () => {
     try {
-      const [zonesRes, tablesRes, catRes, prodRes, syncRes, usersRes] = await Promise.all([
+      const [zonesRes, tablesRes, catRes, prodRes, syncRes, usersRes, addonsRes] = await Promise.all([
         apiFetch('/api/zones'),
         apiFetch('/api/tables'),
         apiFetch('/api/categories'),
         apiFetch('/api/products'),
         apiFetch('/api/sync/status'),
-        apiFetch('/api/users')
+        apiFetch('/api/users'),
+        apiFetch('/api/addons')
       ]);
 
       const zonesData = await zonesRes.json();
@@ -284,6 +288,10 @@ export const OrderProvider = ({ children }) => {
       const prodData = await prodRes.json();
       const syncData = await syncRes.json();
       const usersData = await usersRes.json();
+      if (addonsRes && addonsRes.ok) {
+        const addData = await addonsRes.json();
+        setAddonsData(addData);
+      }
 
       setZones(Array.isArray(zonesData) ? zonesData : []);
       const validTables = Array.isArray(tablesData) ? tablesData : [];
@@ -407,8 +415,8 @@ export const OrderProvider = ({ children }) => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
-              if (['NEW_ORDER', 'ITEM_STATUS_UPDATED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
+            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'ITEM_NOTES_UPDATED', 'WAITER_CLAIMED_ORDER', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
+              if (['NEW_ORDER', 'ITEM_STATUS_UPDATED', 'ITEM_NOTES_UPDATED', 'WAITER_CLAIMED_ORDER', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
                 // Bar and kitchen should only chime once order is accepted/confirmed by a waiter
                 if (data.event === 'NEW_ORDER' && (activeTab === 'bar' || activeTab === 'kitchen')) {
                   // Customer order pending waiter confirmation
@@ -474,6 +482,14 @@ export const OrderProvider = ({ children }) => {
           return item;
         })
         .filter(Boolean)
+    );
+  };
+
+  const updateCartItemNotes = (productId, notes) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.product_id === productId ? { ...item, notes } : item
+      )
     );
   };
 
@@ -654,10 +670,34 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
-  const confirmOrderAsWaiter = async (orderId, waiterName = 'Waiter') => {
+  const claimOrderAsWaiter = async (orderId, waiterName = 'Waiter') => {
     try {
+      const res = await apiFetch(`/api/orders/${orderId}/claim?waiter_name=${encodeURIComponent(waiterName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ waiter_name: waiterName })
+      });
+      if (res.ok) {
+        await fetchOrders();
+        await fetchData();
+        return true;
+      }
+    } catch (err) {
+      console.error("Error claiming order as waiter:", err);
+    }
+    return false;
+  };
+
+  const confirmOrderAsWaiter = async (orderId, waiterName = 'Waiter', updatedItemNotes = null) => {
+    try {
+      const payload = {
+        waiter_name: waiterName,
+        updated_item_notes: updatedItemNotes || null
+      };
       const res = await apiFetch(`/api/orders/${orderId}/waiter-confirm?waiter_name=${encodeURIComponent(waiterName)}`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         await fetchOrders();
@@ -666,6 +706,33 @@ export const OrderProvider = ({ children }) => {
       }
     } catch (err) {
       console.error("Error confirming order as waiter:", err);
+    }
+    return false;
+  };
+
+  const updateOrderItemNotes = async (orderId, itemId, notes) => {
+    try {
+      const res = await apiFetch(`/api/order-items/${itemId}/notes`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes })
+      });
+      if (res.ok) {
+        setAllOrders((prev) =>
+          prev.map((ord) => {
+            if (ord.id === orderId) {
+              return {
+                ...ord,
+                items: ord.items.map((it) => (it.id === itemId ? { ...it, notes } : it))
+              };
+            }
+            return ord;
+          })
+        );
+        return true;
+      }
+    } catch (err) {
+      console.error("Error updating order item notes:", err);
     }
     return false;
   };
@@ -932,8 +999,11 @@ export const OrderProvider = ({ children }) => {
         cart,
         addToCart,
         updateCartQuantity,
+        updateCartItemNotes,
         clearCart,
         submitOrder,
+        addonsData,
+        updateOrderItemNotes,
         activeCustomerOrder,
         fetchTables,
         addPubTable,
@@ -965,6 +1035,7 @@ export const OrderProvider = ({ children }) => {
         toggleSidebar,
         autoHideOnSelect,
         setAutoHideOnSelect: setAutoHidePreference,
+        claimOrderAsWaiter,
         confirmOrderAsWaiter,
         addItemsToOrder,
         deleteOrderItem,

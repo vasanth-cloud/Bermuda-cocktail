@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -388,6 +388,37 @@ async def delete_table(table_id: int, db: Session = Depends(get_db)):
     await manager.broadcast_all({"event": "TABLE_STATUS_UPDATED", "table_id": table_id, "deleted": True})
     return {"message": "Table deleted successfully"}
 
+# --- EDC Addon Master List Endpoint ---
+EDC_ADDONS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "edc_addons.json"))
+_edc_addons_cache = None
+
+def get_edc_addons_data():
+    global _edc_addons_cache
+    if _edc_addons_cache is None:
+        if os.path.exists(EDC_ADDONS_FILE):
+            try:
+                with open(EDC_ADDONS_FILE, "r", encoding="utf-8") as f:
+                    _edc_addons_cache = json.load(f)
+            except Exception as e:
+                print(f"[get_edc_addons_data] Error reading {EDC_ADDONS_FILE}: {e}")
+                _edc_addons_cache = {"total": 0, "quick_categories": {}, "items": []}
+        else:
+            _edc_addons_cache = {"total": 0, "quick_categories": {}, "items": []}
+    return _edc_addons_cache
+
+@app.get("/api/addons")
+def get_edc_addons(q: Optional[str] = None):
+    data = get_edc_addons_data()
+    if not q:
+        return data
+    q_norm = q.strip().lower()
+    filtered_items = [it for it in data.get("items", []) if q_norm in it.get("name", "").lower()]
+    return {
+        "total": len(filtered_items),
+        "quick_categories": data.get("quick_categories", {}),
+        "items": filtered_items[:100]
+    }
+
 # --- Menu Endpoints ---
 @app.get("/api/categories", response_model=List[schemas.CategorySchema])
 def get_categories(db: Session = Depends(get_db)):
@@ -599,7 +630,7 @@ def get_orders(
         for dto in dtos:
             # Exclude unaccepted customer orders from Bar & Kitchen KDS!
             # Orders must be accepted by a waiter (e.g. status CONFIRMED, IN_PREP, READY, SERVED)
-            if dto.status in ["PENDING", "PENDING_WAITER", "BILLED"]:
+            if dto.status in ["PENDING", "PENDING_WAITER", "ATTENDING", "CLAIMED", "BILLED"]:
                 continue
             dept_items = [it for it in dto.items if (it.target_dept or "").upper() == target_dept_upper]
             if dept_items:
@@ -627,16 +658,64 @@ async def update_order_status(order_id: int, status_update: schemas.OrderStatusU
     await manager.broadcast_all(event_payload)
     return {"message": "Order status updated", "status": order.status}
 
-@app.post("/api/orders/{order_id}/waiter-confirm")
-async def waiter_confirm_order(order_id: int, waiter_name: Optional[str] = "Waiter", db: Session = Depends(get_db)):
+@app.post("/api/orders/{order_id}/claim")
+async def waiter_claim_order(
+    order_id: int, 
+    waiter_name: Optional[str] = "Waiter", 
+    req: Optional[schemas.WaiterClaimOrderRequest] = None, 
+    db: Session = Depends(get_db)
+):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    claiming_waiter = (req.waiter_name if req and req.waiter_name else waiter_name) or "Waiter"
+    order.waiter_name = claiming_waiter
+    order.collected_by = claiming_waiter
+    order.status = "ATTENDING"
+    db.commit()
+    db.refresh(order)
+
+    event_payload = {
+        "event": "WAITER_CLAIMED_ORDER",
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "table_number": order.table.table_number if order.table else "ST-01",
+        "zone_name": order.table.zone.display_name if order.table and order.table.zone else "",
+        "waiter_name": claiming_waiter,
+        "status": order.status
+    }
+    await manager.broadcast_all(event_payload)
+    return {
+        "message": f"Order #{order.order_number} for Table {event_payload['table_number']} accepted & claimed by {claiming_waiter}.",
+        "order_id": order.id,
+        "waiter_name": claiming_waiter,
+        "status": order.status
+    }
+
+@app.post("/api/orders/{order_id}/waiter-confirm")
+async def waiter_confirm_order(
+    order_id: int, 
+    waiter_name: Optional[str] = "Waiter", 
+    req: Optional[schemas.WaiterConfirmOrderRequest] = None,
+    db: Session = Depends(get_db)
+):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    effective_waiter = (req.waiter_name if req and req.waiter_name else waiter_name) or "Waiter"
     order.status = "CONFIRMED"
-    order.waiter_name = waiter_name
+    order.waiter_name = effective_waiter
     if not order.collected_by:
-        order.collected_by = waiter_name
+        order.collected_by = effective_waiter
+
+    # If waiter attached or modified notes/addons on items before confirming, apply them
+    if req and req.updated_item_notes:
+        note_dict = {n.item_id: n.notes for n in req.updated_item_notes}
+        for itm in order.items:
+            if itm.id in note_dict:
+                itm.notes = note_dict[itm.id]
 
     for item in order.items:
         if item.status == "PENDING":
@@ -929,6 +1008,25 @@ async def update_item_status(item_id: int, status_update: schemas.ItemStatusUpda
     
     await manager.broadcast_all(event_payload)
     return {"message": "Item status updated", "status": item.status}
+
+@app.patch("/api/order-items/{item_id}/notes")
+async def update_item_notes(item_id: int, req: schemas.ItemNotesUpdate, db: Session = Depends(get_db)):
+    item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Order item not found")
+    
+    item.notes = req.notes
+    db.commit()
+    db.refresh(item)
+
+    event_payload = {
+        "event": "ITEM_NOTES_UPDATED",
+        "item_id": item.id,
+        "order_id": item.order_id,
+        "notes": item.notes
+    }
+    await manager.broadcast_all(event_payload)
+    return {"message": "Item notes updated", "item_id": item.id, "notes": item.notes}
 
 @app.post("/api/orders/{order_id}/collect-payment")
 async def collect_order_payment(order_id: int, req: schemas.PaymentCollectRequest, db: Session = Depends(get_db)):

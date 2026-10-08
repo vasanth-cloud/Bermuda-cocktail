@@ -119,7 +119,7 @@ export default function BarReception() {
   // Only show orders that have been reviewed and accepted by a waiter!
   // Pending customer orders must NOT show on the Bar & Kitchen KDS until a waiter confirms/accepts them.
   const acceptedOrders = allOrders.filter((ord) => {
-    if (ord.status === 'PENDING' || ord.status === 'PENDING_WAITER') return false;
+    if (ord.status === 'PENDING' || ord.status === 'PENDING_WAITER' || ord.status === 'ATTENDING' || ord.status === 'CLAIMED') return false;
     if (ord.status === 'BILLED') return false;
     return true;
   });
@@ -422,6 +422,12 @@ export default function BarReception() {
                               <span className="font-mono text-amber-400 font-extrabold">{item.quantity}x</span>
                               {item.product?.name || `Drink #${item.product_id}`}
                             </div>
+                            {item.notes && (
+                              <div className="text-[10px] text-amber-300 font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded mt-1 flex items-center gap-1 inline-flex">
+                                <span>🏷️ Add-on:</span>
+                                <span>{item.notes}</span>
+                              </div>
+                            )}
                             <div className="text-slate-400 text-[11px] mt-0.5">₹{item.quantity * item.unit_price}</div>
                           </div>
 
@@ -458,7 +464,12 @@ export default function BarReception() {
                               <span className="font-mono text-emerald-400 font-extrabold">{item.quantity}x</span>
                               {item.product?.name || `Food #${item.product_id}`}
                             </div>
-                            {item.notes && <div className="text-[10px] text-amber-300 italic">Note: "{item.notes}"</div>}
+                            {item.notes && (
+                              <div className="text-[10px] text-amber-300 font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded mt-1 flex items-center gap-1 inline-flex">
+                                <span>🏷️ Add-on:</span>
+                                <span>{item.notes}</span>
+                              </div>
+                            )}
                             <div className="text-slate-400 text-[11px] mt-0.5">₹{item.quantity * item.unit_price}</div>
                           </div>
 

@@ -132,6 +132,20 @@ class OrderStatusUpdate(BaseModel):
 class ItemStatusUpdate(BaseModel):
     status: str
 
+class ItemNotesUpdate(BaseModel):
+    notes: Optional[str] = None
+
+class ItemNotesUpdateItem(BaseModel):
+    item_id: int
+    notes: Optional[str] = None
+
+class WaiterClaimOrderRequest(BaseModel):
+    waiter_name: Optional[str] = "Waiter"
+
+class WaiterConfirmOrderRequest(BaseModel):
+    waiter_name: Optional[str] = "Waiter"
+    updated_item_notes: Optional[List[ItemNotesUpdateItem]] = None
+
 class PaymentCollectRequest(BaseModel):
     payment_mode: str  # CASH, UPI, CARD
     amount_collected: float

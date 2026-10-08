@@ -82,8 +82,9 @@ export default function KitchenKDS() {
                             {item.product?.name || `Product #${item.product_id}`}
                           </div>
                           {item.notes && (
-                            <div className="text-xs text-amber-400 italic mt-1 bg-amber-950/40 px-2 py-0.5 rounded">
-                              Note: "{item.notes}"
+                            <div className="text-xs text-amber-300 font-bold mt-1 bg-amber-950/70 border border-amber-500/50 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm">
+                              <span>🏷️ Add-on:</span>
+                              <span className="text-amber-200 uppercase font-mono tracking-wide">{item.notes}</span>
                             </div>
                           )}
                         </div>
