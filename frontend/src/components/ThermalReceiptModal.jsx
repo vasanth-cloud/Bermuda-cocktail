@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Printer, Wifi, CheckCircle2, AlertCircle, X, Receipt, Utensils, Wine, Layers, HelpCircle } from 'lucide-react';
 import { apiFetch } from '../config';
 
@@ -8,6 +8,39 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
   const [isSendingToRugtek, setIsSendingToRugtek] = useState(false);
   const [isSendingBillToLan, setIsSendingBillToLan] = useState(false);
   const [networkPrintStatus, setNetworkPrintStatus] = useState(null);
+  const [printerConfig, setPrinterConfig] = useState({
+    bill_header_title: 'THE BERMUDA COCKTAIL',
+    bill_header_subtitle: 'Craft Cocktails & Gourmet Pub',
+    bill_address: 'Main Boulevard, Pub Row',
+    bill_phone: '+91 98765 43210',
+    bill_gstin: '33ABCDE1234F1Z5',
+    bill_fssai: '12423002000123',
+    bill_footer_msg: 'Thank You For Visiting! Drink Responsibly.'
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    apiFetch('/api/printers/config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && isMounted) {
+          setPrinterConfig((prev) => ({
+            ...prev,
+            bill_header_title: data.bill_header_title || prev.bill_header_title,
+            bill_header_subtitle: data.bill_header_subtitle || prev.bill_header_subtitle,
+            bill_address: data.bill_address || prev.bill_address,
+            bill_phone: data.bill_phone || prev.bill_phone,
+            bill_gstin: data.bill_gstin || prev.bill_gstin,
+            bill_fssai: data.bill_fssai || prev.bill_fssai,
+            bill_footer_msg: data.bill_footer_msg || prev.bill_footer_msg,
+          }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (!order) return null;
 
@@ -384,10 +417,24 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                 /* --- 80mm CUSTOMER FINAL BILL (Includes Food & Drinks Together) --- */
                 <div>
                   <div className="text-center pb-2 border-b-2 border-dashed border-black">
-                    <div className="text-base font-black tracking-wide text-black uppercase">THE BERMUDA COCKTAIL</div>
-                    <div className="text-[10px] font-bold text-black">Craft Cocktails & Gourmet Kitchen</div>
-                    <div className="text-[9.5px] font-bold text-black">Main Boulevard · City Centre</div>
-                    <div className="text-[9.5px] font-bold text-black">GSTIN: 33ABCDE1234F1Z5 · Ph: +91 98765 43210</div>
+                    <div className="text-base font-black tracking-wide text-black uppercase">
+                      {printerConfig.bill_header_title || 'THE BERMUDA COCKTAIL'}
+                    </div>
+                    {printerConfig.bill_header_subtitle && (
+                      <div className="text-[10px] font-bold text-black">{printerConfig.bill_header_subtitle}</div>
+                    )}
+                    {printerConfig.bill_address && (
+                      <div className="text-[9.5px] font-bold text-black">{printerConfig.bill_address}</div>
+                    )}
+                    {printerConfig.bill_phone && (
+                      <div className="text-[9.5px] font-bold text-black">Phone: {printerConfig.bill_phone}</div>
+                    )}
+                    {printerConfig.bill_gstin && (
+                      <div className="text-[9.5px] font-bold text-black">GSTIN: {printerConfig.bill_gstin}</div>
+                    )}
+                    {printerConfig.bill_fssai && (
+                      <div className="text-[9.5px] font-bold text-black">FSSAI: {printerConfig.bill_fssai}</div>
+                    )}
                     <div className="text-xs font-black mt-1 uppercase border-t border-black pt-1">TAX INVOICE / FINAL BILL</div>
                   </div>
 
@@ -464,8 +511,8 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                   {/* Footer */}
                   <div className="text-center pt-2 text-[9.5px] text-black font-bold space-y-0.5">
                     <div>Prices inclusive of all applicable taxes</div>
-                    <div>Thank you for visiting Bermuda Pub!</div>
-                    <div className="font-black">Drink Responsibly · Follow @bermudacocktail</div>
+                    <div>{printerConfig.bill_footer_msg || 'Thank You For Visiting! Drink Responsibly.'}</div>
+                    <div className="font-bold">Follow us on Instagram @bermudacocktail</div>
                     <div className="text-[8px] pt-1">*** END OF BILL ***</div>
                   </div>
                 </div>

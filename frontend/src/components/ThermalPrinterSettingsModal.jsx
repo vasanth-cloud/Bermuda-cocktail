@@ -592,6 +592,18 @@ export default function ThermalPrinterSettingsModal({ isOpen, onClose }) {
                   type="text"
                   value={config.bill_gstin}
                   onChange={(e) => setConfig({ ...config, bill_gstin: e.target.value })}
+                  placeholder="e.g. 33ABCDE1234F1Z5"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">FSSAI License Number:</label>
+                <input
+                  type="text"
+                  value={config.bill_fssai || ''}
+                  onChange={(e) => setConfig({ ...config, bill_fssai: e.target.value })}
+                  placeholder="e.g. 12423002000123"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-amber-500 focus:outline-none"
                 />
               </div>
