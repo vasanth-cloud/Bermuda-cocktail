@@ -20,35 +20,130 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
   const grandTotal = (paymentSummary.total_cash || 0) + (paymentSummary.total_upi || 0) + (paymentSummary.total_card || 0);
   const totalDiscounts = paymentLogs.reduce((acc, log) => acc + (parseFloat(log.discount_amount) || 0), 0);
 
-  // Excel / CSV Export Function
+  // Clean, Simple & Clear CSV Export for Management & Accountants
   const exportToExcel = () => {
     if (!paymentLogs || paymentLogs.length === 0) {
       alert("No payment logs recorded to export.");
       return;
     }
 
-    const headers = ["Timestamp", "Order Number", "Table", "Booking Platform", "Booking Reference ID", "Original Subtotal (INR)", "Discount Amount (INR)", "Net Payable Collected (INR)", "Payment Mode", "Staff (Collected By)"];
-    const rows = paymentLogs.map(log => [
-      `"${log.timestamp || ''}"`,
-      `"#${log.order_number || ''}"`,
-      `"${log.table_number || ''}"`,
-      `"${log.booking_platform || 'Direct / Walk-in'}"`,
-      `"${log.booking_reference_id || '-'}"`,
-      `"${log.subtotal_amount || log.total_amount || log.amount_collected || 0}"`,
-      `"${log.discount_amount || 0}"`,
-      `"${log.amount_collected || log.final_amount || 0}"`,
-      `"${log.payment_mode || ''}"`,
-      `"${log.collected_by || ''}"`
-    ]);
+    const todayStr = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+    const nowTimeStr = new Date().toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
 
-    const csvString = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const totalCash = (paymentSummary.total_cash || 0).toFixed(2);
+    const totalUpi = (paymentSummary.total_upi || 0).toFixed(2);
+    const totalCard = (paymentSummary.total_card || 0).toFixed(2);
+    const totalComplimentary = (paymentSummary.total_complimentary || 0).toFixed(2);
+    const compCount = paymentSummary.complimentary_count || 0;
+    const netRevenue = ((paymentSummary.total_cash || 0) + (paymentSummary.total_upi || 0) + (paymentSummary.total_card || 0)).toFixed(2);
+    const totalDiscountsStr = totalDiscounts.toFixed(2);
+
+    let sumSubtotal = 0;
+    let sumDiscount = 0;
+    let sumNet = 0;
+
+    const transactionRows = paymentLogs.map((log, index) => {
+      const subtotal = parseFloat(log.subtotal_amount || log.total_amount || log.amount_collected || 0);
+      const discount = parseFloat(log.discount_amount || 0);
+      const net = parseFloat(log.amount_collected || log.final_amount || 0);
+      const isComplimentary = log.payment_mode === 'OTHER' || (log.booking_platform && log.booking_platform.includes('Complimentary'));
+
+      sumSubtotal += subtotal;
+      sumDiscount += discount;
+      sumNet += net;
+
+      let settlementDesc = log.booking_platform || 'Direct / Walk-in';
+      if (isComplimentary) {
+        settlementDesc = `COMPLIMENTARY: ${log.booking_reference_id && log.booking_reference_id !== '-' ? log.booking_reference_id : 'Management / Owners / Bouncers'}`;
+      } else if (log.booking_reference_id && log.booking_reference_id !== '-') {
+        settlementDesc += ` (ID: ${log.booking_reference_id})`;
+      }
+
+      const itemsList = (log.items && log.items.length > 0)
+        ? log.items.map(it => `${it.quantity}x ${it.product_name}`).join(' + ')
+        : '-';
+
+      return [
+        index + 1,
+        `"${log.timestamp || ''}"`,
+        `"#${log.order_number || ''}"`,
+        `"${log.table_number || ''}"`,
+        `"${isComplimentary ? 'OTHER (FREE)' : (log.payment_mode || 'CASH')}"`,
+        `"${settlementDesc.replace(/"/g, '""')}"`,
+        subtotal.toFixed(2),
+        discount.toFixed(2),
+        net.toFixed(2),
+        `"${log.collected_by || 'Staff'}"`,
+        `"${itemsList.replace(/"/g, '""')}"`
+      ];
+    });
+
+    const lines = [
+      `"THE BERMUDA COCKTAIL - DAILY SALES & CASHIER REGISTER AUDIT REPORT"`,
+      `"Report Date: ${todayStr} | Generated At: ${nowTimeStr} | All Amounts in INR (Rs.)"`,
+      `""`,
+      `"===================================================================================================="`,
+      `"1. FINANCIAL SUMMARY OVERVIEW"`,
+      `"===================================================================================================="`,
+      `"Payment Category","Total Collected (Rs.)","Notes"`,
+      `"Cash Revenue","Rs. ${totalCash}","Cash drawer in register"`,
+      `"UPI / QR Revenue","Rs. ${totalUpi}","Verified digital transactions"`,
+      `"Card Revenue","Rs. ${totalCard}","Card machine EDC settled"`,
+      `"NET REALIZED REVENUE","Rs. ${netRevenue}","Grand Total Collected (Cash + UPI + Card)"`,
+      `"House / Complimentary Orders (100% Free)","Rs. ${totalComplimentary}","${compCount} Free Orders (Owners / MD / Bouncers)"`,
+      `"Total Offer Discounts Given","Rs. ${totalDiscountsStr}","Promotional / Dining Offers"`,
+      `"Total Orders Settled","${paymentLogs.length} Orders",""`,
+      `""`,
+      `"===================================================================================================="`,
+      `"2. DETAILED ORDER-BY-ORDER AUDIT REGISTER"`,
+      `"===================================================================================================="`,
+      [
+        `"S.No"`,
+        `"Date & Time"`,
+        `"Bill No"`,
+        `"Table"`,
+        `"Payment Mode"`,
+        `"Settlement Channel / Beneficiary"`,
+        `"Subtotal (Rs)"`,
+        `"Discount (Rs)"`,
+        `"Net Collected (Rs)"`,
+        `"Staff / Cashier"`,
+        `"Items Consumed (Food & Drinks)"`
+      ].join(','),
+      ...transactionRows.map(r => r.join(',')),
+      `""`,
+      [
+        `"TOTALS"`,
+        `""`,
+        `"${paymentLogs.length} Orders"`,
+        `""`,
+        `""`,
+        `""`,
+        sumSubtotal.toFixed(2),
+        sumDiscount.toFixed(2),
+        sumNet.toFixed(2),
+        `""`,
+        `""`
+      ].join(','),
+      `""`,
+      `"*** END OF REPORT - GENERATED BY THE BERMUDA COCKTAIL POS SYSTEM ***"`
+    ];
+
+    const csvString = lines.join('\r\n');
     const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    
     const link = document.createElement('a');
     link.href = url;
-    const today = new Date().toISOString().slice(0, 10);
-    link.setAttribute('download', `Bermuda_Pub_Cashier_Audit_Log_${today}.csv`);
+    const fileDate = new Date().toISOString().slice(0, 10);
+    link.setAttribute('download', `Bermuda_Cashier_Sales_Report_${fileDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -90,7 +185,12 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
     let icon = '🚶';
     let badgeClass = 'bg-slate-800 text-slate-300 border-slate-700';
     const platformName = plat || 'Direct / Walk-in';
-    if (platformName.includes('Swiggy')) { icon = '🧡'; badgeClass = 'bg-orange-950/80 text-orange-300 border-orange-800'; }
+    const isComplimentary = platformName.includes('Complimentary') || platformName.includes('Owners') || platformName.includes('Bouncers');
+
+    if (isComplimentary) {
+      icon = '👑';
+      badgeClass = 'bg-amber-950/90 text-amber-300 border-amber-600/60 font-black';
+    } else if (platformName.includes('Swiggy')) { icon = '🧡'; badgeClass = 'bg-orange-950/80 text-orange-300 border-orange-800'; }
     else if (platformName.includes('District')) { icon = '📱'; badgeClass = 'bg-purple-950/80 text-purple-300 border-purple-800'; }
     else if (platformName.includes('Zomato')) { icon = '🔴'; badgeClass = 'bg-rose-950/80 text-rose-300 border-rose-800'; }
     else if (platformName.includes('EazyDiner')) { icon = '🍽️'; badgeClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-800'; }
@@ -102,11 +202,19 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
           <span>{icon}</span> {platformName}
         </span>
         {bookingRef && bookingRef !== '-' && (
-          <div className="text-[10px] font-mono text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 w-fit">
-            ID: #{bookingRef}
+          <div className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border w-fit ${
+            isComplimentary 
+              ? 'text-amber-200 bg-amber-500/20 border-amber-500/40 font-black' 
+              : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
+          }`}>
+            {isComplimentary ? `👤 ${bookingRef}` : `ID: #${bookingRef}`}
           </div>
         )}
-        {(pct > 0 || disc > 0) && (
+        {isComplimentary ? (
+          <div className="text-[10px] font-mono text-emerald-400 font-extrabold">
+            ⭐ 100% Complimentary
+          </div>
+        ) : (pct > 0 || disc > 0) && (
           <div className="text-[10px] font-mono text-rose-400 font-extrabold">
             🏷️ {pct > 0 ? `${pct}% OFF` : `₹${disc} OFF`}
           </div>
@@ -192,6 +300,11 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
             <span className="bg-purple-950 text-purple-300 border border-purple-800 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
               💳 Card: ₹{paymentSummary.total_card || 0}
             </span>
+            {(paymentSummary.total_complimentary > 0 || paymentSummary.complimentary_count > 0) && (
+              <span className="bg-amber-950 text-amber-300 border border-amber-600 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow">
+                👑 Complimentary: {paymentSummary.complimentary_count || 0} Free Orders (₹{(paymentSummary.total_complimentary || 0).toFixed(2)})
+              </span>
+            )}
             {totalDiscounts > 0 && (
               <span className="bg-rose-950 text-rose-300 border border-rose-800 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
                 🏷️ Total Offers Discounted: -₹{totalDiscounts.toFixed(2)}
@@ -225,9 +338,10 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
                     <th className="p-3">Time</th>
                     <th className="p-3">Order #</th>
                     <th className="p-3">Table</th>
-                    <th className="p-3">Platform & Offer</th>
+                    <th className="p-3">Platform & Beneficiary</th>
+                    <th className="p-3">Items Consumed (Food & Drinks)</th>
                     <th className="p-3">Payment Mode</th>
-                    <th className="p-3">Collected By (Staff)</th>
+                    <th className="p-3">Staff</th>
                     <th className="p-3 text-right">Breakdown & Net (₹)</th>
                     <th className="p-3 text-center">Action</th>
                   </tr>
@@ -237,6 +351,7 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
                     const subtotal = parseFloat(log.subtotal_amount || log.total_amount || log.amount_collected || 0);
                     const disc = parseFloat(log.discount_amount || 0);
                     const netCollected = parseFloat(log.amount_collected || log.final_amount || 0);
+                    const isComplimentary = log.payment_mode === 'OTHER' || (log.booking_platform && log.booking_platform.includes('Complimentary'));
 
                     return (
                       <tr key={idx} className="hover:bg-slate-800/50 transition">
@@ -245,21 +360,50 @@ export default function PaymentAuditLogModal({ isOpen, onClose }) {
                         <td className="p-3 font-extrabold text-slate-100">{log.table_number}</td>
                         <td className="p-3">{getPlatformBadge(log.booking_platform, log.discount_percentage, disc, log.booking_reference_id)}</td>
                         <td className="p-3">
+                          {log.items && log.items.length > 0 ? (
+                            <div className="space-y-1 max-w-[240px]">
+                              {log.items.map((it, iIdx) => (
+                                <div key={iIdx} className="text-[11px] text-slate-300 flex items-center justify-between gap-2 bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800">
+                                  <span className="truncate">{it.product_name}</span>
+                                  <span className="font-mono font-bold text-amber-400 shrink-0">x{it.quantity}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 italic text-[11px]">-</span>
+                          )}
+                        </td>
+                        <td className="p-3">
                           <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold font-mono uppercase inline-flex items-center gap-1 ${
+                            log.payment_mode === 'OTHER' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50' :
                             log.payment_mode === 'CASH' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
                             log.payment_mode === 'UPI' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-purple-950 text-purple-300 border border-purple-800'
                           }`}>
-                            {log.payment_mode === 'CASH' ? '💵 Cash' : log.payment_mode === 'UPI' ? '📱 UPI' : '💳 Card'}
+                            {log.payment_mode === 'OTHER' ? '👑 OTHER (FREE)' : log.payment_mode === 'CASH' ? '💵 Cash' : log.payment_mode === 'UPI' ? '📱 UPI' : '💳 Card'}
                           </span>
                         </td>
                         <td className="p-3 font-bold text-amber-400">{log.collected_by}</td>
                         <td className="p-3 font-mono text-right">
-                          {disc > 0 && (
-                            <div className="text-[10px] text-slate-400">
-                              Subtotal: <span className="line-through">₹{subtotal}</span> (-₹{disc})
+                          {isComplimentary ? (
+                            <div>
+                              <div className="text-[10px] text-slate-400">
+                                Subtotal: <span className="line-through">₹{subtotal}</span>
+                              </div>
+                              <div className="font-black text-amber-400 text-xs">
+                                👑 100% Free
+                              </div>
+                              <div className="font-black text-emerald-400 text-sm">₹0.00</div>
+                            </div>
+                          ) : (
+                            <div>
+                              {disc > 0 && (
+                                <div className="text-[10px] text-slate-400">
+                                  Subtotal: <span className="line-through">₹{subtotal}</span> (-₹{disc})
+                                </div>
+                              )}
+                              <div className="font-black text-emerald-400 text-sm">₹{netCollected}</div>
                             </div>
                           )}
-                          <div className="font-black text-emerald-400 text-sm">₹{netCollected}</div>
                         </td>
                         <td className="p-3 text-center">
                           <button

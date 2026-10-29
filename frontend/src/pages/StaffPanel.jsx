@@ -4,10 +4,12 @@ import { apiFetch } from '../config';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
 import ThermalReceiptModal from '../components/ThermalReceiptModal';
 import WaiterAddonModal from '../components/WaiterAddonModal';
+import SwitchTableModal from '../components/SwitchTableModal';
 import { 
   Users, QrCode, Wine, Utensils, CheckCircle, AlertTriangle, Plus, 
   ChevronRight, Bell, DollarSign, CreditCard, Smartphone, Check, Edit2, 
-  Trash2, Search, X, Printer, Eye, LogOut, HelpCircle, RefreshCw, Layers, BarChart3, Tag
+  Trash2, Search, X, Printer, Eye, LogOut, HelpCircle, RefreshCw, Layers, BarChart3, Tag,
+  ArrowRightLeft
 } from 'lucide-react';
 
 export default function StaffPanel() {
@@ -30,6 +32,7 @@ export default function StaffPanel() {
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [amountCollected, setAmountCollected] = useState('');
+  const [beneficiaryName, setBeneficiaryName] = useState('');
   const [waiterName, setWaiterName] = useState(currentUser?.name || 'Waiter');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
@@ -66,6 +69,9 @@ export default function StaffPanel() {
   const [activeAddonTarget, setActiveAddonTarget] = useState(null);
   const [pendingItemNotes, setPendingItemNotes] = useState({});
 
+  // Switch Table Modal State
+  const [switchingTableOrder, setSwitchingTableOrder] = useState(null);
+
   const openOrderEditModal = (order) => {
     setEditingOrderForWaiter(order);
     setItemsToAdd([]);
@@ -81,13 +87,22 @@ export default function StaffPanel() {
     return num.replace(/^DN-/i, 'D').replace(/^SZ-/i, 'S');
   };
 
-  // Calculate elapsed time in minutes from order creation
+  // Calculate elapsed time in minutes from order creation (compact format)
   const getElapsedTimeStr = (createdAt) => {
-    if (!createdAt) return '0 Min';
+    if (!createdAt) return '0m';
     const start = new Date(createdAt).getTime();
     const now = new Date().getTime();
     const diffMins = Math.max(0, Math.floor((now - start) / (1000 * 60)));
-    return `${diffMins} Min`;
+    if (diffMins >= 1440) {
+      const days = Math.floor(diffMins / 1440);
+      return `${days}d`;
+    }
+    if (diffMins >= 60) {
+      const hrs = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      return `${hrs}h${mins > 0 ? ` ${mins}m` : ''}`;
+    }
+    return `${diffMins}m`;
   };
 
   const getTableActiveOrder = (tableId) => {
@@ -286,9 +301,17 @@ export default function StaffPanel() {
     e.preventDefault();
     if (!activePaymentOrder) return;
 
+    if (paymentMode === 'OTHER') {
+      if (!beneficiaryName.trim()) {
+        alert("Please enter the name of the Owner, MD, Bouncer or Guest in the Beneficiary Name field.");
+        return;
+      }
+    }
+
     setIsSubmittingPayment(true);
     let success = false;
-    const finalAmount = amountCollected !== '' ? parseFloat(amountCollected) : (activePaymentOrder.total_amount || 0);
+    const isComplimentary = paymentMode === 'OTHER';
+    const finalAmount = isComplimentary ? 0.0 : (amountCollected !== '' ? parseFloat(amountCollected) : (activePaymentOrder.total_amount || 0));
 
     if (activePaymentOrder.id && activePaymentOrder.id !== 0) {
       success = await collectPayment(
@@ -296,11 +319,12 @@ export default function StaffPanel() {
         paymentMode,
         finalAmount,
         waiterName || currentUser?.name || 'Waiter',
-        'Direct / Walk-in',
-        0,
-        0,
+        isComplimentary ? 'Complimentary (Owners/MD/Bouncers)' : 'Direct / Walk-in',
+        isComplimentary ? 100 : 0,
+        isComplimentary ? (activePaymentOrder.total_amount || 0) : 0,
         finalAmount,
-        null
+        isComplimentary ? beneficiaryName.trim() : null,
+        isComplimentary ? beneficiaryName.trim() : null
       );
     } else if (activePaymentOrder.table_id) {
       await settleTableBill(activePaymentOrder.table_id);
@@ -309,15 +333,25 @@ export default function StaffPanel() {
     setIsSubmittingPayment(false);
 
     if (success) {
-      const orderJustPaid = { ...activePaymentOrder, payment_status: 'COLLECTED', payment_mode: paymentMode };
+      const orderJustPaid = { 
+        ...activePaymentOrder, 
+        payment_status: 'COLLECTED', 
+        payment_mode: paymentMode,
+        booking_platform: isComplimentary ? 'Complimentary (Owners/MD/Bouncers)' : 'Direct / Walk-in',
+        booking_reference_id: isComplimentary ? beneficiaryName.trim() : null
+      };
       const tblStr = orderJustPaid.table?.table_number || 'T-01';
       setActivePaymentOrder(null);
       setAmountCollected('');
+      setBeneficiaryName('');
+      setPaymentMode('CASH');
       // Auto-dispatched by backend to RP327 Printer USB001! No manual modal selection needed.
       setOrderFeedback({
         type: 'bill_paid',
-        title: `Payment Collected for Table ${tblStr}!`,
-        message: `💰 Final Bill (Food + Drinks unified) auto-dispatched to Rugtek RP327 billing machine (USB001). No manual selection needed!`,
+        title: isComplimentary ? `Complimentary Order Closed for Table ${tblStr}!` : `Payment Collected for Table ${tblStr}!`,
+        message: isComplimentary
+          ? `👑 100% Free Complimentary Order logged for ${beneficiaryName.trim()}! Receipt auto-dispatched to Rugtek RP327.`
+          : `💰 Final Bill (Food + Drinks unified) auto-dispatched to Rugtek RP327 billing machine (USB001). No manual selection needed!`,
         order: orderJustPaid
       });
       setTimeout(() => setOrderFeedback(null), 8000);
@@ -643,11 +677,14 @@ export default function StaffPanel() {
                             setSelectedTable(table);
                             setActiveTab('customer');
                           }}
-                          className={`h-16 rounded-xl flex items-center justify-center transition cursor-pointer select-none shadow-sm ${statusStyle.cardClass}`}
+                          className={`h-[88px] rounded-xl flex flex-col items-center justify-center transition cursor-pointer select-none shadow-sm hover:scale-[1.02] ${statusStyle.cardClass}`}
                           title={`Open menu for table ${table.table_number}`}
                         >
-                          <span className="text-lg font-black text-slate-800 tracking-tight">
+                          <span className="text-base sm:text-lg font-black text-slate-800 tracking-tight">
                             {tableLabel}
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                            Vacant
                           </span>
                         </div>
                       );
@@ -661,21 +698,21 @@ export default function StaffPanel() {
                           onClick={() => {
                             if (activeOrder) openOrderEditModal(activeOrder);
                           }}
-                          className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
+                          className={`h-[88px] rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group overflow-hidden ${statusStyle.cardClass}`}
                           title={`Customer order awaiting acceptance at Table ${table.table_number}`}
                         >
-                          <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
-                            <span className="font-extrabold text-slate-950">{getElapsedTimeStr(activeOrder.created_at)}</span>
-                            <span className="font-black bg-slate-950 text-amber-300 px-1 py-0.5 rounded text-[8px] uppercase">
-                              📩 NEW
+                          <div className="flex items-center justify-between text-[8.5px] font-mono leading-none gap-0.5">
+                            <span className="font-extrabold text-slate-950 truncate">{getElapsedTimeStr(activeOrder.created_at)}</span>
+                            <span className="font-black bg-slate-950 text-amber-300 px-1 py-0.5 rounded text-[7.5px] uppercase shrink-0">
+                              NEW
                             </span>
                           </div>
 
-                          <div className="text-center my-0.5">
-                            <div className="text-base font-black leading-tight tracking-tight text-slate-950">
+                          <div className="text-center my-auto">
+                            <div className="text-sm font-black leading-tight tracking-tight text-slate-950">
                               {tableLabel}
                             </div>
-                            <div className="text-[11px] font-extrabold leading-none text-slate-900">
+                            <div className="text-[11px] font-extrabold leading-none text-slate-900 mt-0.5">
                               ₹{activeOrder?.total_amount || 0}
                             </div>
                           </div>
@@ -687,10 +724,10 @@ export default function StaffPanel() {
                               e.stopPropagation();
                               if (activeOrder) handleClaimOrder(activeOrder.id);
                             }}
-                            className="w-full bg-slate-950 hover:bg-slate-900 text-amber-400 py-1 rounded text-[10px] font-black transition flex items-center justify-center gap-1 shadow"
+                            className="w-full bg-slate-950 hover:bg-slate-900 text-amber-400 py-1 rounded-md text-[9px] font-black transition flex items-center justify-center gap-1 shadow shrink-0"
                           >
                             <Check className="w-3 h-3 text-amber-400" />
-                            {claimingOrderId === activeOrder?.id ? 'Claiming...' : 'TAKE ORDER'}
+                            <span>{claimingOrderId === activeOrder?.id ? 'Claiming' : 'TAKE ORDER'}</span>
                           </button>
                         </div>
                       );
@@ -704,39 +741,39 @@ export default function StaffPanel() {
                           onClick={() => {
                             if (activeOrder) openOrderEditModal(activeOrder);
                           }}
-                          className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group ${statusStyle.cardClass}`}
+                          className={`h-[88px] rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group overflow-hidden ${statusStyle.cardClass}`}
                           title={`Order being attended by ${activeOrder?.waiter_name || 'Waiter'} at Table ${table.table_number}`}
                         >
-                          <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
-                            <span className="font-extrabold text-indigo-200">{getElapsedTimeStr(activeOrder.created_at)}</span>
-                            <span className="font-bold truncate max-w-[65px] text-amber-300">
+                          <div className="flex items-center justify-between text-[8.5px] font-mono leading-none gap-0.5">
+                            <span className="font-extrabold text-indigo-200 truncate">{getElapsedTimeStr(activeOrder.created_at)}</span>
+                            <span className="font-bold truncate max-w-[44px] text-amber-300 text-[8.5px]" title={activeOrder?.waiter_name || 'Waiter'}>
                               👤 {activeOrder?.waiter_name || 'Waiter'}
                             </span>
                           </div>
 
-                          <div className="text-center my-0.5">
-                            <div className="text-base font-black leading-tight tracking-tight text-white">
+                          <div className="text-center my-auto">
+                            <div className="text-sm font-black leading-tight tracking-tight text-white">
                               {tableLabel}
                             </div>
-                            <div className="text-[11px] font-extrabold leading-none text-indigo-200">
+                            <div className="text-[11px] font-extrabold leading-none text-indigo-200 mt-0.5">
                               ₹{activeOrder?.total_amount || 0}
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1 w-full shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
                               onClick={() => openOrderEditModal(activeOrder)}
-                              className="flex-1 bg-slate-950/80 hover:bg-slate-900 text-amber-400 py-1 rounded text-[9px] font-black transition flex items-center justify-center gap-0.5 border border-amber-500/40"
+                              className="flex-1 bg-slate-950/80 hover:bg-slate-900 text-amber-400 py-0.5 px-1 rounded-md text-[8.5px] font-black transition flex items-center justify-center gap-0.5 border border-amber-500/40"
                               title="Review / Edit Add-ons"
                             >
-                              <Tag className="w-2.5 h-2.5" /> ADD-ON
+                              <Tag className="w-2.5 h-2.5" /> ADD
                             </button>
                             <button
                               type="button"
                               disabled={confirmingOrderId === activeOrder?.id}
                               onClick={() => handleConfirmOrder(activeOrder.id)}
-                              className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-1 rounded text-[9px] font-black transition flex items-center justify-center gap-0.5 shadow"
+                              className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-0.5 px-1 rounded-md text-[8.5px] font-black transition flex items-center justify-center gap-0.5 shadow"
                               title="Confirm & Send to Kitchen/Bar"
                             >
                               <Check className="w-2.5 h-2.5 stroke-[3]" /> KOT
@@ -747,7 +784,7 @@ export default function StaffPanel() {
                     }
 
                     // 3. OCCUPIED TABLE CARD (RUNNING / PRINTED / PAID)
-                    const elapsedTime = activeOrder ? getElapsedTimeStr(activeOrder.created_at) : '0 Min';
+                    const elapsedTime = activeOrder ? getElapsedTimeStr(activeOrder.created_at) : '0m';
                     const amountStr = activeOrder ? `₹${activeOrder.total_amount}` : '₹0';
 
                     return (
@@ -761,55 +798,50 @@ export default function StaffPanel() {
                             setActiveTab('customer');
                           }
                         }}
-                        className={`h-20 rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group hover:scale-[1.03] shadow-md ${statusStyle.cardClass}`}
-                        title={`Click to view/edit order for Table ${table.table_number}`}
+                        className={`h-[88px] rounded-xl p-1.5 flex flex-col justify-between transition cursor-pointer select-none relative group hover:scale-[1.02] shadow-md overflow-hidden ${statusStyle.cardClass}`}
+                        title={`Table ${table.table_number}: Click card to open order & menu`}
                       >
                         {/* Top Row: Duration & Claimed Waiter Name */}
-                        <div className="flex items-center justify-between text-[9px] font-mono leading-none gap-1">
-                          <span className="opacity-90 font-semibold">{elapsedTime}</span>
-                          <span className="truncate max-w-[55px] font-bold opacity-90" title={`Handled by ${activeOrder?.waiter_name || activeOrder?.collected_by || currentUser?.name || 'Waiter'}`}>
+                        <div className="flex items-center justify-between text-[8.5px] font-mono leading-none gap-0.5">
+                          <span className="opacity-90 font-bold shrink-0">{elapsedTime}</span>
+                          <span className="truncate max-w-[44px] font-bold opacity-90 text-[8.5px]" title={`Handled by ${activeOrder?.waiter_name || activeOrder?.collected_by || currentUser?.name || 'Waiter'}`}>
                             👤 {activeOrder?.waiter_name || activeOrder?.collected_by || currentUser?.name || 'Waiter'}
                           </span>
                         </div>
 
                         {/* Middle: Table Number & Amount */}
-                        <div className="text-center my-0.5">
-                          <div className="text-base font-black leading-tight tracking-tight">
+                        <div className="text-center my-auto">
+                          <div className="text-sm font-black leading-tight tracking-tight">
                             {tableLabel}
                           </div>
-                          <div className="text-[11px] font-extrabold leading-none opacity-95">
+                          <div className="text-[11px] font-extrabold leading-none opacity-95 mt-0.5">
                             {amountStr}
                           </div>
                         </div>
 
-                        {/* Bottom Row: Quick Action Buttons */}
-                        <div className="flex items-center justify-center gap-1 pt-0.5 border-t border-black/20">
-                          {/* Auto-Print Respective KOTs Button */}
-                          <button
-                            type="button"
-                            onClick={(e) => handleAutoPrintOrderKOTs(e, activeOrder, table)}
-                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-amber-400 hover:text-amber-300"
-                            title="⚡ Auto-Print Respective KOTs (Food ➔ Kitchen KOT, Drinks ➔ Bar Posiflex)"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* View/Edit Icon Button */}
+                        {/* Bottom Row: Quick Action Buttons (Compact & Centered inside Card) */}
+                        <div className="flex items-center justify-center gap-1.5 pt-1 border-t border-black/20 w-full shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {/* Switch Table Quick Button */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (activeOrder) {
-                                openOrderEditModal(activeOrder);
-                              } else {
-                                setSelectedTable(table);
-                                setActiveTab('customer');
-                              }
+                              if (activeOrder) setSwitchingTableOrder(activeOrder);
                             }}
-                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-white"
-                            title="View / Edit Order Items & Add-ons"
+                            className="w-5 h-5 rounded bg-slate-950/40 hover:bg-slate-950/80 transition text-cyan-300 hover:text-cyan-200 flex items-center justify-center shrink-0"
+                            title="🔀 Switch Table (Move Customer to Another Table)"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <ArrowRightLeft className="w-3 h-3" />
+                          </button>
+
+                          {/* Auto-Print Respective KOTs Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleAutoPrintOrderKOTs(e, activeOrder, table)}
+                            className="w-5 h-5 rounded bg-slate-950/40 hover:bg-slate-950/80 transition text-amber-300 hover:text-amber-200 flex items-center justify-center shrink-0"
+                            title="⚡ Auto-Print Respective KOTs (Food ➔ Kitchen KOT, Drinks ➔ Bar Posiflex)"
+                          >
+                            <Printer className="w-3 h-3" />
                           </button>
 
                           {/* Pay / Collect Icon Button */}
@@ -826,12 +858,14 @@ export default function StaffPanel() {
                                 items: []
                               };
                               setActivePaymentOrder(paymentOrder);
+                              setPaymentMode('CASH');
+                              setBeneficiaryName('');
                               setAmountCollected((paymentOrder.total_amount || 0).toString());
                             }}
-                            className="p-1.5 rounded-md bg-slate-950/40 hover:bg-slate-950/80 transition text-white"
-                            title="Collect Payment & Settle Table"
+                            className="w-5 h-5 rounded bg-slate-950/40 hover:bg-slate-950/80 transition text-emerald-300 hover:text-emerald-200 flex items-center justify-center shrink-0"
+                            title="💳 Collect Payment & Settle Table"
                           >
-                            <DollarSign className="w-3.5 h-3.5" />
+                            <DollarSign className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
@@ -885,55 +919,133 @@ export default function StaffPanel() {
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setPaymentMode('CASH')}
-                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    onClick={() => {
+                      setPaymentMode('CASH');
+                      setAmountCollected('');
+                    }}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition text-xs ${
                       paymentMode === 'CASH'
-                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-900/30 font-black'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    💵 Cash
+                    <span>💵</span>
+                    <span>Cash</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setPaymentMode('UPI')}
-                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    onClick={() => {
+                      setPaymentMode('UPI');
+                      setAmountCollected('');
+                    }}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition text-xs ${
                       paymentMode === 'UPI'
-                        ? 'bg-blue-950 border-blue-500 text-blue-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                        ? 'bg-blue-950 border-blue-500 text-blue-300 shadow-md shadow-blue-900/30 font-black'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    📱 UPI
+                    <span>📱</span>
+                    <span>UPI</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setPaymentMode('CARD')}
-                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    onClick={() => {
+                      setPaymentMode('CARD');
+                      setAmountCollected('');
+                    }}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition text-xs ${
                       paymentMode === 'CARD'
-                        ? 'bg-purple-950 border-purple-500 text-purple-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                        ? 'bg-purple-950 border-purple-500 text-purple-300 shadow-md shadow-purple-900/30 font-black'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    💳 Card
+                    <span>💳</span>
+                    <span>Card</span>
                   </button>
                 </div>
+
+                {/* Management Complimentary Button - Full Width */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (paymentMode === 'OTHER') {
+                      setPaymentMode('CASH');
+                      setAmountCollected('');
+                    } else {
+                      setPaymentMode('OTHER');
+                      setAmountCollected('0.00');
+                    }
+                  }}
+                  className={`w-full mt-2 py-2.5 px-3.5 rounded-xl font-black flex items-center justify-between border transition text-xs ${
+                    paymentMode === 'OTHER'
+                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 border-amber-400 text-slate-950 shadow-lg shadow-amber-500/20'
+                      : 'bg-slate-950 border-amber-500/40 text-amber-300 hover:border-amber-400 hover:bg-amber-950/20'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-base">👑</span>
+                    <span className="font-extrabold tracking-wide">OTHER (Owners / MD / Bouncers)</span>
+                  </span>
+                  <span className={`text-[10px] uppercase font-mono font-black px-2 py-0.5 rounded ${
+                    paymentMode === 'OTHER'
+                      ? 'bg-slate-950 text-amber-300'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    100% Free
+                  </span>
+                </button>
               </div>
+
+              {/* Complimentary Banner & Beneficiary Input if OTHER is selected */}
+              {paymentMode === 'OTHER' && (
+                <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex items-center gap-2 text-amber-300 font-black text-xs">
+                    <span>👑</span>
+                    <span>100% Free / Complimentary (Owners, MD, Bouncers)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    This order is entirely free (₹0 payable). All items consumed will be recorded for audit and inventory accounting. Please enter who came and ate below:
+                  </p>
+                  <div>
+                    <label className="font-bold text-amber-300 block mb-1 text-[11px]">
+                      Beneficiary Name & Role (Required) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={beneficiaryName}
+                      onChange={(e) => setBeneficiaryName(e.target.value)}
+                      className="w-full bg-slate-950 border border-amber-500/50 rounded-lg px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400"
+                      placeholder="e.g. MD Friend - Ramesh / Bouncer Anand / Owner Relative"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* 4. Final Amount Collected Input */}
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Final Amount Collected (₹) *</label>
+                <label className="font-bold text-slate-300 block mb-1">
+                  Final Amount Collected (₹) {paymentMode === 'OTHER' && <span className="text-amber-400">(100% Free)</span>} *
+                </label>
                 <input
                   type="number"
                   step="0.01"
+                  disabled={paymentMode === 'OTHER'}
                   value={
-                    amountCollected !== ''
-                      ? amountCollected
-                      : (activePaymentOrder.total_amount || 0).toFixed(2)
+                    paymentMode === 'OTHER'
+                      ? '0.00'
+                      : (amountCollected !== ''
+                          ? amountCollected
+                          : (activePaymentOrder.total_amount || 0).toFixed(2))
                   }
                   onChange={(e) => setAmountCollected(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-base font-extrabold text-amber-400 focus:outline-none focus:border-amber-500 font-mono"
+                  className={`w-full border rounded-xl px-3 py-2.5 text-base font-extrabold font-mono focus:outline-none ${
+                    paymentMode === 'OTHER'
+                      ? 'bg-slate-900 border-amber-500/50 text-emerald-400 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-amber-400 focus:border-amber-500'
+                  }`}
                   required
                 />
               </div>
@@ -972,6 +1084,26 @@ export default function StaffPanel() {
         </div>
       )}
 
+      {/* Switch Table / Transfer Order Modal */}
+      {switchingTableOrder && (
+        <SwitchTableModal
+          isOpen={!!switchingTableOrder}
+          activeOrder={switchingTableOrder}
+          onClose={() => setSwitchingTableOrder(null)}
+          onSwitchSuccess={(res) => {
+            setOrderFeedback({
+              type: 'order_accepted',
+              title: '🔀 Table Transferred Successfully!',
+              message: res.message || `Customer order moved to new table. Kitchen & Bar transfer notices dispatched.`
+            });
+            setTimeout(() => setOrderFeedback(null), 7000);
+            if (editingOrderForWaiter && editingOrderForWaiter.id === switchingTableOrder.id) {
+              setEditingOrderForWaiter(null);
+            }
+          }}
+        />
+      )}
+
       {/* 80mm Thermal Receipt & KOT Modal (POSIFLEX USB & RUGTEK LAN) */}
       {activePrintOrder && (
         <ThermalReceiptModal
@@ -1003,6 +1135,19 @@ export default function StaffPanel() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Switch Table Button in Edit Modal */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSwitchingTableOrder(editingOrderForWaiter);
+                  }}
+                  className="bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 font-extrabold px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5 shadow transition"
+                  title="Move this order to another table"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Switch Table</span>
+                </button>
+
                 {/* Waiter Selection in Modal */}
                 <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-700 px-2.5 py-1 rounded-xl text-xs font-bold text-amber-300 shadow-sm">
                   <span className="text-slate-400 text-[10px] shrink-0">👤 Waiter:</span>

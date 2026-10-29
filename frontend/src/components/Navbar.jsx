@@ -52,6 +52,10 @@ export default function Navbar() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const handleTabClick = (tab) => {
+    if (!currentUser && tab !== 'customer') {
+      setIsLoginModalOpen(true);
+      return;
+    }
     setActiveTab(tab);
     setMobileOpen(false);
   };
@@ -134,10 +138,9 @@ export default function Navbar() {
   // Filter terminal navigation items based on currentUser allowed_terminals
   const getVisibleNavItems = () => {
     if (!currentUser) {
-      if (isCustomerQrMode && !showStaffNav) {
-        return navItems.filter(item => item.id === 'customer');
-      }
-      return navItems.filter(item => item.id !== 'admin' && item.id !== 'staff_accounts');
+      // Unauthenticated users can strictly ONLY view the Customer Menu
+      // They are blocked from Waiter Staff, Bar KDS, Reports, Tables, Staff Accounts, VIP Cards, and Admin!
+      return navItems.filter(item => item.id === 'customer');
     }
 
     if (currentUser.role === 'ADMIN' || currentUser.email === 'avasanth081@gmail.com') {
@@ -305,6 +308,21 @@ export default function Navbar() {
                 );
               })}
             </nav>
+
+            {!currentUser && (
+              <div className="pt-3 border-t border-slate-800/80">
+                <button
+                  onClick={() => setIsLoginModalOpen(true)}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 text-slate-950 font-black p-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition active:scale-95"
+                >
+                  <LogIn className="w-4 h-4 stroke-[2.5]" />
+                  <span>Staff / Cashier Login</span>
+                </button>
+                <p className="text-[10px] text-slate-500 text-center mt-1.5 font-medium">
+                  Authentication required for staff floor & bar terminals
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

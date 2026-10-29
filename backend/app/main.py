@@ -37,6 +37,36 @@ def sync_staff_users_to_file(db: Session):
     except Exception as e:
         print(f"[sync_staff_users_to_file] Warning: {e}")
 
+PUB_SETTINGS_JSON_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "pub_settings.json"))
+
+DEFAULT_PUB_SETTINGS = {
+    "customer_punching_enabled": True,  # True = customer can add to cart and order; False = view menu only
+    "weekend_rush_mode": False,
+    "view_only_message": "Digital Menu (View Only Mode) - Due to high rush, customer self-ordering is paused. Our waiter will visit your table to take your order!"
+}
+
+def load_pub_settings() -> dict:
+    try:
+        if os.path.exists(PUB_SETTINGS_JSON_PATH):
+            with open(PUB_SETTINGS_JSON_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return {**DEFAULT_PUB_SETTINGS, **data}
+    except Exception as e:
+        print(f"[load_pub_settings] Warning: {e}")
+    return DEFAULT_PUB_SETTINGS.copy()
+
+def save_pub_settings(settings: dict) -> dict:
+    try:
+        os.makedirs(os.path.dirname(PUB_SETTINGS_JSON_PATH), exist_ok=True)
+        current = load_pub_settings()
+        current.update(settings)
+        with open(PUB_SETTINGS_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2)
+        return current
+    except Exception as e:
+        print(f"[save_pub_settings] Warning: {e}")
+        return settings
+
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -207,16 +237,23 @@ def is_bar_drink_item(it) -> bool:
 # --- Auth & User Management Endpoints ---
 @app.post("/api/auth/login")
 def login_user(creds: schemas.UserLogin, db: Session = Depends(get_db)):
+    clean_email = (creds.email or "").strip().lower()
     hashed = hash_password(creds.password)
     user = db.query(models.User).filter(
-        models.User.email == creds.email,
+        models.User.email.ilike(clean_email),
         models.User.password_hash == hashed
     ).first()
 
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid email or password. This staff account does not exist or has been removed."
+        )
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="Account is disabled")
+        raise HTTPException(
+            status_code=403, 
+            detail="Account has been deactivated by an administrator."
+        )
 
     allowed = user.allowed_terminals
     if not allowed:
@@ -229,6 +266,44 @@ def login_user(creds: schemas.UserLogin, db: Session = Depends(get_db)):
 
     return {
         "message": "Login successful",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "allowed_terminals": allowed
+        }
+    }
+
+@app.post("/api/auth/verify")
+def verify_user_session(payload: dict = Body(...), db: Session = Depends(get_db)):
+    user_id = payload.get("id")
+    email = (payload.get("email") or "").strip().lower()
+    if not user_id and not email:
+        raise HTTPException(status_code=401, detail="Session credentials missing")
+
+    query = db.query(models.User)
+    if user_id:
+        user = query.filter(models.User.id == user_id).first()
+    else:
+        user = query.filter(models.User.email.ilike(email)).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Staff account no longer exists in database")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Staff account has been deactivated")
+
+    allowed = user.allowed_terminals
+    if not allowed:
+        if user.role == "ADMIN" or user.email == "avasanth081@gmail.com":
+            allowed = "customer,entry_scanner,bar,staff,members,admin"
+        elif user.role in ["BAR_RECEPTION", "KITCHEN_CHEF", "BAR_KITCHEN"]:
+            allowed = "customer,entry_scanner,bar,members"
+        else:
+            allowed = "customer,entry_scanner,staff,members"
+
+    return {
+        "valid": True,
         "user": {
             "id": user.id,
             "name": user.name,
@@ -300,17 +375,29 @@ def update_staff_user(user_id: int, user_data: schemas.UserUpdate, db: Session =
     return user
 
 @app.delete("/api/users/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+async def delete_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.email == "avasanth081@gmail.com":
+    if user.email.lower() == "avasanth081@gmail.com":
         raise HTTPException(status_code=400, detail="Cannot delete master admin account")
 
+    deleted_email = user.email
     db.delete(user)
     db.commit()
     sync_staff_users_to_file(db)
-    return {"message": "User deleted successfully"}
+
+    try:
+        await manager.broadcast_to_channel("all", {
+            "event": "STAFF_USER_DELETED",
+            "type": "STAFF_USER_DELETED",
+            "user_id": user_id,
+            "email": deleted_email
+        })
+    except Exception as e:
+        print(f"Broadcast user deletion error: {e}")
+
+    return {"message": "User deleted successfully", "deleted_id": user_id, "deleted_email": deleted_email}
 
 # --- Table & Zone Endpoints ---
 @app.get("/api/zones", response_model=List[schemas.TableZoneSchema])
@@ -512,6 +599,93 @@ async def create_order(order_data: schemas.OrderCreate, db: Session = Depends(ge
     table = db.query(models.PubTable).filter(models.PubTable.id == order_data.table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
+
+    # Check if customer punching is disabled (Weekend rush mode)
+    pub_settings = load_pub_settings()
+    if not pub_settings.get("customer_punching_enabled", True):
+        c_name = (order_data.customer_name or "").strip().lower()
+        is_staff_order = any(w in c_name for w in ["waiter", "staff", "admin", "captain", "vasanth", "padmesh", "ajaykumar"])
+        if not is_staff_order:
+            raise HTTPException(
+                status_code=403,
+                detail="Customer self-ordering is currently paused during peak rush. Our waiter will visit your table to take your order."
+            )
+
+    # Check if this table already has an active order (not yet billed/cancelled)
+    active_order = db.query(models.Order).filter(
+        models.Order.table_id == table.id,
+        models.Order.status.notin_(["BILLED", "CANCELLED"])
+    ).first()
+
+    if active_order:
+        # Existing active table order -> append newly ordered items as PENDING add-on items
+        added_total = 0.0
+        bar_items_added = 0
+        kitchen_items_added = 0
+
+        for item in order_data.items:
+            prod = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+            if not prod:
+                continue
+            
+            item_price = prod.price * item.quantity
+            added_total += item_price
+
+            item_dept = "BAR" if is_bar_drink_item(prod) else "KITCHEN"
+            order_item = models.OrderItem(
+                order_id=active_order.id,
+                product_id=prod.id,
+                quantity=item.quantity,
+                unit_price=prod.price,
+                target_dept=item_dept,
+                status="PENDING",
+                notes=item.notes
+            )
+            db.add(order_item)
+
+            if item_dept == "BAR":
+                bar_items_added += 1
+            else:
+                kitchen_items_added += 1
+
+        active_order.total_amount += added_total
+        active_order.status = "PENDING"  # Alert waiter terminals that new items are pending confirmation
+        table.current_status = "OCCUPIED"
+
+        db.commit()
+        db.refresh(active_order)
+
+        order_payload = {
+            "event": "NEW_ORDER",
+            "order_id": active_order.id,
+            "order_number": active_order.order_number,
+            "table_number": table.table_number,
+            "zone_name": table.zone.display_name if table.zone else "Main",
+            "customer_name": active_order.customer_name,
+            "total_amount": active_order.total_amount,
+            "status": active_order.status,
+            "created_at": active_order.created_at.isoformat(),
+            "bar_items_count": bar_items_added,
+            "kitchen_items_count": kitchen_items_added,
+            "is_addon": True,
+            "items": [
+                {
+                    "id": it.id,
+                    "product_id": it.product_id,
+                    "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                    "quantity": it.quantity,
+                    "unit_price": it.unit_price,
+                    "target_dept": it.target_dept,
+                    "status": it.status,
+                    "notes": it.notes
+                }
+                for it in active_order.items
+            ]
+        }
+
+        await manager.broadcast_to_channel("staff", order_payload)
+        await manager.broadcast_to_channel("admin", order_payload)
+        return active_order
 
     order_num = f"ORD-{uuid.uuid4().hex[:6].upper()}"
     total = 0.0
@@ -717,6 +891,15 @@ async def waiter_confirm_order(
             if itm.id in note_dict:
                 itm.notes = note_dict[itm.id]
 
+    # 1. Identify newly pending items before marking them confirmed
+    new_pending_items = [it for it in order.items if it.status == "PENDING"]
+    # Check if this order already had previously confirmed items (Add-on round)
+    is_addon_round = (len(order.items) > len(new_pending_items)) and (len(new_pending_items) > 0)
+
+    # Route ONLY the newly pending items to Kitchen and Bar!
+    # If all items were already confirmed and none are pending (e.g. repeated tap), items_to_route is empty.
+    items_to_route = new_pending_items
+
     for item in order.items:
         if item.status == "PENDING":
             item.status = "CONFIRMED"
@@ -726,12 +909,14 @@ async def waiter_confirm_order(
     db.commit()
     db.refresh(order)
 
-    # Split order items into Bar Drinks and Kitchen Food
-    bar_items = [it for it in order.items if is_bar_drink_item(it)]
-    kitchen_items = [it for it in order.items if not is_bar_drink_item(it)]
+    # Split ONLY the newly confirmed items into Bar Drinks and Kitchen Food
+    bar_items = [it for it in items_to_route if is_bar_drink_item(it)]
+    kitchen_items = [it for it in items_to_route if not is_bar_drink_item(it)]
 
     bar_items_count = len(bar_items)
     kitchen_items_count = len(kitchen_items)
+
+    ticket_order_number = f"{order.order_number}-ADDON" if is_addon_round else order.order_number
 
     order_payload = {
         "event": "WAITER_CONFIRMED_ORDER",
@@ -742,10 +927,11 @@ async def waiter_confirm_order(
         "customer_name": order.customer_name,
         "total_amount": order.total_amount,
         "status": order.status,
-        "confirmed_by": waiter_name,
-        "waiter_name": waiter_name,
+        "confirmed_by": effective_waiter,
+        "waiter_name": effective_waiter,
         "bar_items_count": bar_items_count,
         "kitchen_items_count": kitchen_items_count,
+        "is_addon": is_addon_round,
         "items": [
             {
                 "id": it.id,
@@ -787,9 +973,9 @@ async def waiter_confirm_order(
                         for it in kitchen_items
                     ]
                     kot_data = thermal_printer.build_kot_esc_pos(
-                        order_number=order.order_number,
+                        order_number=ticket_order_number,
                         table_label=full_tbl,
-                        waiter_name=waiter_name or "Staff",
+                        waiter_name=effective_waiter or "Staff",
                         items=k_items_data,
                         dept="KITCHEN"
                     )
@@ -799,7 +985,7 @@ async def waiter_confirm_order(
                         port=k_port,
                         windows_printer=k_win,
                         data=kot_data,
-                        job_title=f"KOT #{order.order_number}"
+                        job_title=f"KOT {'Addon ' if is_addon_round else ''}#{order.order_number}"
                     )
                 except Exception as ex:
                     print(f"[AutoPrintKitchenKOT] Error: {ex}")
@@ -824,9 +1010,9 @@ async def waiter_confirm_order(
                         for it in bar_items
                     ]
                     bot_data = thermal_printer.build_kot_esc_pos(
-                        order_number=order.order_number,
+                        order_number=ticket_order_number,
                         table_label=full_tbl,
-                        waiter_name=waiter_name or "Staff",
+                        waiter_name=effective_waiter or "Staff",
                         items=b_items_data,
                         dept="BAR"
                     )
@@ -836,7 +1022,7 @@ async def waiter_confirm_order(
                         ip=printer_cfg.get("bar_printer_ip", ""),
                         port=int(printer_cfg.get("bar_printer_port", 9100)),
                         data=bot_data,
-                        job_title=f"BOT #{order.order_number}"
+                        job_title=f"BOT {'Addon ' if is_addon_round else ''}#{order.order_number}"
                     )
                 except Exception as ex:
                     print(f"[AutoPrintBarBOT] Error: {ex}")
@@ -844,7 +1030,7 @@ async def waiter_confirm_order(
 
     await manager.broadcast_all(order_payload)
     return {
-        "message": f"Order #{order.order_number} confirmed by {waiter_name} and routed: {kitchen_items_count} food items to Kitchen KOT, {bar_items_count} drinks items to Posiflex Bar",
+        "message": f"Order #{order.order_number} confirmed by {effective_waiter} and routed: {kitchen_items_count} food items to Kitchen KOT, {bar_items_count} drinks items to Posiflex Bar",
         "order": order_payload
     }
 
@@ -899,57 +1085,58 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
     z_lbl = order.table.zone.display_name if order.table and order.table.zone else ""
     tbl_str = f"{t_lbl} ({z_lbl})" if z_lbl else t_lbl
 
-    # Auto-dispatch supplemental Food KOT to Kitchen LAN printer if kitchen items were added
-    if added_kitchen_items and printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
-        import asyncio
-        async def _auto_print_addon_kitchen():
-            try:
-                k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.0.70")
-                k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
-                k_win = printer_cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
-                kot_data = thermal_printer.build_kot_esc_pos(
-                    order_number=f"{order.order_number}-ADDON",
-                    table_label=tbl_str,
-                    waiter_name=req.waiter_name or "Waiter",
-                    items=added_kitchen_items,
-                    dept="KITCHEN"
-                )
-                await thermal_printer.print_bridge.dispatch_print(
-                    target="KITCHEN",
-                    ip=k_ip,
-                    port=k_port,
-                    windows_printer=k_win,
-                    data=kot_data,
-                    job_title=f"KOT Addon #{order.order_number}"
-                )
-            except Exception as ex:
-                print(f"[AutoPrintKitchenAddon] Error: {ex}")
-        asyncio.create_task(_auto_print_addon_kitchen())
+    # Auto-dispatch supplemental KOT/BOT ONLY if explicitly requested (by default, waiter confirmation handles printing)
+    should_print = getattr(req, "auto_print", False)
+    if should_print:
+        if added_kitchen_items and printer_cfg.get("auto_print_kot", True) and printer_cfg.get("kitchen_printer_enabled", True):
+            import asyncio
+            async def _auto_print_addon_kitchen():
+                try:
+                    k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.0.70")
+                    k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
+                    k_win = printer_cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
+                    kot_data = thermal_printer.build_kot_esc_pos(
+                        order_number=f"{order.order_number}-ADDON",
+                        table_label=tbl_str,
+                        waiter_name=req.waiter_name or "Waiter",
+                        items=added_kitchen_items,
+                        dept="KITCHEN"
+                    )
+                    await thermal_printer.print_bridge.dispatch_print(
+                        target="KITCHEN",
+                        ip=k_ip,
+                        port=k_port,
+                        windows_printer=k_win,
+                        data=kot_data,
+                        job_title=f"KOT Addon #{order.order_number}"
+                    )
+                except Exception as ex:
+                    print(f"[AutoPrintKitchenAddon] Error: {ex}")
+            asyncio.create_task(_auto_print_addon_kitchen())
 
-    # Auto-dispatch supplemental Drinks BOT to Posiflex USB if bar items were added
-    if added_bar_items and printer_cfg.get("auto_print_bar_kot", True) and printer_cfg.get("bar_printer_enabled", True):
-        import asyncio
-        async def _auto_print_addon_bar():
-            try:
-                bar_win = printer_cfg.get("bar_printer_windows_name", "BAR BOT")
-                bot_data = thermal_printer.build_kot_esc_pos(
-                    order_number=f"{order.order_number}-ADDON",
-                    table_label=tbl_str,
-                    waiter_name=req.waiter_name or "Waiter",
-                    items=added_bar_items,
-                    dept="BAR"
-                )
-                await thermal_printer.print_bridge.dispatch_print(
-                    target="BAR",
-                    windows_printer=bar_win,
-                    ip=printer_cfg.get("bar_printer_ip", ""),
-                    port=int(printer_cfg.get("bar_printer_port", 9100)),
-                    data=bot_data,
-                    job_title=f"BOT Addon #{order.order_number}"
-                )
-            except Exception as ex:
-                print(f"[AutoPrintBarAddon] Error: {ex}")
-        asyncio.create_task(_auto_print_addon_bar())
+        if added_bar_items and printer_cfg.get("auto_print_bar_kot", True) and printer_cfg.get("bar_printer_enabled", True):
+            import asyncio
+            async def _auto_print_addon_bar():
+                try:
+                    bar_win = printer_cfg.get("bar_printer_windows_name", "BAR BOT")
+                    bot_data = thermal_printer.build_kot_esc_pos(
+                        order_number=f"{order.order_number}-ADDON",
+                        table_label=tbl_str,
+                        waiter_name=req.waiter_name or "Waiter",
+                        items=added_bar_items,
+                        dept="BAR"
+                    )
+                    await thermal_printer.print_bridge.dispatch_print(
+                        target="BAR",
+                        windows_printer=bar_win,
+                        ip=printer_cfg.get("bar_printer_ip", ""),
+                        port=int(printer_cfg.get("bar_printer_port", 9100)),
+                        data=bot_data,
+                        job_title=f"BOT Addon #{order.order_number}"
+                    )
+                except Exception as ex:
+                    print(f"[AutoPrintBarAddon] Error: {ex}")
+            asyncio.create_task(_auto_print_addon_bar())
 
 
     await manager.broadcast_all({
@@ -959,6 +1146,149 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
         "added_by": req.waiter_name or "Waiter"
     })
     return {"message": f"Added {len(req.items)} item(s) to order", "new_total": order.total_amount}
+
+@app.post("/api/orders/{order_id}/switch-table")
+async def switch_order_table(
+    order_id: int, 
+    req: schemas.SwitchTableRequest, 
+    db: Session = Depends(get_db)
+):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status in ["BILLED", "CANCELLED"] or order.payment_status == "COLLECTED":
+        raise HTTPException(status_code=400, detail="Cannot switch table for an order that is already billed or cancelled.")
+
+    new_table = db.query(models.PubTable).filter(models.PubTable.id == req.new_table_id).first()
+    if not new_table:
+        raise HTTPException(status_code=404, detail="Destination table not found")
+
+    old_table = order.table
+    if old_table and old_table.id == new_table.id:
+        raise HTTPException(status_code=400, detail="Order is already on this table.")
+
+    old_tbl_str = f"{old_table.table_number} ({old_table.zone.display_name})" if old_table and old_table.zone else (old_table.table_number if old_table else "Previous Table")
+    new_tbl_str = f"{new_table.table_number} ({new_table.zone.display_name})" if new_table.zone else new_table.table_number
+    waiter_label = req.waiter_name or order.waiter_name or "Staff"
+
+    # 1. Update Order's Table ID
+    order.table_id = new_table.id
+    if req.waiter_name:
+        order.waiter_name = req.waiter_name
+
+    # 2. Update New Table Status to OCCUPIED
+    new_table.current_status = "OCCUPIED"
+
+    # 3. Check if Old Table has any other active orders remaining
+    if old_table:
+        remaining_active = db.query(models.Order).filter(
+            models.Order.table_id == old_table.id,
+            models.Order.id != order.id,
+            ~models.Order.status.in_(["BILLED", "CANCELLED"])
+        ).count()
+        if remaining_active == 0:
+            old_table.current_status = "VACANT"
+
+    # 4. Add sync log
+    db.add(models.SyncLog(
+        entity_type="ORDER_TABLE_TRANSFER",
+        entity_id=order.order_number,
+        action="UPDATE",
+        sync_status="PENDING"
+    ))
+
+    db.commit()
+    db.refresh(order)
+    db.refresh(new_table)
+    if old_table:
+        db.refresh(old_table)
+
+    # 5. Thermal Printing: Table Transfer Notice to Kitchen KOT and Bar BOT
+    printer_cfg = thermal_printer.load_printer_config()
+    should_print = req.print_transfer_slip if req.print_transfer_slip is not None else True
+
+    if should_print:
+        order_items_data = [
+            {
+                "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "target_dept": it.target_dept or ("BAR" if is_bar_drink_item(it) else "KITCHEN")
+            }
+            for it in order.items
+        ]
+        kitchen_items = [it for it in order_items_data if it["target_dept"] == "KITCHEN"]
+        bar_items = [it for it in order_items_data if it["target_dept"] == "BAR"]
+
+        import asyncio
+        async def _dispatch_transfer_slips():
+            try:
+                # Dispatch to Kitchen KOT
+                if kitchen_items and printer_cfg.get("kitchen_printer_enabled", True):
+                    k_ip = printer_cfg.get("kitchen_printer_ip", "192.168.0.70")
+                    k_port = int(printer_cfg.get("kitchen_printer_port", 9100))
+                    k_win = printer_cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
+                    k_slip = thermal_printer.build_table_transfer_slip(
+                        order_number=order.order_number,
+                        old_table_label=old_tbl_str,
+                        new_table_label=new_tbl_str,
+                        waiter_name=waiter_label,
+                        items=kitchen_items,
+                        dept="KITCHEN"
+                    )
+                    await thermal_printer.print_bridge.dispatch_print(
+                        target="KITCHEN",
+                        ip=k_ip,
+                        port=k_port,
+                        windows_printer=k_win,
+                        data=k_slip,
+                        job_title=f"Transfer #{order.order_number} to {new_table.table_number}"
+                    )
+
+                # Dispatch to Bar BOT
+                if bar_items and printer_cfg.get("bar_printer_enabled", True):
+                    bar_win = printer_cfg.get("bar_printer_windows_name", "BAR BOT")
+                    b_slip = thermal_printer.build_table_transfer_slip(
+                        order_number=order.order_number,
+                        old_table_label=old_tbl_str,
+                        new_table_label=new_tbl_str,
+                        waiter_name=waiter_label,
+                        items=bar_items,
+                        dept="BAR"
+                    )
+                    await thermal_printer.print_bridge.dispatch_print(
+                        target="BAR",
+                        windows_printer=bar_win,
+                        ip=printer_cfg.get("bar_printer_ip", ""),
+                        port=int(printer_cfg.get("bar_printer_port", 9100)),
+                        data=b_slip,
+                        job_title=f"Transfer #{order.order_number} to {new_table.table_number}"
+                    )
+            except Exception as ex:
+                print(f"[TableTransferPrint] Notice: {ex}")
+
+        asyncio.create_task(_dispatch_transfer_slips())
+
+    # 6. Broadcast to all screens via WebSocket
+    event_payload = {
+        "event": "TABLE_TRANSFERRED",
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "from_table_id": old_table.id if old_table else None,
+        "from_table_number": old_table.table_number if old_table else "None",
+        "to_table_id": new_table.id,
+        "to_table_number": new_table.table_number,
+        "new_table_label": new_tbl_str,
+        "waiter_name": waiter_label
+    }
+    await manager.broadcast_all(event_payload)
+
+    return {
+        "message": f"Order #{order.order_number} successfully transferred from {old_tbl_str} to {new_tbl_str}!",
+        "order_id": order.id,
+        "from_table": old_tbl_str,
+        "to_table": new_tbl_str
+    }
 
 @app.delete("/api/order-items/{item_id}")
 async def delete_order_item(item_id: int, db: Session = Depends(get_db)):
@@ -1037,23 +1367,38 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
     order.payment_status = "COLLECTED"
     order.payment_mode = req.payment_mode
     order.collected_by = req.collected_by or "Waiter"
-    order.booking_platform = req.booking_platform or "Direct / Walk-in"
-    order.booking_reference_id = req.booking_reference_id or None
-    order.discount_percentage = float(req.discount_percentage or 0.0)
-    order.discount_amount = float(req.discount_amount or 0.0)
 
-    sub = float(order.total_amount or 0.0)
-    if order.discount_amount <= 0.0 and order.discount_percentage > 0.0:
-        order.discount_amount = round((sub * order.discount_percentage) / 100.0, 2)
+    is_complimentary = (req.payment_mode == "OTHER" or "Complimentary" in (req.booking_platform or ""))
+    beneficiary = req.beneficiary_name or req.notes or req.booking_reference_id
 
-    if order.discount_amount > 0.0:
-        order.final_amount = max(0.0, sub - order.discount_amount)
-    elif req.final_amount is not None:
-        order.final_amount = float(req.final_amount)
+    if is_complimentary:
+        order.payment_mode = "OTHER"
+        order.booking_platform = req.booking_platform or "Complimentary (Owners/MD/Bouncers)"
+        order.booking_reference_id = (beneficiary or "Management Guest").strip()
+        order.discount_percentage = 100.0
+        sub = float(order.total_amount or 0.0)
+        order.discount_amount = sub
+        order.final_amount = 0.0
+        order.amount_collected = 0.0
     else:
-        order.final_amount = sub
+        order.booking_platform = req.booking_platform or "Direct / Walk-in"
+        order.booking_reference_id = req.booking_reference_id or None
+        order.discount_percentage = float(req.discount_percentage or 0.0)
+        order.discount_amount = float(req.discount_amount or 0.0)
 
-    order.amount_collected = order.final_amount
+        sub = float(order.total_amount or 0.0)
+        if order.discount_amount <= 0.0 and order.discount_percentage > 0.0:
+            order.discount_amount = round((sub * order.discount_percentage) / 100.0, 2)
+
+        if order.discount_amount > 0.0:
+            order.final_amount = max(0.0, sub - order.discount_amount)
+        elif req.final_amount is not None:
+            order.final_amount = float(req.final_amount)
+        else:
+            order.final_amount = sub
+
+        order.amount_collected = order.final_amount
+
     order.status = "BILLED"
 
     if order.table:
@@ -1132,25 +1477,40 @@ def get_payment_logs(db: Session = Depends(get_db)):
     total_cash = 0.0
     total_upi = 0.0
     total_card = 0.0
+    total_complimentary = 0.0
+    complimentary_count = 0
     total_discount_given = 0.0
     platform_counts = {}
 
     for ord in collected_orders:
-        amt = ord.amount_collected or ord.final_amount or ord.total_amount
+        amt = ord.amount_collected if ord.amount_collected is not None else (ord.final_amount if ord.final_amount is not None else ord.total_amount)
         mode = ord.payment_mode or "CASH"
         platform = ord.booking_platform or "Direct / Walk-in"
         disc_pct = ord.discount_percentage or 0.0
         disc_amt = ord.discount_amount or 0.0
 
         if mode == "CASH":
-            total_cash += amt
+            total_cash += float(amt or 0.0)
         elif mode == "UPI":
-            total_upi += amt
+            total_upi += float(amt or 0.0)
         elif mode == "CARD":
-            total_card += amt
+            total_card += float(amt or 0.0)
+        elif mode == "OTHER" or "Complimentary" in platform:
+            total_complimentary += float(ord.total_amount or 0.0)
+            complimentary_count += 1
 
-        total_discount_given += disc_amt
+        total_discount_given += float(disc_amt or 0.0)
         platform_counts[platform] = platform_counts.get(platform, 0) + 1
+
+        items_list = []
+        for it in ord.items:
+            items_list.append({
+                "id": it.id,
+                "product_name": it.product.name if it.product else f"Item #{it.product_id}",
+                "quantity": it.quantity,
+                "unit_price": it.unit_price,
+                "target_dept": it.target_dept
+            })
 
         logs.append({
             "order_id": ord.id,
@@ -1158,14 +1518,15 @@ def get_payment_logs(db: Session = Depends(get_db)):
             "table_number": ord.table.table_number if ord.table else "ST-01",
             "zone_name": ord.table.zone.display_name if ord.table and ord.table.zone else "Main Zone",
             "amount_collected": amt,
-            "subtotal_amount": ord.total_amount,
+            "subtotal_amount": float(ord.total_amount or 0.0),
             "payment_mode": mode,
             "booking_platform": platform,
             "booking_reference_id": ord.booking_reference_id or "-",
             "discount_percentage": disc_pct,
             "discount_amount": disc_amt,
             "collected_by": ord.collected_by or "Staff",
-            "timestamp": ord.updated_at.strftime("%d-%m-%Y %H:%M:%S") if ord.updated_at else ord.created_at.strftime("%d-%m-%Y %H:%M:%S")
+            "timestamp": ord.updated_at.strftime("%d-%m-%Y %H:%M:%S") if ord.updated_at else ord.created_at.strftime("%d-%m-%Y %H:%M:%S"),
+            "items": items_list
         })
 
     return {
@@ -1173,6 +1534,8 @@ def get_payment_logs(db: Session = Depends(get_db)):
             "total_cash": total_cash,
             "total_upi": total_upi,
             "total_card": total_card,
+            "total_complimentary": total_complimentary,
+            "complimentary_count": complimentary_count,
             "grand_total": total_cash + total_upi + total_card,
             "total_discount_given": total_discount_given,
             "total_transactions": len(logs),
@@ -1242,6 +1605,8 @@ def get_category_sales_report(db: Session = Depends(get_db)):
     total_cash = 0.0
     total_upi = 0.0
     total_card = 0.0
+    total_complimentary = 0.0
+    complimentary_count = 0
     grand_total_collected = 0.0
     total_discounts = 0.0
 
@@ -1254,19 +1619,24 @@ def get_category_sales_report(db: Session = Depends(get_db)):
     platform_sales = {}
 
     for ord in collected_orders:
-        amt = ord.amount_collected or ord.final_amount or ord.total_amount or 0.0
+        amt = ord.amount_collected if ord.amount_collected is not None else (ord.final_amount if ord.final_amount is not None else (ord.total_amount or 0.0))
         mode = ord.payment_mode or "CASH"
         platform = ord.booking_platform or "Direct / Walk-in"
         disc = ord.discount_amount or 0.0
 
         if mode == "CASH":
             total_cash += amt
+            grand_total_collected += amt
         elif mode == "UPI":
             total_upi += amt
+            grand_total_collected += amt
         elif mode == "CARD":
             total_card += amt
+            grand_total_collected += amt
+        elif mode == "OTHER" or "Complimentary" in platform:
+            total_complimentary += float(ord.total_amount or 0.0)
+            complimentary_count += 1
 
-        grand_total_collected += amt
         total_discounts += disc
 
         # Platform summary
@@ -1313,7 +1683,9 @@ def get_category_sales_report(db: Session = Depends(get_db)):
             "total_cash": total_cash,
             "total_upi": total_upi,
             "total_card": total_card,
-            "grand_total": grand_total_collected,
+            "total_complimentary": total_complimentary,
+            "complimentary_count": complimentary_count,
+            "grand_total": total_cash + total_upi + total_card,
             "total_discounts": total_discounts,
             "total_orders": len(collected_orders)
         },
@@ -1514,6 +1886,23 @@ def bulk_import_members(members_list: List[schemas.CustomerMemberCreate], db: Se
         "added_count": added_count,
         "skipped_count": skipped_count
     }
+
+# --- Pub System Settings Endpoints ---
+
+@app.get("/api/settings")
+def get_pub_settings_endpoint():
+    """Returns current pub operational settings including customer punching toggle."""
+    return load_pub_settings()
+
+@app.post("/api/settings")
+async def update_pub_settings_endpoint(settings_data: dict = Body(...)):
+    """Updates operational settings (e.g. customer punching on/off) and broadcasts to all terminals."""
+    updated = save_pub_settings(settings_data)
+    await manager.broadcast_all({
+        "event": "SETTINGS_UPDATED",
+        "settings": updated
+    })
+    return {"message": "Settings updated successfully", "settings": updated}
 
 # --- Thermal Printer Management & ESC/POS Endpoints ---
 
@@ -1832,6 +2221,19 @@ async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Dep
     waiter_str = order.waiter_name or order.collected_by or "Staff"
     created_str = order.created_at.strftime("%d-%b-%Y %I:%M %p") if order.created_at else None
 
+    # If there are pending items, route only pending items as add-on; if all already confirmed, route all (reprint)
+    pending_items = [it for it in order.items if it.status == "PENDING"]
+    is_addon = (len(order.items) > len(pending_items)) and (len(pending_items) > 0)
+    items_to_route = pending_items if pending_items else order.items
+    ticket_order_num = f"{order.order_number}-ADDON" if is_addon else order.order_number
+
+    if pending_items:
+        for it in pending_items:
+            it.status = "CONFIRMED"
+        order.status = "CONFIRMED"
+        db.commit()
+        db.refresh(order)
+
     # Split into kitchen food vs bar drinks
     kitchen_items = [
         {
@@ -1840,7 +2242,7 @@ async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Dep
             "unit_price": it.unit_price,
             "notes": it.notes
         }
-        for it in order.items
+        for it in items_to_route
         if not is_bar_drink_item(it)
     ]
     bar_items = [
@@ -1850,7 +2252,7 @@ async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Dep
             "unit_price": it.unit_price,
             "notes": it.notes
         }
-        for it in order.items
+        for it in items_to_route
         if is_bar_drink_item(it)
     ]
 
@@ -1862,7 +2264,7 @@ async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Dep
         k_port = int(cfg.get("kitchen_printer_port", 9100))
         k_win = cfg.get("kitchen_printer_windows_name", "KITCHEN KOT")
         kot_bytes = thermal_printer.build_kot_esc_pos(
-            order_number=order.order_number,
+            order_number=ticket_order_num,
             table_label=table_label,
             waiter_name=waiter_str,
             items=kitchen_items,
@@ -1875,7 +2277,7 @@ async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Dep
             port=k_port,
             windows_printer=k_win,
             data=kot_bytes,
-            job_title=f"KOT #{order.order_number}"
+            job_title=f"KOT {'Addon ' if is_addon else ''}#{order.order_number}"
         )
         results.append(f"Kitchen Food: {k_msg}")
 
@@ -1883,7 +2285,7 @@ async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Dep
     if bar_items:
         bar_win = cfg.get("bar_printer_windows_name", "BAR BOT")
         bot_bytes = thermal_printer.build_kot_esc_pos(
-            order_number=order.order_number,
+            order_number=ticket_order_num,
             table_label=table_label,
             waiter_name=waiter_str,
             items=bar_items,
@@ -1896,7 +2298,7 @@ async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Dep
             ip=cfg.get("bar_printer_ip", ""),
             port=int(cfg.get("bar_printer_port", 9100)),
             data=bot_bytes,
-            job_title=f"BOT #{order.order_number}"
+            job_title=f"BOT {'Addon ' if is_addon else ''}#{order.order_number}"
         )
         results.append(f"Bar Drinks: {b_msg}")
 

@@ -361,6 +361,81 @@ def build_kot_esc_pos(
     return bytes(b)
 
 
+def build_table_transfer_slip(
+    order_number: str,
+    old_table_label: str,
+    new_table_label: str,
+    waiter_name: str,
+    items: List[Dict[str, Any]],
+    dept: str = "ALL",
+    transferred_at_str: Optional[str] = None
+) -> bytes:
+    """
+    Builds a high-visibility Table Transfer Slip in ESC/POS format.
+    Alerts Kitchen and Bar staff that a customer's order has moved to a new table.
+    """
+    now = transferred_at_str or datetime.now().strftime("%d-%b-%Y %I:%M %p")
+    dept_label = "FOOD & KITCHEN" if dept.upper() == "KITCHEN" else ("BAR & DRINKS" if dept.upper() == "BAR" else "KITCHEN & BAR")
+    
+    b = bytearray()
+    b.extend(CMD_INIT)
+    b.extend(ESC + b'G\x01')  # Double-strike deep dark thermal printing
+    b.extend(ESC + b't\x00')
+    
+    # Title Banner
+    b.extend(CMD_ALIGN_CENTER)
+    b.extend(CMD_BOLD_ON)
+    b.extend(CMD_TEXT_DOUBLE_SIZE)
+    b.extend(b"*** TABLE TRANSFER ***\n")
+    b.extend(CMD_TEXT_NORMAL)
+    b.extend(f"NOTICE FOR: {dept_label}\n".encode('latin-1', 'replace'))
+    b.extend(CMD_BOLD_OFF)
+    b.extend(b"========================================\n")
+    
+    # Old and New Table Numbers in Large Font
+    b.extend(CMD_ALIGN_LEFT)
+    b.extend(CMD_BOLD_ON)
+    b.extend(b"FROM PREVIOUS TABLE:\n")
+    b.extend(CMD_TEXT_DOUBLE_SIZE)
+    b.extend(f"{old_table_label}\n".encode('latin-1', 'replace'))
+    b.extend(CMD_TEXT_NORMAL)
+    b.extend(CMD_BOLD_OFF)
+    b.extend(b"----------------------------------------\n")
+    b.extend(CMD_BOLD_ON)
+    b.extend(b">>> MOVED TO NEW TABLE: >>>\n")
+    b.extend(CMD_TEXT_DOUBLE_SIZE)
+    b.extend(f"{new_table_label}\n".encode('latin-1', 'replace'))
+    b.extend(CMD_TEXT_NORMAL)
+    b.extend(CMD_BOLD_OFF)
+    b.extend(b"========================================\n")
+    
+    # Metadata
+    b.extend(CMD_ALIGN_LEFT)
+    b.extend(f"Order #:   {order_number}\n".encode('latin-1', 'replace'))
+    b.extend(f"Server:    {waiter_name}\n".encode('latin-1', 'replace'))
+    b.extend(f"Moved At:  {now}\n".encode('latin-1', 'replace'))
+    b.extend(b"----------------------------------------\n")
+    b.extend(CMD_BOLD_ON)
+    b.extend(b"ATTENTION STAFF:\n")
+    b.extend(f"Please serve all pending food & drinks\n".encode('latin-1', 'replace'))
+    b.extend(f"to NEW TABLE: {new_table_label}\n".encode('latin-1', 'replace'))
+    b.extend(b"========================================\n")
+    b.extend(CMD_BOLD_OFF)
+    
+    if items:
+        b.extend(b"ITEMS ON THIS ORDER:\n")
+        for it in items:
+            qty = it.get("quantity", 1)
+            name = it.get("product_name") or it.get("name") or "Item"
+            b.extend(f"  [{qty}] {name}\n".encode('latin-1', 'replace'))
+        b.extend(b"----------------------------------------\n")
+        
+    b.extend(CMD_ALIGN_CENTER)
+    b.extend(b"--- END OF TRANSFER NOTICE ---\n")
+    b.extend(CMD_FEED_AND_CUT)
+    return bytes(b)
+
+
 def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     """
     Builds a complete, extra-dark 80mm Customer Tax Invoice / Final Bill in ESC/POS format.
@@ -418,9 +493,15 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     if cfg.get("bill_fssai"):
         b.extend(f"FSSAI: {cfg['bill_fssai']}\n".encode('latin-1', 'replace'))
         
+    is_complimentary = (payment_mode in ["OTHER", "COMPLIMENTARY"] or "Complimentary" in platform)
+    booking_ref = order_dict.get("booking_reference_id")
+
     b.extend(b"----------------------------------------\n")
     b.extend(CMD_BOLD_ON)
-    b.extend(b"TAX INVOICE / FINAL BILL\n")
+    if is_complimentary:
+        b.extend(b"TAX INVOICE / COMPLIMENTARY BILL\n")
+    else:
+        b.extend(b"TAX INVOICE / FINAL BILL\n")
     b.extend(CMD_BOLD_OFF)
     b.extend(b"----------------------------------------\n")
     
@@ -433,8 +514,11 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     b.extend(f"Server:    {waiter}\n".encode('latin-1', 'replace'))
     b.extend(f"Guest:     {customer}\n".encode('latin-1', 'replace'))
     b.extend(f"Channel:   {platform}\n".encode('latin-1', 'replace'))
-    booking_ref = order_dict.get("booking_reference_id")
-    if booking_ref and booking_ref != "-":
+    if is_complimentary:
+        b.extend(f"Bill Type: COMPLIMENTARY (FREE)\n".encode('latin-1', 'replace'))
+        if booking_ref and booking_ref != "-":
+            b.extend(f"Beneficiary:{booking_ref}\n".encode('latin-1', 'replace'))
+    elif booking_ref and booking_ref != "-":
         b.extend(f"Book ID:   {booking_ref}\n".encode('latin-1', 'replace'))
     b.extend(CMD_BOLD_OFF)
     b.extend(b"========================================\n")
@@ -461,20 +545,26 @@ def build_bill_esc_pos(order_dict: Dict[str, Any]) -> bytes:
     
     # Totals
     b.extend(f"{'Subtotal:'.ljust(26)}{f'Rs. {subtotal:.2f}'.rjust(14)}\n".encode('latin-1', 'replace'))
-    if discount_amt > 0:
+    if is_complimentary:
+        b.extend(f"{'Free (100% Compl.):'.ljust(26)}{f'-Rs. {subtotal:.2f}'.rjust(14)}\n".encode('latin-1', 'replace'))
+    elif discount_amt > 0:
         disc_label = f"Discount ({discount_pct:.0f}%):" if discount_pct > 0 else "Discount:"
         b.extend(f"{disc_label.ljust(26)}{f'-Rs. {discount_amt:.2f}'.rjust(14)}\n".encode('latin-1', 'replace'))
         
     b.extend(b"========================================\n")
     b.extend(CMD_BOLD_ON)
     b.extend(CMD_TEXT_DOUBLE_HEIGHT)
-    b.extend(f"{'NET PAYABLE:'.ljust(22)}{f'Rs. {final_amt:.2f}'.rjust(18)}\n".encode('latin-1', 'replace'))
+    final_amt_to_show = 0.0 if is_complimentary else final_amt
+    b.extend(f"{'NET PAYABLE:'.ljust(22)}{f'Rs. {final_amt_to_show:.2f}'.rjust(18)}\n".encode('latin-1', 'replace'))
     b.extend(CMD_TEXT_NORMAL)
     b.extend(CMD_BOLD_OFF)
     b.extend(b"========================================\n")
     
     b.extend(CMD_BOLD_ON)
-    b.extend(f"Payment Mode: {payment_mode}\n".encode('latin-1', 'replace'))
+    if is_complimentary:
+        b.extend(f"Payment Mode: OTHER (COMPLIMENTARY)\n".encode('latin-1', 'replace'))
+    else:
+        b.extend(f"Payment Mode: {payment_mode}\n".encode('latin-1', 'replace'))
     b.extend(CMD_BOLD_OFF)
     b.extend(b"Prices inclusive of all applicable taxes\n")
     b.extend(b"----------------------------------------\n")

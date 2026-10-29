@@ -11,57 +11,78 @@ def hash_password(password: str) -> str:
 
 def seed_initial_data(db: Session):
     # 0. Sync & Seed Users (Admin & Staff Accounts)
-    # Ensure all defined staff accounts exist and persist across deploys/restarts
-    users_to_sync = []
-    if os.path.exists(STAFF_USERS_JSON_PATH):
-        try:
-            with open(STAFF_USERS_JSON_PATH, "r", encoding="utf-8") as f:
-                users_to_sync = json.load(f)
-        except Exception as e:
-            print(f"[seed_data] Warning loading staff_users.json: {e}")
+    # Ensure Master Admin ALWAYS exists with full access
+    admin_user = db.query(User).filter(User.email.ilike("avasanth081@gmail.com")).first()
+    if not admin_user:
+        admin_pass = "Vasanth@123"
+        admin_user = User(
+            name="Vasanth Admin",
+            email="avasanth081@gmail.com",
+            password_hash=hash_password(admin_pass),
+            plain_password=admin_pass,
+            role="ADMIN",
+            allowed_terminals="customer,entry_scanner,bar,staff,reports,tables,staff_accounts,members,admin",
+            is_active=True
+        )
+        db.add(admin_user)
+        db.commit()
+    else:
+        # Guarantee admin privileges are up-to-date
+        if "staff_accounts" not in (admin_user.allowed_terminals or ""):
+            admin_user.allowed_terminals = "customer,entry_scanner,bar,staff,reports,tables,staff_accounts,members,admin"
+            admin_user.role = "ADMIN"
+            admin_user.is_active = True
+            db.commit()
 
-    if not users_to_sync:
-        users_to_sync = [
-            {"name": "Vasanth Admin", "email": "avasanth081@gmail.com", "password": "Vasanth@123", "role": "ADMIN", "allowed_terminals": "customer,entry_scanner,bar,staff,members,admin"},
-            {"name": "padmesh", "email": "padmeshskmr@gmail.com", "password_hash": "99a96506f91a60e57d7cae1aa3d4f794cdee1f7ef621fb521efded8479b9a4da", "role": "BAR_KITCHEN", "allowed_terminals": "customer,bar,staff,members"},
-            {"name": "surendar", "email": "surendar@gmail.com", "password_hash": "840979de0c216277cf7d1805bd4f309a6d82ac29ee94b7087d30fd79c36beb95", "role": "WAITER", "allowed_terminals": "customer,staff,members"},
-            {"name": "Ajaykumar", "email": "ajaykumar@bermuda.pub", "password": "Ajay@123", "role": "WAITER", "allowed_terminals": "customer,staff,members"},
-            {"name": "John Waiter", "email": "waiter@bermuda.pub", "password": "Waiter@123", "role": "WAITER", "allowed_terminals": "customer,entry_scanner,staff,members"},
-            {"name": "Bar & Kitchen Staff", "email": "bar@bermuda.pub", "password": "Bar@123", "role": "BAR_KITCHEN", "allowed_terminals": "customer,entry_scanner,bar,members"},
-            {"name": "Chef Mario", "email": "kitchen@bermuda.pub", "password": "Kitchen@123", "role": "BAR_KITCHEN", "allowed_terminals": "customer,entry_scanner,bar,members"}
-        ]
+    # CRITICAL: ONLY seed initial starter staff if database is completely brand new (count <= 1).
+    # NEVER re-insert staff accounts that an administrator has deleted!
+    total_users_count = db.query(User).count()
+    if total_users_count <= 1:
+        # Check if a persistent backup exists in staff_users.json
+        seeded_staff = False
+        if os.path.exists(STAFF_USERS_JSON_PATH):
+            try:
+                with open(STAFF_USERS_JSON_PATH, "r", encoding="utf-8") as f:
+                    saved_users = json.load(f)
+                    for u in saved_users:
+                        if u.get("email", "").lower() != "avasanth081@gmail.com":
+                            existing = db.query(User).filter(User.email.ilike(u["email"])).first()
+                            if not existing:
+                                p_pass = u.get("plain_password") or "Bermuda@123"
+                                p_hash = u.get("password_hash") or hash_password(p_pass)
+                                db.add(User(
+                                    name=u["name"],
+                                    email=u["email"],
+                                    password_hash=p_hash,
+                                    plain_password=p_pass,
+                                    role=u.get("role", "WAITER"),
+                                    allowed_terminals=u.get("allowed_terminals", "customer,staff"),
+                                    is_active=u.get("is_active", True)
+                                ))
+                                seeded_staff = True
+                    if seeded_staff:
+                        db.commit()
+            except Exception as e:
+                print(f"[seed_data] Warning reading staff_users.json: {e}")
 
-    DEFAULT_PASSWORDS = {
-        "avasanth081@gmail.com": "Vasanth@123",
-        "padmeshskmr@gmail.com": "Padmesh@123",
-        "surendar@gmail.com": "Surendar@123",
-        "ajaykumar@bermuda.pub": "Ajay@123",
-        "waiter@bermuda.pub": "Waiter@123",
-        "bar@bermuda.pub": "Bar@123",
-        "kitchen@bermuda.pub": "Kitchen@123",
-    }
-
-    for u_info in users_to_sync:
-        existing = db.query(User).filter_by(email=u_info["email"]).first()
-        plain_pass = u_info.get("plain_password") or u_info.get("password") or DEFAULT_PASSWORDS.get(u_info["email"].lower(), "Bermuda@123")
-        if not existing:
-            p_hash = u_info.get("password_hash") or hash_password(plain_pass)
-            new_u = User(
-                name=u_info["name"],
-                email=u_info["email"],
-                password_hash=p_hash,
-                plain_password=plain_pass,
-                role=u_info.get("role", "WAITER"),
-                allowed_terminals=u_info.get("allowed_terminals", "customer,staff"),
-                is_active=u_info.get("is_active", True)
-            )
-            db.add(new_u)
-        else:
-            if not getattr(existing, "plain_password", None):
-                existing.plain_password = plain_pass
-            if not existing.allowed_terminals and u_info.get("allowed_terminals"):
-                existing.allowed_terminals = u_info["allowed_terminals"]
-    db.commit()
+        # If still only master admin exists, seed standard initial accounts for first run only
+        if not seeded_staff and db.query(User).count() <= 1:
+            starter_accounts = [
+                {"name": "PADMESH", "email": "padmeshskmr@gmail.com", "password": "Padmesh@123", "role": "WAITER", "allowed_terminals": "staff"}
+            ]
+            for u in starter_accounts:
+                existing = db.query(User).filter(User.email.ilike(u["email"])).first()
+                if not existing:
+                    db.add(User(
+                        name=u["name"],
+                        email=u["email"],
+                        password_hash=hash_password(u["password"]),
+                        plain_password=u["password"],
+                        role=u["role"],
+                        allowed_terminals=u["allowed_terminals"],
+                        is_active=True
+                    ))
+            db.commit()
 
     # 1. Seed & Update Table Zones
     if db.query(TableZone).count() == 0:

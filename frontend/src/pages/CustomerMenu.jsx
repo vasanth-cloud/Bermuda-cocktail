@@ -5,7 +5,7 @@ import BermudaLogo from '../components/BermudaLogo';
 import WaiterAddonModal from '../components/WaiterAddonModal';
 import { 
   ShoppingBag, Plus, Minus, Check, Wine, Utensils, Search, 
-  Sparkles, Clock, ChevronDown, ChevronUp, AlertCircle, Receipt, X, Tag
+  Sparkles, Clock, ChevronDown, ChevronUp, AlertCircle, Receipt, X, Tag, Eye
 } from 'lucide-react';
 
 const productThumbnails = {
@@ -68,7 +68,8 @@ export default function CustomerMenu() {
     confirmOrderAsWaiter,
     setActiveTab,
     currentUser,
-    isCustomerQrMode
+    isCustomerQrMode,
+    pubSettings
   } = useOrder();
 
   const [selectedDept, setSelectedDept] = useState('ALL'); // ALL, KITCHEN, BAR
@@ -79,6 +80,7 @@ export default function CustomerMenu() {
   const [customerName, setCustomerName] = useState('Guest');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeAddonCartItem, setActiveAddonCartItem] = useState(null);
+  const isPunchingDisabledForCustomer = (pubSettings?.customer_punching_enabled === false) && !currentUser;
 
   const tableActiveOrder = allOrders?.find(o => o.table_id === selectedTable?.id && o.status !== 'BILLED');
 
@@ -185,6 +187,32 @@ export default function CustomerMenu() {
         </div>
       )}
 
+      {/* RUSH MODE VIEW-ONLY BANNER FOR CUSTOMERS */}
+      {isPunchingDisabledForCustomer && (
+        <div className="bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500/70 p-3.5 sm:p-4 rounded-2xl mb-3.5 shadow-2xl flex items-center justify-between gap-3 text-xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center text-xl shrink-0">
+              📢
+            </div>
+            <div>
+              <div className="font-black text-amber-300 text-sm flex items-center gap-2">
+                <span>Digital Menu — View Only Mode</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono font-bold uppercase border border-rose-500/40">
+                  Weekend Rush
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 mt-0.5">
+                Self-punching is paused during rush hours. Please browse our menu — our waiter will take your order directly at <strong className="text-white font-extrabold">Table {selectedTable?.table_number || 'ST-01'}</strong>!
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:flex flex-col items-end shrink-0">
+            <span className="text-[10px] font-mono text-slate-400">Order Method:</span>
+            <span className="text-xs font-black text-amber-400">Waiter At Table</span>
+          </div>
+        </div>
+      )}
+
       {/* MOBILE COMPACT HEADER BANNER */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-5 mb-3 shadow-lg flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -206,18 +234,25 @@ export default function CustomerMenu() {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsCartOpen(true)}
-          className="relative bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg transition active:scale-95"
-        >
-          <ShoppingBag className="w-4 h-4 stroke-[2.5]" />
-          <span className="hidden sm:inline">Cart</span>
-          {cartCount > 0 && (
-            <span className="w-5 h-5 rounded-full bg-slate-950 text-amber-400 text-[10px] font-mono font-black flex items-center justify-center shadow">
-              {cartCount}
-            </span>
-          )}
-        </button>
+        {isPunchingDisabledForCustomer ? (
+          <div className="bg-slate-900 border border-amber-500/40 text-amber-300 font-extrabold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow">
+            <Eye className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">Browse Mode</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="relative bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg transition active:scale-95"
+          >
+            <ShoppingBag className="w-4 h-4 stroke-[2.5]" />
+            <span className="hidden sm:inline">Cart</span>
+            {!isPunchingDisabledForCustomer && cartCount > 0 && (
+              <span className="w-5 h-5 rounded-full bg-slate-950 text-amber-400 text-[10px] font-mono font-black flex items-center justify-center shadow">
+                {cartCount}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Customer Live Order Summary Drawer */}
@@ -439,6 +474,11 @@ export default function CustomerMenu() {
                 {!isAvailable ? (
                   <span className="text-[10px] text-rose-400 font-bold bg-rose-950/40 px-2 py-1 rounded">
                     Unavailable
+                  </span>
+                ) : isPunchingDisabledForCustomer ? (
+                  <span className="bg-slate-950 text-amber-400 border border-amber-500/30 text-[11px] font-bold px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-sm">
+                    <Eye className="w-3.5 h-3.5 text-amber-400" />
+                    <span>View Only</span>
                   </span>
                 ) : inCart ? (
                   <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-amber-500/40">

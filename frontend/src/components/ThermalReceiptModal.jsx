@@ -435,7 +435,9 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                     {printerConfig.bill_fssai && (
                       <div className="text-[9.5px] font-bold text-black">FSSAI: {printerConfig.bill_fssai}</div>
                     )}
-                    <div className="text-xs font-black mt-1 uppercase border-t border-black pt-1">TAX INVOICE / FINAL BILL</div>
+                    <div className="text-xs font-black mt-1 uppercase border-t border-black pt-1">
+                      {(order.payment_mode === 'OTHER' || order.booking_platform?.includes('Complimentary')) ? 'TAX INVOICE / COMPLIMENTARY BILL' : 'TAX INVOICE / FINAL BILL'}
+                    </div>
                   </div>
 
                   <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5">
@@ -453,6 +455,15 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                     </div>
                     {order.booking_platform && (
                       <div>Platform: <strong className="font-bold">{order.booking_platform}</strong></div>
+                    )}
+                    {order.booking_reference_id && order.booking_reference_id !== '-' && (
+                      <div>
+                        {(order.payment_mode === 'OTHER' || order.booking_platform?.includes('Complimentary')) ? (
+                          <span>Beneficiary: <strong className="font-black text-black">{order.booking_reference_id}</strong></span>
+                        ) : (
+                          <span>Ref ID: <strong className="font-bold">{order.booking_reference_id}</strong></span>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -504,7 +515,11 @@ export default function ThermalReceiptModal({ order, onClose, initialMode = 'BIL
                   <div className="py-2 border-b border-dashed border-black text-[10px] flex justify-between items-center font-bold">
                     <span>Payment Status:</span>
                     <span className="font-black px-2 py-0.5 border border-black rounded uppercase">
-                      {order.payment_status === 'COLLECTED' ? `PAID (${order.payment_mode || 'CASH'})` : 'PENDING'}
+                      {order.payment_status === 'COLLECTED'
+                        ? ((order.payment_mode === 'OTHER' || order.booking_platform?.includes('Complimentary'))
+                            ? 'FREE (COMPLIMENTARY - OTHER)'
+                            : `PAID (${order.payment_mode || 'CASH'})`)
+                        : 'PENDING'}
                     </span>
                   </div>
 

@@ -23,6 +23,12 @@ export const OrderProvider = ({ children }) => {
   
   // EDC Addons Master Data
   const [addonsData, setAddonsData] = useState({ total: 0, quick_categories: {}, items: [] });
+  // Pub Operational Settings (Customer Punching ON/OFF for peak rush)
+  const [pubSettings, setPubSettings] = useState({
+    customer_punching_enabled: true,
+    weekend_rush_mode: false,
+    view_only_message: ''
+  });
   
   // Offline Sync State & Connection
   const [syncStatus, setSyncStatus] = useState({ pending_sync_count: 0, connection_mode: 'OFFLINE_LOCAL_SERVER' });
@@ -72,6 +78,24 @@ export const OrderProvider = ({ children }) => {
     }
   });
 
+  const updatePubSettings = async (newSettings) => {
+    try {
+      const res = await apiFetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.settings) setPubSettings(data.settings);
+        return { success: true, settings: data.settings };
+      }
+    } catch (err) {
+      console.error('Error updating settings:', err);
+    }
+    return { success: false };
+  };
+
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => {
       const next = !prev;
@@ -108,10 +132,94 @@ export const OrderProvider = ({ children }) => {
 
   const [staffUsers, setStaffUsers] = useState([]);
 
+  // Validate current user session against backend database
+  const verifyCurrentSession = async (userToCheck = currentUser) => {
+    if (!userToCheck || !userToCheck.email) return false;
+    try {
+      const res = await apiFetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userToCheck.id, email: userToCheck.email })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.valid && data.user) {
+          setCurrentUser(data.user);
+          localStorage.setItem('bermuda_user', JSON.stringify(data.user));
+          return true;
+        }
+      } else {
+        // Staff account no longer exists in database or deactivated
+        console.warn("Staff account has been deleted or deactivated. Clearing session.");
+        setCurrentUser(null);
+        localStorage.removeItem('bermuda_user');
+        setActiveTab('customer');
+        return false;
+      }
+    } catch (err) {
+      console.warn("Session verification warning:", err);
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      verifyCurrentSession(currentUser);
+    }
+
+    // Periodic check every 20 seconds to revoke deleted staff members
+    const interval = setInterval(() => {
+      const saved = localStorage.getItem('bermuda_user');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.email) verifyCurrentSession(parsed);
+        } catch (e) {}
+      }
+    }, 20000);
+
+    const onFocus = () => {
+      const saved = localStorage.getItem('bermuda_user');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.email) verifyCurrentSession(parsed);
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
   const fetchStaffUsers = async () => {
     try {
       const res = await apiFetch('/api/users');
-      if (res.ok) setStaffUsers(await res.json());
+      if (res.ok) {
+        const users = await res.json();
+        setStaffUsers(users);
+        // Verify current user still exists
+        const saved = localStorage.getItem('bermuda_user');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.email && parsed.email !== 'avasanth081@gmail.com') {
+              const stillExists = users.some(u => 
+                (u.id === parsed.id || u.email.toLowerCase() === parsed.email.toLowerCase()) && u.is_active
+              );
+              if (!stillExists) {
+                console.warn("Logged-in staff account is not in active staff list. Logging out.");
+                setCurrentUser(null);
+                localStorage.removeItem('bermuda_user');
+                setActiveTab('customer');
+              }
+            }
+          } catch (e) {}
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -119,10 +227,11 @@ export const OrderProvider = ({ children }) => {
 
   const loginUser = async (email, password) => {
     try {
+      const cleanEmail = (email || '').trim().toLowerCase();
       const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: cleanEmail, password })
       });
       const data = await res.json();
       if (res.ok && data.user) {
@@ -142,7 +251,7 @@ export const OrderProvider = ({ children }) => {
 
         return { success: true };
       }
-      return { success: false, error: data.detail || 'Login failed' };
+      return { success: false, error: data.detail || 'Invalid email or password' };
     } catch (err) {
       return { success: false, error: 'Server connection failed' };
     }
@@ -206,6 +315,35 @@ export const OrderProvider = ({ children }) => {
       console.error(e);
     }
     return false;
+  };
+
+  const switchOrderTable = async (orderId, newTableId, waiterName = 'Staff', printTransferSlip = true) => {
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}/switch-table`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          new_table_id: newTableId,
+          waiter_name: waiterName,
+          print_transfer_slip: printTransferSlip
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchTables();
+        await fetchOrders();
+        return { 
+          success: true, 
+          message: data.message, 
+          from_table: data.from_table, 
+          to_table: data.to_table 
+        };
+      }
+      return { success: false, error: data.detail || 'Failed to switch table' };
+    } catch (err) {
+      console.error("switchOrderTable error:", err);
+      return { success: false, error: 'Network error switching table' };
+    }
   };
 
   const fetchTables = async () => {
@@ -272,14 +410,15 @@ export const OrderProvider = ({ children }) => {
   // Fetch initial metadata
   const fetchData = async () => {
     try {
-      const [zonesRes, tablesRes, catRes, prodRes, syncRes, usersRes, addonsRes] = await Promise.all([
+      const [zonesRes, tablesRes, catRes, prodRes, syncRes, usersRes, addonsRes, settingsRes] = await Promise.all([
         apiFetch('/api/zones'),
         apiFetch('/api/tables'),
         apiFetch('/api/categories'),
         apiFetch('/api/products'),
         apiFetch('/api/sync/status'),
         apiFetch('/api/users'),
-        apiFetch('/api/addons')
+        apiFetch('/api/addons'),
+        apiFetch('/api/settings')
       ]);
 
       const zonesData = await zonesRes.json();
@@ -291,6 +430,10 @@ export const OrderProvider = ({ children }) => {
       if (addonsRes && addonsRes.ok) {
         const addData = await addonsRes.json();
         setAddonsData(addData);
+      }
+      if (settingsRes && settingsRes.ok) {
+        const settsData = await settingsRes.json();
+        setPubSettings(settsData);
       }
 
       setZones(Array.isArray(zonesData) ? zonesData : []);
@@ -415,14 +558,36 @@ export const OrderProvider = ({ children }) => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'ITEM_NOTES_UPDATED', 'WAITER_CLAIMED_ORDER', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
-              if (['NEW_ORDER', 'ITEM_STATUS_UPDATED', 'ITEM_NOTES_UPDATED', 'WAITER_CLAIMED_ORDER', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED'].includes(data.event)) {
+
+            if (data.event === 'STAFF_USER_DELETED' || data.type === 'STAFF_USER_DELETED') {
+              fetchStaffUsers();
+              const deletedId = data.user_id;
+              const deletedEmail = (data.email || '').toLowerCase();
+              const savedUserStr = localStorage.getItem('bermuda_user');
+              if (savedUserStr) {
+                try {
+                  const saved = JSON.parse(savedUserStr);
+                  if (saved.id === deletedId || (saved.email && saved.email.toLowerCase() === deletedEmail)) {
+                    setCurrentUser(null);
+                    localStorage.removeItem('bermuda_user');
+                    setActiveTab('customer');
+                    alert('Your staff account has been deleted by an administrator. Please sign in with valid credentials.');
+                  }
+                } catch (e) {}
+              }
+              return;
+            }
+            if (['NEW_ORDER', 'ORDER_STATUS_UPDATED', 'ITEM_STATUS_UPDATED', 'ITEM_NOTES_UPDATED', 'WAITER_CLAIMED_ORDER', 'TABLE_SETTLED', 'MENU_UPDATED', 'TABLE_STATUS_UPDATED', 'PAYMENT_COLLECTED', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED', 'SETTINGS_UPDATED', 'TABLE_TRANSFERRED'].includes(data.event)) {
+              if (['NEW_ORDER', 'ITEM_STATUS_UPDATED', 'ITEM_NOTES_UPDATED', 'WAITER_CLAIMED_ORDER', 'WAITER_CONFIRMED_ORDER', 'ORDER_ITEMS_ADDED', 'SETTINGS_UPDATED', 'TABLE_TRANSFERRED'].includes(data.event)) {
                 // Bar and kitchen should only chime once order is accepted/confirmed by a waiter
                 if (data.event === 'NEW_ORDER' && (activeTab === 'bar' || activeTab === 'kitchen')) {
                   // Customer order pending waiter confirmation
                 } else {
                   playNotificationChime();
                 }
+              }
+              if (data.event === 'SETTINGS_UPDATED' && data.settings) {
+                setPubSettings(data.settings);
               }
               fetchOrders();
               fetchData();
@@ -574,18 +739,22 @@ export const OrderProvider = ({ children }) => {
     discountPercentage = 0.0,
     discountAmount = 0.0,
     finalAmount = null,
-    bookingReferenceId = null
+    bookingReferenceId = null,
+    beneficiaryName = null
   ) => {
     try {
+      const isComplimentary = paymentMode === 'OTHER' || (bookingPlatform && bookingPlatform.includes('Complimentary'));
       const parsedSubtotal = parseFloat(amount || 0);
-      const parsedDiscountPct = parseFloat(discountPercentage || 0);
-      let parsedDiscountAmt = parseFloat(discountAmount || 0);
-      if (parsedDiscountAmt <= 0 && parsedDiscountPct > 0) {
+      const parsedDiscountPct = isComplimentary ? 100.0 : parseFloat(discountPercentage || 0);
+      let parsedDiscountAmt = isComplimentary ? parsedSubtotal : parseFloat(discountAmount || 0);
+      if (!isComplimentary && parsedDiscountAmt <= 0 && parsedDiscountPct > 0) {
         parsedDiscountAmt = parseFloat(((parsedSubtotal * parsedDiscountPct) / 100).toFixed(2));
       }
-      const computedFinal = (finalAmount !== null && finalAmount !== undefined && !isNaN(finalAmount))
+      const computedFinal = isComplimentary ? 0.0 : ((finalAmount !== null && finalAmount !== undefined && !isNaN(finalAmount))
         ? parseFloat(finalAmount)
-        : (parsedDiscountAmt > 0 ? Math.max(0, parsedSubtotal - parsedDiscountAmt) : parsedSubtotal);
+        : (parsedDiscountAmt > 0 ? Math.max(0, parsedSubtotal - parsedDiscountAmt) : parsedSubtotal));
+
+      const refId = beneficiaryName ? beneficiaryName.trim() : (bookingReferenceId ? bookingReferenceId.trim() : null);
 
       const res = await apiFetch(`/api/orders/${orderId}/collect-payment`, {
         method: 'POST',
@@ -594,8 +763,9 @@ export const OrderProvider = ({ children }) => {
           payment_mode: paymentMode,
           amount_collected: computedFinal,
           collected_by: collectedBy,
-          booking_platform: bookingPlatform,
-          booking_reference_id: bookingReferenceId || null,
+          booking_platform: isComplimentary ? (bookingPlatform || 'Complimentary (Owners/MD/Bouncers)') : bookingPlatform,
+          booking_reference_id: refId,
+          beneficiary_name: refId,
           discount_percentage: parsedDiscountPct,
           discount_amount: parsedDiscountAmt,
           final_amount: computedFinal
@@ -1047,6 +1217,7 @@ export const OrderProvider = ({ children }) => {
         createStaffAccount,
         updateStaffAccount,
         deleteStaffAccount,
+        switchOrderTable,
         members,
         fetchMembers,
         createMember,
@@ -1060,7 +1231,9 @@ export const OrderProvider = ({ children }) => {
         clearAllPaymentLogs,
         clearMemberEntryLogs,
         importExcelMenu,
-        uploadImage
+        uploadImage,
+        pubSettings,
+        updatePubSettings
       }}
     >
       {children}

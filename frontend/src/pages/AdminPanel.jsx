@@ -76,7 +76,9 @@ export default function AdminPanel() {
     deleteMember,
     recordMemberVisit,
     importExcelMenu,
-    uploadImage
+    uploadImage,
+    pubSettings,
+    updatePubSettings
   } = useOrder();
 
   const PRESET_PRODUCT_IMAGES = [
@@ -105,6 +107,29 @@ export default function AdminPanel() {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
+  // Pub Customer Punching Toggle State
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+  const [settingsFeedback, setSettingsFeedback] = useState(null);
+
+  const handleToggleCustomerPunching = async () => {
+    setIsUpdatingSettings(true);
+    const currentEnabled = pubSettings?.customer_punching_enabled ?? true;
+    const nextVal = !currentEnabled;
+    const res = await updatePubSettings({
+      customer_punching_enabled: nextVal,
+      weekend_rush_mode: !nextVal
+    });
+    setIsUpdatingSettings(false);
+    if (res.success) {
+      setSettingsFeedback({
+        type: nextVal ? 'success' : 'warning',
+        message: nextVal
+          ? '🟢 Customer Punching ENABLED: Customers scanning table QR codes can now punch orders directly.'
+          : '🔴 Customer Punching PAUSED (Weekend Rush Mode): Digital menu is now View-Only for customers. Waiters will take orders from each table.'
+      });
+      setTimeout(() => setSettingsFeedback(null), 6000);
+    }
+  };
 
   // Master Menu Search, Filter & Pagination State
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
@@ -798,8 +823,37 @@ export default function AdminPanel() {
             </div>
           </div>
 
-        {/* Top-Right Controls: Audit Log Button */}
+        {/* Top-Right Controls: Punching Toggle & Audit Log Button */}
         <div className="flex items-center gap-3 flex-wrap">
+          {/* Weekend Peak Rush Customer Punching Toggle Button */}
+          <button
+            type="button"
+            onClick={handleToggleCustomerPunching}
+            disabled={isUpdatingSettings}
+            className={`font-black px-4 py-2.5 rounded-xl text-xs flex items-center gap-2.5 shadow-lg transition active:scale-95 ${
+              (pubSettings?.customer_punching_enabled ?? true)
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 border border-emerald-400'
+                : 'bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white border-2 border-rose-300 animate-pulse'
+            }`}
+            title="Toggle customer order punching during peak rush"
+          >
+            <span className="text-base">{(pubSettings?.customer_punching_enabled ?? true) ? '📱' : '🚫'}</span>
+            <div className="text-left">
+              <div className="text-[10px] uppercase tracking-wider font-extrabold opacity-90">
+                Customer Menu:
+              </div>
+              <div className="text-xs font-black">
+                {(pubSettings?.customer_punching_enabled ?? true) ? 'PUNCHING ON (Normal)' : 'PUNCHING OFF (Rush Mode)'}
+              </div>
+            </div>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono uppercase font-bold ${
+              (pubSettings?.customer_punching_enabled ?? true)
+                ? 'bg-slate-950/20 text-slate-950'
+                : 'bg-white text-rose-700'
+            }`}>
+              {(pubSettings?.customer_punching_enabled ?? true) ? 'ACTIVE' : 'VIEW ONLY'}
+            </span>
+          </button>
 
           <button
             onClick={() => setIsLogModalOpen(true)}
@@ -814,6 +868,20 @@ export default function AdminPanel() {
         </div>
       </div>
     </div>
+
+      {/* Settings Feedback Toast */}
+      {settingsFeedback && (
+        <div className={`p-4 rounded-xl text-xs font-bold border flex items-center justify-between shadow-lg animate-in fade-in ${
+          settingsFeedback.type === 'success'
+            ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
+            : 'bg-rose-950/90 border-rose-500/60 text-rose-200'
+        }`}>
+          <span>{settingsFeedback.message}</span>
+          <button type="button" onClick={() => setSettingsFeedback(null)} className="text-slate-400 hover:text-white p-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Grid Section: Real QR Code Generator + Menu Master */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

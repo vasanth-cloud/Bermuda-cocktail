@@ -147,7 +147,7 @@ class WaiterConfirmOrderRequest(BaseModel):
     updated_item_notes: Optional[List[ItemNotesUpdateItem]] = None
 
 class PaymentCollectRequest(BaseModel):
-    payment_mode: str  # CASH, UPI, CARD
+    payment_mode: str  # CASH, UPI, CARD, OTHER
     amount_collected: float
     collected_by: Optional[str] = "Waiter / Cashier"
     booking_platform: Optional[str] = "Direct / Walk-in"
@@ -155,10 +155,13 @@ class PaymentCollectRequest(BaseModel):
     discount_percentage: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
     final_amount: Optional[float] = 0.0
+    beneficiary_name: Optional[str] = None
+    notes: Optional[str] = None
 
 class AddItemsToOrderRequest(BaseModel):
     items: List[CartItemCreate]
     waiter_name: Optional[str] = "Waiter"
+    auto_print: Optional[bool] = False
 
 class UserSchema(BaseModel):
     id: int
@@ -239,3 +242,9 @@ class MemberEntryLogSchema(BaseModel):
         from_attributes = True
 
 
+
+class SwitchTableRequest(BaseModel):
+    new_table_id: int
+    waiter_name: Optional[str] = "Staff"
+    reason: Optional[str] = "Customer requested table transfer"
+    print_transfer_slip: Optional[bool] = True

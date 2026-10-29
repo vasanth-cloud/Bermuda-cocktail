@@ -5,7 +5,8 @@ import PaymentAuditLogModal from '../components/PaymentAuditLogModal';
 import CategorySalesReportModal from '../components/CategorySalesReportModal';
 import ThermalReceiptModal from '../components/ThermalReceiptModal';
 import ThermalPrinterSettingsModal from '../components/ThermalPrinterSettingsModal';
-import { Wine, Utensils, CheckCircle2, Clock, DollarSign, Receipt, RefreshCw, AlertCircle, Smartphone, CreditCard, Flame, Sparkles, Filter, BarChart3, Printer } from 'lucide-react';
+import SwitchTableModal from '../components/SwitchTableModal';
+import { Wine, Utensils, CheckCircle2, Clock, DollarSign, Receipt, RefreshCw, AlertCircle, Smartphone, CreditCard, Flame, Sparkles, Filter, BarChart3, Printer, ArrowRightLeft } from 'lucide-react';
 
 export default function BarReception() {
   const { allOrders, updateOrderStatus, updateItemStatus, collectPayment, settleTableBill, tables, paymentLogs, paymentSummary } = useOrder();
@@ -24,12 +25,14 @@ export default function BarReception() {
   const [bookingReferenceId, setBookingReferenceId] = useState('');
   const [discountPercentage, setDiscountPercentage] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [beneficiaryName, setBeneficiaryName] = useState('');
 
   // Thermal Printing & Settings State
   const [activePrintOrder, setActivePrintOrder] = useState(null);
   const [isPrinterSettingsOpen, setIsPrinterSettingsOpen] = useState(false);
   const [paymentFeedback, setPaymentFeedback] = useState(null);
   const [isBridgeConnected, setIsBridgeConnected] = useState(false);
+  const [switchingTableOrder, setSwitchingTableOrder] = useState(null);
 
   useEffect(() => {
     const checkBridge = async () => {
@@ -105,6 +108,7 @@ export default function BarReception() {
   const openPaymentModal = (ord) => {
     setActivePaymentOrder(ord);
     setPaymentMode('CASH');
+    setBeneficiaryName('');
     setBookingPlatform(ord.booking_platform || 'Direct / Walk-in');
     setBookingReferenceId(ord.booking_reference_id && ord.booking_reference_id !== '-' ? ord.booking_reference_id : '');
     const pct = ord.discount_percentage || 0;
@@ -142,20 +146,31 @@ export default function BarReception() {
 
   const handleRecordPayment = async (e) => {
     e.preventDefault();
-    if (!activePaymentOrder || amountCollected === '' || amountCollected === undefined) return;
+    if (!activePaymentOrder) return;
 
-    const finalNetPayable = parseFloat(amountCollected || 0);
+    if (paymentMode === 'OTHER') {
+      if (!beneficiaryName.trim()) {
+        alert("Please enter the name of the Owner, MD, Bouncer or Guest in the Beneficiary Name field.");
+        return;
+      }
+    } else if (amountCollected === '' || amountCollected === undefined) {
+      return;
+    }
+
+    const isComplimentary = paymentMode === 'OTHER';
+    const finalNetPayable = isComplimentary ? 0.0 : parseFloat(amountCollected || 0);
 
     const success = await collectPayment(
       activePaymentOrder.id,
       paymentMode,
       finalNetPayable,
       cashierName || 'Receptionist',
-      bookingPlatform,
-      discountPercentage,
-      discountAmount,
+      isComplimentary ? 'Complimentary (Owners/MD/Bouncers)' : bookingPlatform,
+      isComplimentary ? 100 : discountPercentage,
+      isComplimentary ? (activePaymentOrder.total_amount || 0) : discountAmount,
       finalNetPayable,
-      bookingReferenceId.trim() || null
+      isComplimentary ? beneficiaryName.trim() : (bookingReferenceId.trim() || null),
+      isComplimentary ? beneficiaryName.trim() : null
     );
 
     if (success) {
@@ -164,13 +179,14 @@ export default function BarReception() {
         payment_status: 'COLLECTED',
         payment_mode: paymentMode,
         final_amount: finalNetPayable,
-        discount_percentage: discountPercentage,
-        discount_amount: discountAmount,
-        booking_platform: bookingPlatform,
-        booking_reference_id: bookingReferenceId.trim() || null
+        discount_percentage: isComplimentary ? 100 : discountPercentage,
+        discount_amount: isComplimentary ? (activePaymentOrder.total_amount || 0) : discountAmount,
+        booking_platform: isComplimentary ? 'Complimentary (Owners/MD/Bouncers)' : bookingPlatform,
+        booking_reference_id: isComplimentary ? beneficiaryName.trim() : (bookingReferenceId.trim() || null)
       };
       setActivePaymentOrder(null);
       setAmountCollected('');
+      setBeneficiaryName('');
       setDiscountPercentage(0);
       setDiscountAmount(0);
       setBookingPlatform('Direct / Walk-in');
@@ -178,8 +194,10 @@ export default function BarReception() {
 
       // Auto-dispatched by backend to Rugtek RP327 billing machine (USB001). No manual modal selection needed!
       setPaymentFeedback({
-        title: `Payment Settled for Table ${settledOrder.table?.table_number || 'T-01'}!`,
-        message: `💰 Final Bill (Food + Drinks unified) auto-dispatched to Rugtek RP327 billing machine (USB001). Zero manual selection needed!`
+        title: isComplimentary ? `Complimentary Order Settled for Table ${settledOrder.table?.table_number || 'T-01'}!` : `Payment Settled for Table ${settledOrder.table?.table_number || 'T-01'}!`,
+        message: isComplimentary
+          ? `👑 100% Free Complimentary Order logged for ${beneficiaryName.trim()}! Receipt auto-dispatched to Rugtek RP327.`
+          : `💰 Final Bill (Food + Drinks unified) auto-dispatched to Rugtek RP327 billing machine (USB001). Zero manual selection needed!`
       });
       setTimeout(() => setPaymentFeedback(null), 8000);
     }
@@ -384,9 +402,20 @@ export default function BarReception() {
                   {/* Card Header */}
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-2xl font-black text-slate-100">
-                        Table {order.table?.table_number || 'DN-01'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl font-black text-slate-100">
+                          Table {order.table?.table_number || 'DN-01'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSwitchingTableOrder(order)}
+                          className="px-2 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[10px] font-black transition flex items-center gap-1 shadow"
+                          title="Switch Table"
+                        >
+                          <ArrowRightLeft className="w-3 h-3 text-cyan-400" />
+                          <span>Switch</span>
+                        </button>
+                      </div>
                       <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-mono uppercase">
                         {order.table?.zone?.display_name || 'Main Zone'}
                       </span>
@@ -510,6 +539,16 @@ export default function BarReception() {
                     )}
 
                     <button
+                      type="button"
+                      onClick={() => setSwitchingTableOrder(order)}
+                      className="bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 font-extrabold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow transition shrink-0 cursor-pointer"
+                      title="Switch / Transfer Table"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Switch Table</span>
+                    </button>
+
+                    <button
                       onClick={() => openPaymentModal(order)}
                       className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition shrink-0 cursor-pointer"
                     >
@@ -544,225 +583,320 @@ export default function BarReception() {
 
             <form onSubmit={handleRecordPayment} className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-3.5 text-xs">
-              {/* 1. Booking Platform Selection */}
-              <div>
-                <label className="font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
-                  <span>Booking Platform / Dining Offer Source:</span>
-                  <span className="text-amber-400 text-[10px] font-mono">{bookingPlatform}</span>
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {[
-                    { id: 'Direct / Walk-in', label: 'Walk-in / Direct', icon: '🚶' },
-                    { id: 'District (Zomato District)', label: 'District (Zomato)', icon: '📱' },
-                    { id: 'Swiggy (Swiggy Dineout)', label: 'Swiggy Dineout', icon: '🧡' },
-                    { id: 'Zomato', label: 'Zomato Gold', icon: '🔴' },
-                    { id: 'EazyDiner', label: 'EazyDiner', icon: '🍽️' },
-                    { id: 'Other', label: 'Other Offer', icon: '🏷️' }
-                  ].map((plat) => (
-                    <button
-                      key={plat.id}
-                      type="button"
-                      onClick={() => setBookingPlatform(plat.id)}
-                      className={`py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 border text-[11px] transition ${
-                        bookingPlatform === plat.id
-                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <span>{plat.icon}</span>
-                      <span className="truncate">{plat.label}</span>
-                    </button>
-                  ))}
+              
+              {/* Table Total Amount Banner */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="font-bold text-xs">Table Total Bill Amount:</span>
+                  <span className="font-mono font-black text-amber-400 text-base">₹{activePaymentOrder.total_amount || 0}</span>
                 </div>
-              </div>
-
-              {/* 1.1 Booking Platform ID / Voucher Number */}
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                <label className="font-bold text-slate-300 block mb-1 text-[11px] flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <span>🆔</span>
-                    <span>Platform Booking ID / Voucher Code:</span>
+                <div className="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2">
+                  <span className="text-sm shrink-0">ℹ️</span>
+                  <span>
+                    Select payment mode below. For Management, Owners, and Bouncers, select <strong className="text-amber-300">👑 OTHER (Owners/MD/Bouncers)</strong> for 100% complimentary house billing.
                   </span>
-                  {bookingPlatform !== 'Direct / Walk-in' ? (
-                    <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
-                      Required for {bookingPlatform.split(' ')[0]}
-                    </span>
-                  ) : (
-                    <span className="text-slate-500 text-[10px] font-mono">Optional</span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  placeholder={
-                    bookingPlatform === 'Direct / Walk-in'
-                      ? 'Optional: Guest / Direct Reference'
-                      : `Enter ${bookingPlatform.split(' ')[0]} Booking ID (e.g. #${bookingPlatform.slice(0, 3).toUpperCase()}-98234)`
-                  }
-                  value={bookingReferenceId}
-                  onChange={(e) => setBookingReferenceId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              {/* 2. Quick Offer Discount % Calculator */}
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-300 text-xs">Dining Offer Discount (% or ₹):</label>
-                  {discountPercentage > 0 && (
-                    <span className="bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
-                      {discountPercentage}% OFF Applied
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {[0, 10, 15, 20, 25, 30, 50].map((pct) => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => {
-                        setDiscountPercentage(pct);
-                        const sub = activePaymentOrder.total_amount || 0;
-                        const disc = (sub * pct) / 100;
-                        setDiscountAmount(disc);
-                        setAmountCollected(Math.max(0, sub - disc).toFixed(2));
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${
-                        discountPercentage === pct
-                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
-                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
-                      }`}
-                    >
-                      {pct === 0 ? 'No Offer' : `${pct}% OFF`}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block mb-1">Custom Offer %:</span>
-                    <input
-                      type="number"
-                      step="1"
-                      min="0"
-                      max="100"
-                      placeholder="e.g. 15"
-                      value={discountPercentage || ''}
-                      onChange={(e) => {
-                        const pct = parseFloat(e.target.value) || 0;
-                        setDiscountPercentage(pct);
-                        const sub = activePaymentOrder.total_amount || 0;
-                        const disc = (sub * pct) / 100;
-                        setDiscountAmount(disc);
-                        setAmountCollected(Math.max(0, sub - disc).toFixed(2));
-                      }}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block mb-1">Or Flat Discount (₹):</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g. 200"
-                      value={discountAmount || ''}
-                      onChange={(e) => {
-                        const disc = parseFloat(e.target.value) || 0;
-                        setDiscountAmount(disc);
-                        const sub = activePaymentOrder.total_amount || 0;
-                        if (sub > 0) {
-                          setDiscountPercentage(Math.round((disc / sub) * 100));
-                        }
-                        setAmountCollected(Math.max(0, sub - disc).toFixed(2));
-                      }}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Real-Time Live Calculation Box */}
-                <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1.5 font-mono text-xs">
-                  <div className="flex justify-between text-slate-400">
-                    <span>Original Subtotal:</span>
-                    <span>₹{activePaymentOrder.total_amount || 0}</span>
-                  </div>
-
-                  {(discountPercentage > 0 || discountAmount > 0) && (
-                    <div className="flex justify-between text-rose-400 font-bold">
-                      <span>Offer Discount ({discountPercentage}% OFF):</span>
-                      <span>-₹{(discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100)).toFixed(2)}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between text-slate-100 font-black text-sm pt-1 border-t border-slate-800">
-                    <span className="text-amber-300">Net Remaining Payable:</span>
-                    <span className="text-amber-400">
-                      ₹{(
-                        (activePaymentOrder.total_amount || 0) -
-                        (discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100))
-                      ).toFixed(2)}
-                    </span>
-                  </div>
                 </div>
               </div>
 
-              {/* 3. Payment Method */}
+              {/* 1. Payment Method Selection */}
               <div>
                 <label className="font-bold text-slate-300 block mb-1.5">Select Payment Mode:</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setPaymentMode('CASH')}
-                    className={`p-2.5 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    onClick={() => {
+                      setPaymentMode('CASH');
+                      setAmountCollected('');
+                    }}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition text-xs ${
                       paymentMode === 'CASH'
-                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-900/30 font-black'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    💵 Cash
+                    <span>💵</span>
+                    <span>Cash</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentMode('UPI')}
-                    className={`p-2.5 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    onClick={() => {
+                      setPaymentMode('UPI');
+                      setAmountCollected('');
+                    }}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition text-xs ${
                       paymentMode === 'UPI'
-                        ? 'bg-purple-950 border-purple-500 text-purple-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                        ? 'bg-purple-950 border-purple-500 text-purple-300 shadow-md shadow-purple-900/30 font-black'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    📱 UPI / QR
+                    <span>📱</span>
+                    <span>UPI / QR</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentMode('CARD')}
-                    className={`p-2.5 rounded-xl font-bold flex items-center justify-center gap-1 border transition ${
+                    onClick={() => {
+                      setPaymentMode('CARD');
+                      setAmountCollected('');
+                    }}
+                    className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition text-xs ${
                       paymentMode === 'CARD'
-                        ? 'bg-blue-950 border-blue-500 text-blue-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
+                        ? 'bg-blue-950 border-blue-500 text-blue-300 shadow-md shadow-blue-900/30 font-black'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    💳 Card
+                    <span>💳</span>
+                    <span>Card</span>
                   </button>
                 </div>
+
+                {/* Management Complimentary Button - Full Width */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (paymentMode === 'OTHER') {
+                      setPaymentMode('CASH');
+                      setAmountCollected('');
+                    } else {
+                      setPaymentMode('OTHER');
+                      setAmountCollected('0.00');
+                    }
+                  }}
+                  className={`w-full mt-2 py-2.5 px-3.5 rounded-xl font-black flex items-center justify-between border transition text-xs ${
+                    paymentMode === 'OTHER'
+                      ? 'bg-gradient-to-r from-amber-500 to-amber-600 border-amber-400 text-slate-950 shadow-lg shadow-amber-500/20'
+                      : 'bg-slate-950 border-amber-500/40 text-amber-300 hover:border-amber-400 hover:bg-amber-950/20'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-base">👑</span>
+                    <span className="font-extrabold tracking-wide">OTHER (Owners / MD / Bouncers)</span>
+                  </span>
+                  <span className={`text-[10px] uppercase font-mono font-black px-2 py-0.5 rounded ${
+                    paymentMode === 'OTHER'
+                      ? 'bg-slate-950 text-amber-300'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    100% Free
+                  </span>
+                </button>
               </div>
 
-              {/* 4. Final Amount Collected Input */}
+              {/* Complimentary Banner & Beneficiary Input if OTHER is selected */}
+              {paymentMode === 'OTHER' ? (
+                <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-xl p-3.5 space-y-2.5 animate-fade-in">
+                  <div className="flex items-center gap-2 text-amber-300 font-black text-xs">
+                    <span>👑</span>
+                    <span>100% Free / Complimentary (Owners, MD, Bouncers)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    This order is entirely free (₹0 payable). All items consumed will be recorded for audit and inventory accounting. Please enter who came and ate below:
+                  </p>
+                  <div>
+                    <label className="font-bold text-amber-300 block mb-1 text-[11px]">
+                      Beneficiary Name & Role (Required, e.g. MD Friend - Ramesh, Bouncer Manoj, Owner Suresh) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={beneficiaryName}
+                      onChange={(e) => setBeneficiaryName(e.target.value)}
+                      className="w-full bg-slate-950 border border-amber-500/50 rounded-lg px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400"
+                      placeholder="e.g. MD Friend - Ramesh / Bouncer Manoj / Owner Suresh"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Standard Dining Platform & Discounts (Only for Cash, UPI, Card) */
+                <>
+                  {/* 2. Booking Platform Selection (Old confusing 'Other Offer' removed!) */}
+                  <div>
+                    <label className="font-bold text-slate-300 block mb-1.5 flex items-center justify-between">
+                      <span>Booking Platform / Dining Offer Source:</span>
+                      <span className="text-amber-400 text-[10px] font-mono">{bookingPlatform}</span>
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {[
+                        { id: 'Direct / Walk-in', label: 'Walk-in / Direct', icon: '🚶' },
+                        { id: 'District (Zomato District)', label: 'District (Zomato)', icon: '📱' },
+                        { id: 'Swiggy (Swiggy Dineout)', label: 'Swiggy Dineout', icon: '🧡' },
+                        { id: 'Zomato', label: 'Zomato Gold', icon: '🔴' },
+                        { id: 'EazyDiner', label: 'EazyDiner', icon: '🍽️' }
+                      ].map((plat) => (
+                        <button
+                          key={plat.id}
+                          type="button"
+                          onClick={() => setBookingPlatform(plat.id)}
+                          className={`py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 border text-[11px] transition ${
+                            bookingPlatform === plat.id
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
+                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          <span>{plat.icon}</span>
+                          <span className="truncate">{plat.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2.1 Booking Platform ID / Voucher Number */}
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <label className="font-bold text-slate-300 block mb-1 text-[11px] flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <span>🆔</span>
+                        <span>Platform Booking ID / Voucher Code:</span>
+                      </span>
+                      {bookingPlatform !== 'Direct / Walk-in' ? (
+                        <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                          Required for {bookingPlatform.split(' ')[0]}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 text-[10px] font-mono">Optional</span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={
+                        bookingPlatform === 'Direct / Walk-in'
+                          ? 'Optional: Guest / Direct Reference'
+                          : `Enter ${bookingPlatform.split(' ')[0]} Booking ID (e.g. #${bookingPlatform.slice(0, 3).toUpperCase()}-98234)`
+                      }
+                      value={bookingReferenceId}
+                      onChange={(e) => setBookingReferenceId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* 2.2 Quick Offer Discount % Calculator */}
+                  <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-300 text-xs">Dining Offer Discount (% or ₹):</label>
+                      {discountPercentage > 0 && (
+                        <span className="bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                          {discountPercentage}% OFF Applied
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[0, 10, 15, 20, 25, 30, 50].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => {
+                            setDiscountPercentage(pct);
+                            const sub = activePaymentOrder.total_amount || 0;
+                            const disc = (sub * pct) / 100;
+                            setDiscountAmount(disc);
+                            setAmountCollected(Math.max(0, sub - disc).toFixed(2));
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-black border transition ${
+                            discountPercentage === pct
+                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                          }`}
+                        >
+                          {pct === 0 ? 'No Offer' : `${pct}% OFF`}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Custom Offer %:</span>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          max="100"
+                          placeholder="e.g. 15"
+                          value={discountPercentage || ''}
+                          onChange={(e) => {
+                            const pct = parseFloat(e.target.value) || 0;
+                            setDiscountPercentage(pct);
+                            const sub = activePaymentOrder.total_amount || 0;
+                            const disc = (sub * pct) / 100;
+                            setDiscountAmount(disc);
+                            setAmountCollected(Math.max(0, sub - disc).toFixed(2));
+                          }}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold block mb-1">Or Flat Discount (₹):</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="e.g. 200"
+                          value={discountAmount || ''}
+                          onChange={(e) => {
+                            const disc = parseFloat(e.target.value) || 0;
+                            setDiscountAmount(disc);
+                            const sub = activePaymentOrder.total_amount || 0;
+                            if (sub > 0) {
+                              setDiscountPercentage(Math.round((disc / sub) * 100));
+                            }
+                            setAmountCollected(Math.max(0, sub - disc).toFixed(2));
+                          }}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Real-Time Live Calculation Box */}
+                    <div className="bg-slate-900 p-3 rounded-lg border border-slate-800 space-y-1.5 font-mono text-xs">
+                      <div className="flex justify-between text-slate-400">
+                        <span>Original Subtotal:</span>
+                        <span>₹{activePaymentOrder.total_amount || 0}</span>
+                      </div>
+
+                      {(discountPercentage > 0 || discountAmount > 0) && (
+                        <div className="flex justify-between text-rose-400 font-bold">
+                          <span>Offer Discount ({discountPercentage}% OFF):</span>
+                          <span>-₹{(discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100)).toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between text-slate-100 font-black text-sm pt-1 border-t border-slate-800">
+                        <span className="text-amber-300">Net Remaining Payable:</span>
+                        <span className="text-amber-400">
+                          ₹{(
+                            (activePaymentOrder.total_amount || 0) -
+                            (discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100))
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* 3. Final Amount Collected Input */}
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Final Net Amount Collected (₹) *</label>
+                <label className="font-bold text-slate-300 block mb-1">
+                  Final Net Amount Collected (₹) {paymentMode === 'OTHER' && <span className="text-amber-400">(100% Free)</span>} *
+                </label>
                 <input
                   type="number"
                   step="0.01"
+                  disabled={paymentMode === 'OTHER'}
                   value={
-                    amountCollected !== ''
-                      ? amountCollected
-                      : (
-                          (activePaymentOrder.total_amount || 0) -
-                          (discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100))
-                        ).toFixed(2)
+                    paymentMode === 'OTHER'
+                      ? '0.00'
+                      : (amountCollected !== ''
+                          ? amountCollected
+                          : (
+                              (activePaymentOrder.total_amount || 0) -
+                              (discountAmount || ((activePaymentOrder.total_amount * discountPercentage) / 100))
+                            ).toFixed(2))
                   }
                   onChange={(e) => setAmountCollected(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-base font-extrabold text-amber-400 focus:outline-none focus:border-amber-500 font-mono"
+                  className={`w-full border rounded-xl px-3 py-2.5 text-base font-extrabold font-mono focus:outline-none ${
+                    paymentMode === 'OTHER'
+                      ? 'bg-slate-900 border-amber-500/50 text-emerald-400 cursor-not-allowed'
+                      : 'bg-slate-950 border-slate-800 text-amber-400 focus:border-amber-500'
+                  }`}
                   required
                 />
               </div>
@@ -791,7 +925,7 @@ export default function BarReception() {
                   type="submit"
                   className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black py-3 rounded-xl shadow-lg transition"
                 >
-                  Confirm & Clear Table
+                  {paymentMode === 'OTHER' ? 'Confirm Free Order & Clear Table' : 'Confirm & Clear Table'}
                 </button>
               </div>
             </form>
@@ -804,6 +938,22 @@ export default function BarReception() {
         isOpen={isLogModalOpen}
         onClose={() => setIsLogModalOpen(false)}
       />
+
+      {/* Switch Table / Transfer Order Modal */}
+      {switchingTableOrder && (
+        <SwitchTableModal
+          isOpen={!!switchingTableOrder}
+          activeOrder={switchingTableOrder}
+          onClose={() => setSwitchingTableOrder(null)}
+          onSwitchSuccess={(res) => {
+            setPaymentFeedback({
+              title: '🔀 Table Transferred Successfully!',
+              message: res.message || `Customer order moved to new table. Kitchen & Bar transfer notices dispatched.`
+            });
+            setTimeout(() => setPaymentFeedback(null), 7000);
+          }}
+        />
+      )}
 
       {/* Category Sales & Department Revenue Report Modal */}
       <CategorySalesReportModal

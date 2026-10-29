@@ -40,6 +40,7 @@ export default function CategorySalesReportModal({ isOpen, onClose }) {
     let totalCash = 0;
     let totalUpi = 0;
     let totalCard = 0;
+    let totalComplimentary = 0;
     let totalDiscounts = 0;
     let grandTotal = 0;
 
@@ -52,7 +53,7 @@ export default function CategorySalesReportModal({ isOpen, onClose }) {
     const platformMap = {};
 
     collectedOrders.forEach(ord => {
-      const amt = parseFloat(ord.amount_collected || ord.final_amount || ord.total_amount || 0);
+      const amt = parseFloat(ord.amount_collected || ord.final_amount || 0);
       const mode = (ord.payment_mode || 'CASH').toUpperCase();
       const plat = ord.booking_platform || 'Direct / Walk-in';
       const disc = parseFloat(ord.discount_amount || 0);
@@ -60,6 +61,9 @@ export default function CategorySalesReportModal({ isOpen, onClose }) {
       if (mode === 'CASH') totalCash += amt;
       else if (mode === 'UPI') totalUpi += amt;
       else if (mode === 'CARD') totalCard += amt;
+      else if (mode === 'OTHER' || plat.includes('Complimentary')) {
+        totalComplimentary += parseFloat(ord.total_amount || 0);
+      }
 
       grandTotal += amt;
       totalDiscounts += disc;
@@ -106,6 +110,7 @@ export default function CategorySalesReportModal({ isOpen, onClose }) {
         total_cash: totalCash,
         total_upi: totalUpi,
         total_card: totalCard,
+        total_complimentary: totalComplimentary,
         grand_total: grandTotal,
         total_discounts: totalDiscounts,
         total_orders: collectedOrders.length
@@ -122,6 +127,7 @@ export default function CategorySalesReportModal({ isOpen, onClose }) {
     total_cash: paymentSummary.total_cash || 0,
     total_upi: paymentSummary.total_upi || 0,
     total_card: paymentSummary.total_card || 0,
+    total_complimentary: paymentSummary.total_complimentary || 0,
     grand_total: (paymentSummary.total_cash || 0) + (paymentSummary.total_upi || 0) + (paymentSummary.total_card || 0),
     total_discounts: 0,
     total_orders: paymentLogs.length
@@ -134,47 +140,125 @@ export default function CategorySalesReportModal({ isOpen, onClose }) {
     return (cat.target_dept || '').toUpperCase() === departmentFilter;
   });
 
+  // Clean, Simple & Legible Category Sales CSV Export
   const exportCategoryReportToExcel = () => {
     if (!reportData || !reportData.category_sales || reportData.category_sales.length === 0) {
       alert("No category sales report data available to export.");
       return;
     }
 
-    const headers = ["Category Name", "Department", "Items Sold Quantity", "Total Revenue (INR)", "% Share of Total Sales"];
-    const rows = reportData.category_sales.map(cat => {
-      const sharePct = grandTotal > 0 ? ((cat.total_revenue / grandTotal) * 100).toFixed(1) : '0';
+    const todayStr = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+    const nowTimeStr = new Date().toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    const totalCash = (paymentSummaryData.total_cash || 0).toFixed(2);
+    const totalUpi = (paymentSummaryData.total_upi || 0).toFixed(2);
+    const totalCard = (paymentSummaryData.total_card || 0).toFixed(2);
+    const totalComplimentary = (paymentSummaryData.total_complimentary || 0).toFixed(2);
+    const totalDiscountsStr = (paymentSummaryData.total_discounts || 0).toFixed(2);
+    const netRevenue = (paymentSummaryData.grand_total || (parseFloat(totalCash) + parseFloat(totalUpi) + parseFloat(totalCard))).toFixed(2);
+
+    const kitchenData = reportData.department_summary?.KITCHEN || { items_sold: 0, gross_sales: 0 };
+    const barData = reportData.department_summary?.BAR || { items_sold: 0, gross_sales: 0 };
+    const deptTotalItems = (kitchenData.items_sold || 0) + (barData.items_sold || 0);
+    const deptTotalGross = (kitchenData.gross_sales || 0) + (barData.gross_sales || 0);
+
+    let sumQty = 0;
+    let sumRev = 0;
+
+    const categoryRows = reportData.category_sales.map((cat, idx) => {
+      const rev = parseFloat(cat.total_revenue || 0);
+      const qty = parseInt(cat.items_sold || 0);
+      sumQty += qty;
+      sumRev += rev;
+      const sharePct = grandTotal > 0 ? ((rev / grandTotal) * 100).toFixed(1) : '0.0';
+      const deptLabel = (cat.target_dept || '').toUpperCase() === 'BAR' ? 'Bar & Drinks' : 'Food & Kitchen';
+
       return [
+        idx + 1,
         `"${cat.category_name}"`,
-        `"${cat.target_dept}"`,
-        `"${cat.items_sold}"`,
-        `"${cat.total_revenue.toFixed(2)}"`,
+        `"${deptLabel}"`,
+        qty,
+        rev.toFixed(2),
         `"${sharePct}%"`
       ];
     });
 
-    const summarySection = [
-      [],
-      ["--- PAYMENT MODE REVENUE SUMMARY ---"],
-      ["Payment Mode", "Collected Amount (INR)"],
-      ["Cash Revenue", `"${paymentSummaryData.total_cash}"`],
-      ["UPI / QR Revenue", `"${paymentSummaryData.total_upi}"`],
-      ["Card Revenue", `"${paymentSummaryData.total_card}"`],
-      ["Grand Total Net Revenue", `"${paymentSummaryData.grand_total}"`],
-      ["Total Offer Discounts Provided", `"${paymentSummaryData.total_discounts}"`]
+    const lines = [
+      `"THE BERMUDA COCKTAIL - DAILY SALES & CATEGORY PERFORMANCE REPORT"`,
+      `"Report Date: ${todayStr} | Generated At: ${nowTimeStr} | Currency: INR (Rs.)"`,
+      `""`,
+      `"===================================================================================================="`,
+      `"1. FINANCIAL REVENUE OVERVIEW"`,
+      `"===================================================================================================="`,
+      `"Revenue Channel","Amount (Rs.)","Details"`,
+      `"Cash Register Revenue","Rs. ${totalCash}","Cash collected in drawer"`,
+      `"UPI / QR Digital Revenue","Rs. ${totalUpi}","Online UPI payments"`,
+      `"Card Terminal Revenue","Rs. ${totalCard}","POS card swiped"`,
+      `"TOTAL NET REALIZED REVENUE","Rs. ${netRevenue}","Grand Total (Cash + UPI + Card)"`,
+      `"House / Complimentary (100% Free)","Rs. ${totalComplimentary}","Owners / MD / Bouncers house orders"`,
+      `"Total Dining Discounts Given","Rs. ${totalDiscountsStr}","Offers and platform discounts"`,
+      `"Total Orders Settled","${paymentSummaryData.total_orders || 0} Orders",""`,
+      `""`,
+      `"===================================================================================================="`,
+      `"2. DEPARTMENT REVENUE BREAKDOWN"`,
+      `"===================================================================================================="`,
+      `"Department","Items Sold","Gross Revenue (Rs.)","Share of Total"`
     ];
 
-    const csvString = [
-      headers.join(','), 
-      ...rows.map(r => r.join(',')),
-      ...summarySection.map(r => r.join(','))
-    ].join('\n');
+    if (deptTotalGross > 0) {
+      const kShare = ((kitchenData.gross_sales / deptTotalGross) * 100).toFixed(1);
+      const bShare = ((barData.gross_sales / deptTotalGross) * 100).toFixed(1);
+      lines.push(
+        `"Food & Kitchen","${kitchenData.items_sold} Items","Rs. ${kitchenData.gross_sales.toFixed(2)}","${kShare}%"`,
+        `"Bar & Drinks","${barData.items_sold} Items","Rs. ${barData.gross_sales.toFixed(2)}","${bShare}%"`,
+        `"TOTAL DEPARTMENT SALES","${deptTotalItems} Items","Rs. ${deptTotalGross.toFixed(2)}","100.0%"`
+      );
+    } else {
+      lines.push(`"No department sales recorded yet today","0 Items","Rs. 0.00","0%"`);
+    }
 
+    lines.push(
+      `""`,
+      `"===================================================================================================="`,
+      `"3. DETAILED CATEGORY SALES (RANKED BY REVENUE)"`,
+      `"===================================================================================================="`,
+      [
+        `"Rank"`,
+        `"Category Name"`,
+        `"Department"`,
+        `"Items Sold (Qty)"`,
+        `"Total Sales (Rs)"`,
+        `"% Share of Sales"`
+      ].join(','),
+      ...categoryRows.map(r => r.join(',')),
+      `""`,
+      [
+        `"TOTALS"`,
+        `""`,
+        `"${reportData.category_sales.length} Categories"`,
+        sumQty,
+        sumRev.toFixed(2),
+        `"100.0%"`
+      ].join(','),
+      `""`,
+      `"*** END OF REPORT - THE BERMUDA COCKTAIL POS SYSTEM ***"`
+    );
+
+    const csvString = lines.join('\r\n');
     const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const today = new Date().toISOString().slice(0, 10);
-    link.setAttribute('download', `Bermuda_Pub_Category_Sales_Report_${today}.csv`);
+    const fileDate = new Date().toISOString().slice(0, 10);
+    link.setAttribute('download', `Bermuda_Category_Sales_Report_${fileDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

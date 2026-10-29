@@ -72,7 +72,22 @@ class ErrorBoundary extends React.Component {
 }
 
 function MainContent() {
-  const { activeTab } = useOrder();
+  const { activeTab, currentUser } = useOrder();
+
+  // Guard against unauthenticated access to staff panels
+  if (!currentUser && activeTab !== 'customer') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-3xl">
+          🔒
+        </div>
+        <h2 className="text-xl font-black text-amber-400">Staff Authentication Required</h2>
+        <p className="text-xs text-slate-300 max-w-sm">
+          You must enter your staff email and password to access this terminal.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <main className="w-full">
