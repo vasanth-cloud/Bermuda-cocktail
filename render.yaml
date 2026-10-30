@@ -11,7 +11,9 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: ALLOWED_ORIGINS
-        value: "*"
+        value: "https://elitedominators.com,https://www.elitedominators.com,https://bermuda-cocktail-frontend.onrender.com"
+      - key: JWT_SECRET_KEY
+        generateValue: true
 
   # 2. Frontend Static Web Service (Vite React App)
   - type: web
