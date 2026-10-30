@@ -1,25 +1,22 @@
-import hashlib
 import json
 import os
+import secrets
 from sqlalchemy.orm import Session
 from app.models import TableZone, PubTable, Category, Product, User, Order
+from app.security import hash_password
 
 STAFF_USERS_JSON_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "staff_users.json"))
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 def seed_initial_data(db: Session):
     # 0. Sync & Seed Users (Admin & Staff Accounts)
     # Ensure Master Admin ALWAYS exists with full access
     admin_user = db.query(User).filter(User.email.ilike("avasanth081@gmail.com")).first()
     if not admin_user:
-        admin_pass = "Vasanth@123"
+        admin_pass = os.getenv("ADMIN_INITIAL_PASSWORD", "Vasanth@123")
         admin_user = User(
             name="Vasanth Admin",
             email="avasanth081@gmail.com",
             password_hash=hash_password(admin_pass),
-            plain_password=admin_pass,
             role="ADMIN",
             allowed_terminals="customer,entry_scanner,bar,staff,reports,tables,staff_accounts,members,admin",
             is_active=True
@@ -48,13 +45,13 @@ def seed_initial_data(db: Session):
                         if u.get("email", "").lower() != "avasanth081@gmail.com":
                             existing = db.query(User).filter(User.email.ilike(u["email"])).first()
                             if not existing:
-                                p_pass = u.get("plain_password") or "Bermuda@123"
-                                p_hash = u.get("password_hash") or hash_password(p_pass)
+                                p_hash = u.get("password_hash")
+                                if not p_hash or not (p_hash.startswith("$2b$") or len(p_hash) == 64):
+                                    p_hash = hash_password(secrets.token_urlsafe(16))
                                 db.add(User(
                                     name=u["name"],
                                     email=u["email"],
                                     password_hash=p_hash,
-                                    plain_password=p_pass,
                                     role=u.get("role", "WAITER"),
                                     allowed_terminals=u.get("allowed_terminals", "customer,staff"),
                                     is_active=u.get("is_active", True)
@@ -77,7 +74,6 @@ def seed_initial_data(db: Session):
                         name=u["name"],
                         email=u["email"],
                         password_hash=hash_password(u["password"]),
-                        plain_password=u["password"],
                         role=u["role"],
                         allowed_terminals=u["allowed_terminals"],
                         is_active=True

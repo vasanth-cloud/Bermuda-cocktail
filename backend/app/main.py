@@ -1,5 +1,11 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Body
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Body, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from app.security import (
+    hash_password, verify_password, create_access_token, decode_access_token,
+    get_current_user, require_admin, require_management, require_staff,
+    require_roles, login_limiter, ws_ticket_manager, ALL_STAFF_ROLES, ROLE_ADMIN, ROLE_MANAGER,
+    ROLE_WAITER, ROLE_BAR_RECEPTION, ROLE_KITCHEN_CHEF
+)
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -24,7 +30,6 @@ def sync_staff_users_to_file(db: Session):
                 "name": u.name,
                 "email": u.email,
                 "password_hash": u.password_hash,
-                "plain_password": getattr(u, "plain_password", None),
                 "role": u.role,
                 "allowed_terminals": u.allowed_terminals,
                 "is_active": u.is_active
@@ -71,24 +76,58 @@ def save_pub_settings(settings: dict) -> dict:
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Bermuda Cocktail Pub POS & Order System", version="1.0.0")
+env_mode = os.getenv("ENVIRONMENT", "development").lower()
+is_prod = env_mode == "production"
+enable_docs = os.getenv("ENABLE_DOCS", "false").lower() == "true"
+docs_url = None if is_prod and not enable_docs else "/docs"
+redoc_url = None if is_prod and not enable_docs else "/redoc"
+
+app = FastAPI(
+    title="Bermuda Cocktail Pub POS & Order System",
+    version="1.0.0",
+    docs_url=docs_url,
+    redoc_url=redoc_url
+)
 
 # Setup uploads directory for custom product image uploads
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# Support Cloud & Custom Domain CORS
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
-origins_list = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+# Strict Production & Local Allowed Origins Whitelist (No Wildcards)
+env_origins = os.getenv("ALLOWED_ORIGINS", "")
+parsed_env_origins = [o.strip() for o in env_origins.split(",") if o.strip() and o.strip() != "*"]
+
+DEFAULT_TRUSTED_ORIGINS = [
+    "https://elitedominators.com",
+    "https://www.elitedominators.com",
+    "https://bermuda-cocktail-frontend.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173"
+]
+
+trusted_origins = list(dict.fromkeys(DEFAULT_TRUSTED_ORIGINS + parsed_env_origins))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if "*" in origins_list else origins_list,
+    allow_origins=trusted_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 from sqlalchemy import text, inspect
 
@@ -105,9 +144,10 @@ def startup_event():
                 with engine.connect() as conn:
                     conn.execute(text("ALTER TABLE users ADD COLUMN allowed_terminals VARCHAR DEFAULT 'customer,staff'"))
                     conn.commit()
-            if "plain_password" not in user_cols:
+            # Purge plain_password column data for security
+            if "plain_password" in user_cols:
                 with engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN plain_password VARCHAR"))
+                    conn.execute(text("UPDATE users SET plain_password = NULL WHERE plain_password IS NOT NULL"))
                     conn.commit()
 
         if "orders" in tables:
@@ -135,9 +175,42 @@ def startup_event():
     db = next(get_db())
     seed_initial_data(db)
 
-# --- WebSocket Endpoint ---
+# --- WebSocket Ticket & Realtime Endpoint ---
+@app.post("/api/auth/ws-ticket", response_model=schemas.WSTicketResponse)
+def get_websocket_ticket(current_user: models.User = Depends(require_staff)):
+    """
+    Issues a short-lived (30-second), single-use WebSocket authentication ticket.
+    Protects staff/admin event streams without exposing long-lived JWTs in URL query strings.
+    """
+    ticket = ws_ticket_manager.issue_ticket(current_user)
+    return {"ticket": ticket, "expires_in": ws_ticket_manager.ttl_seconds}
+
 @app.websocket("/ws-api/{channel}")
-async def websocket_endpoint(websocket: WebSocket, channel: str):
+async def websocket_endpoint(
+    websocket: WebSocket, 
+    channel: str, 
+    ticket: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    # Enforce authentication on all staff and administrative channels
+    PRIVATE_STAFF_CHANNELS = ["staff", "admin", "bar", "kitchen", "all"]
+    if channel.lower() in PRIVATE_STAFF_CHANNELS:
+        ticket_info = ws_ticket_manager.consume_ticket(ticket) if ticket else None
+        if not ticket_info:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Valid WebSocket ticket required")
+            return
+
+        # Validate that the ticket belongs to an active staff member in the database
+        user = db.query(models.User).filter(models.User.id == ticket_info["user_id"]).first()
+        if not user or not user.is_active:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Staff account is inactive or removed")
+            return
+
+        # Check role-specific channel boundaries (e.g. admin channel requires ADMIN role)
+        if channel.lower() == "admin" and user.role != ROLE_ADMIN:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Admin privileges required")
+            return
+
     await manager.connect(websocket, channel)
     try:
         while True:
@@ -171,10 +244,7 @@ def get_system_ip():
         "qr_base_url": custom_domain if custom_domain else f"http://{ip}:3000"
     }
 
-import hashlib
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+# Password hashing imported from app.security
 
 def is_bar_drink_item(it) -> bool:
     """
@@ -235,91 +305,106 @@ def is_bar_drink_item(it) -> bool:
 
 
 # --- Auth & User Management Endpoints ---
-@app.post("/api/auth/login")
-def login_user(creds: schemas.UserLogin, db: Session = Depends(get_db)):
+@app.post("/api/auth/login", response_model=schemas.TokenResponse)
+def login_user(creds: schemas.UserLogin, request: Request, db: Session = Depends(get_db)):
     clean_email = (creds.email or "").strip().lower()
-    hashed = hash_password(creds.password)
-    user = db.query(models.User).filter(
-        models.User.email.ilike(clean_email),
-        models.User.password_hash == hashed
-    ).first()
+    client_ip = request.client.host if request.client else "unknown"
 
+    # Enforce brute-force rate limiting
+    login_limiter.check_rate_limit(f"ip:{client_ip}")
+    login_limiter.check_rate_limit(f"email:{clean_email}")
+
+    user = db.query(models.User).filter(models.User.email.ilike(clean_email)).first()
     if not user:
+        login_limiter.record_failure(f"ip:{client_ip}")
+        login_limiter.record_failure(f"email:{clean_email}")
         raise HTTPException(
-            status_code=401, 
+            status_code=401,
             detail="Invalid email or password. This staff account does not exist or has been removed."
         )
+
+    is_valid, needs_migration = verify_password(creds.password, user.password_hash)
+    if not is_valid:
+        login_limiter.record_failure(f"ip:{client_ip}")
+        login_limiter.record_failure(f"email:{clean_email}")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password."
+        )
+
     if not user.is_active:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="Account has been deactivated by an administrator."
         )
 
-    allowed = user.allowed_terminals
-    if not allowed:
-        if user.role == "ADMIN" or user.email == "avasanth081@gmail.com":
-            allowed = "customer,entry_scanner,bar,staff,members,admin"
-        elif user.role in ["BAR_RECEPTION", "KITCHEN_CHEF", "BAR_KITCHEN"]:
-            allowed = "customer,entry_scanner,bar,members"
-        else:
-            allowed = "customer,entry_scanner,staff,members"
+    # Reset rate limiting counter on successful authentication
+    login_limiter.record_success(f"ip:{client_ip}")
+    login_limiter.record_success(f"email:{clean_email}")
+
+    # Seamless transparent migration from legacy SHA-256 to bcrypt
+    if needs_migration:
+        user.password_hash = hash_password(creds.password)
+        db.commit()
+
+    token = create_access_token(user)
 
     return {
-        "message": "Login successful",
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role,
-            "allowed_terminals": allowed
-        }
+        "access_token": token,
+        "token_type": "bearer",
+        "user": schemas.UserSchema.model_validate(user)
     }
 
 @app.post("/api/auth/verify")
-def verify_user_session(payload: dict = Body(...), db: Session = Depends(get_db)):
-    user_id = payload.get("id")
-    email = (payload.get("email") or "").strip().lower()
-    if not user_id and not email:
-        raise HTTPException(status_code=401, detail="Session credentials missing")
+def verify_user_session(
+    payload: dict = Body(default={}),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    token = payload.get("token")
+    if not token and request:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
 
-    query = db.query(models.User)
-    if user_id:
-        user = query.filter(models.User.id == user_id).first()
-    else:
-        user = query.filter(models.User.email.ilike(email)).first()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session credentials missing: Valid Bearer token required"
+        )
 
+    claims = decode_access_token(token)
+    user_id_str = claims.get("sub")
+    if not user_id_str:
+        raise HTTPException(status_code=401, detail="Malformed session claims")
+
+    try:
+        user_id = int(user_id_str)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid session token user ID")
+
+    user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="Staff account no longer exists in database")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Staff account has been deactivated")
 
-    allowed = user.allowed_terminals
-    if not allowed:
-        if user.role == "ADMIN" or user.email == "avasanth081@gmail.com":
-            allowed = "customer,entry_scanner,bar,staff,members,admin"
-        elif user.role in ["BAR_RECEPTION", "KITCHEN_CHEF", "BAR_KITCHEN"]:
-            allowed = "customer,entry_scanner,bar,members"
-        else:
-            allowed = "customer,entry_scanner,staff,members"
-
     return {
         "valid": True,
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role,
-            "allowed_terminals": allowed
-        }
+        "user": schemas.UserSchema.model_validate(user)
     }
 
 @app.get("/api/users", response_model=List[schemas.UserSchema])
-def get_users(db: Session = Depends(get_db)):
+def get_users(current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     return db.query(models.User).order_by(models.User.created_at.desc()).all()
 
 @app.post("/api/users", response_model=schemas.UserSchema)
-def create_staff_user(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == user_data.email).first()
+def create_staff_user(
+    user_data: schemas.UserCreate,
+    current_user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    existing = db.query(models.User).filter(models.User.email.ilike(user_data.email.strip())).first()
     if existing:
         raise HTTPException(status_code=400, detail="User with this email already exists")
 
@@ -331,10 +416,9 @@ def create_staff_user(user_data: schemas.UserCreate, db: Session = Depends(get_d
             terminals = "customer,staff"
 
     new_user = models.User(
-        name=user_data.name,
-        email=user_data.email,
+        name=user_data.name.strip(),
+        email=user_data.email.strip().lower(),
         password_hash=hash_password(user_data.password),
-        plain_password=user_data.password,
         role=user_data.role.upper(),
         allowed_terminals=terminals,
         is_active=True
@@ -346,22 +430,27 @@ def create_staff_user(user_data: schemas.UserCreate, db: Session = Depends(get_d
     return new_user
 
 @app.put("/api/users/{user_id}", response_model=schemas.UserSchema)
-def update_staff_user(user_id: int, user_data: schemas.UserUpdate, db: Session = Depends(get_db)):
+def update_staff_user(
+    user_id: int,
+    user_data: schemas.UserUpdate,
+    current_user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if user_data.name is not None:
-        user.name = user_data.name
+        user.name = user_data.name.strip()
     if user_data.email is not None and user_data.email.strip():
-        if user_data.email != user.email:
-            existing = db.query(models.User).filter(models.User.email == user_data.email).first()
+        clean_email = user_data.email.strip().lower()
+        if clean_email != user.email.lower():
+            existing = db.query(models.User).filter(models.User.email.ilike(clean_email)).first()
             if existing:
                 raise HTTPException(status_code=400, detail="User with this email already exists")
-            user.email = user_data.email
+            user.email = clean_email
     if user_data.password is not None and user_data.password.strip():
         user.password_hash = hash_password(user_data.password)
-        user.plain_password = user_data.password
     if user_data.role is not None:
         user.role = user_data.role.upper()
     if user_data.allowed_terminals is not None:
@@ -375,7 +464,11 @@ def update_staff_user(user_id: int, user_data: schemas.UserUpdate, db: Session =
     return user
 
 @app.delete("/api/users/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
+async def delete_user(
+    user_id: int,
+    current_user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -419,7 +512,7 @@ def get_table_by_id(table_id: int, db: Session = Depends(get_db)):
     return table
 
 @app.post("/api/tables", response_model=schemas.PubTableSchema)
-async def create_table(table_data: schemas.PubTableCreate, db: Session = Depends(get_db)):
+async def create_table(table_data: schemas.PubTableCreate, current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     t_num = table_data.table_number.strip().upper()
     existing = db.query(models.PubTable).filter(models.PubTable.table_number == t_num).first()
     if existing:
@@ -442,7 +535,7 @@ async def create_table(table_data: schemas.PubTableCreate, db: Session = Depends
     return new_table
 
 @app.put("/api/tables/{table_id}", response_model=schemas.PubTableSchema)
-async def update_table(table_id: int, table_update: schemas.PubTableUpdate, db: Session = Depends(get_db)):
+async def update_table(table_id: int, table_update: schemas.PubTableUpdate, current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -465,7 +558,7 @@ async def update_table(table_id: int, table_update: schemas.PubTableUpdate, db: 
     return table
 
 @app.delete("/api/tables/{table_id}")
-async def delete_table(table_id: int, db: Session = Depends(get_db)):
+async def delete_table(table_id: int, current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -521,7 +614,7 @@ def get_products(category_id: Optional[int] = None, target_dept: Optional[str] =
     return query.all()
 
 @app.post("/api/products", response_model=schemas.ProductSchema)
-async def create_product(prod_data: schemas.ProductCreate, db: Session = Depends(get_db)):
+async def create_product(prod_data: schemas.ProductCreate, current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     category = db.query(models.Category).filter(models.Category.id == prod_data.category_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -543,7 +636,7 @@ async def create_product(prod_data: schemas.ProductCreate, db: Session = Depends
     return new_prod
 
 @app.patch("/api/products/{product_id}", response_model=schemas.ProductSchema)
-async def update_product(product_id: int, prod_update: schemas.ProductUpdate, db: Session = Depends(get_db)):
+async def update_product(product_id: int, prod_update: schemas.ProductUpdate, current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -558,21 +651,57 @@ async def update_product(product_id: int, prod_update: schemas.ProductUpdate, db
     await manager.broadcast_all({"event": "MENU_UPDATED"})
     return product
 
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 Megabytes maximum
+
 @app.post("/api/upload-image")
-async def upload_image(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are allowed")
-    ext = os.path.splitext(file.filename)[1]
-    if not ext:
-        ext = ".png"
-    filename = f"img_{uuid.uuid4().hex[:10]}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user: models.User = Depends(require_staff)
+):
+    # 1. Validate MIME header
+    content_type = (file.content_type or "").lower().strip()
+    if content_type not in ALLOWED_IMAGE_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only standard image formats (JPG, PNG, WebP) are allowed. SVG and executable formats are rejected for security."
+        )
+
+    # 2. Validate file extension
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Disallowed image file extension.")
+
+    # 3. Read content with size enforcement
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Uploaded image exceeds 5MB size limit.")
+    if len(file_bytes) < 16:
+        raise HTTPException(status_code=400, detail="Image file appears empty or corrupted.")
+
+    # 4. Verify file signature / magic bytes to prevent masquerading
+    is_valid_magic = False
+    if ext in [".jpg", ".jpeg"] and file_bytes.startswith(b"\xff\xd8\xff"):
+        is_valid_magic = True
+    elif ext == ".png" and file_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        is_valid_magic = True
+    elif ext == ".webp" and file_bytes.startswith(b"RIFF") and b"WEBP" in file_bytes[:16]:
+        is_valid_magic = True
+
+    if not is_valid_magic:
+        raise HTTPException(status_code=400, detail="File content does not match genuine image binary signature.")
+
+    # 5. Save with cryptographically random hex filename
+    safe_filename = f"img_{uuid.uuid4().hex[:12]}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, safe_filename)
     with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    return {"image_url": f"/uploads/{filename}"}
+        buffer.write(file_bytes)
+
+    return {"image_url": f"/uploads/{safe_filename}"}
 
 @app.delete("/api/products/{product_id}")
-async def delete_product(product_id: int, db: Session = Depends(get_db)):
+async def delete_product(product_id: int, current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -584,7 +713,7 @@ async def delete_product(product_id: int, db: Session = Depends(get_db)):
     return {"message": "Product deleted successfully"}
 
 @app.post("/api/menu/import-excel")
-async def trigger_excel_menu_import(db: Session = Depends(get_db)):
+async def trigger_excel_menu_import(current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     from app.excel_importer import import_excel_menu
     success = import_excel_menu(db)
     if success:
@@ -595,16 +724,37 @@ async def trigger_excel_menu_import(db: Session = Depends(get_db)):
 
 # --- Order & Split Routing Endpoints ---
 @app.post("/api/orders", response_model=schemas.OrderSchema)
-async def create_order(order_data: schemas.OrderCreate, db: Session = Depends(get_db)):
+async def create_order(order_data: schemas.OrderCreate, request: Request, db: Session = Depends(get_db)):
     table = db.query(models.PubTable).filter(models.PubTable.id == order_data.table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
 
+    # Strict Order Security: validate non-empty items and quantity constraints (1 to 50)
+    if not order_data.items:
+        raise HTTPException(status_code=400, detail="Order must contain at least one item.")
+
+    for item in order_data.items:
+        if item.quantity <= 0 or item.quantity > 50:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid quantity {item.quantity}. Quantity must be between 1 and 50."
+            )
+
     # Check if customer punching is disabled (Weekend rush mode)
     pub_settings = load_pub_settings()
     if not pub_settings.get("customer_punching_enabled", True):
+        auth_header = request.headers.get("Authorization", "") if request else ""
+        has_staff_token = False
+        if auth_header.startswith("Bearer "):
+            try:
+                payload = decode_access_token(auth_header.split(" ", 1)[1].strip())
+                if payload.get("role") in ALL_STAFF_ROLES:
+                    has_staff_token = True
+            except Exception:
+                pass
+
         c_name = (order_data.customer_name or "").strip().lower()
-        is_staff_order = any(w in c_name for w in ["waiter", "staff", "admin", "captain", "vasanth", "padmesh", "ajaykumar"])
+        is_staff_order = has_staff_token or any(w in c_name for w in ["waiter", "staff", "admin", "captain", "vasanth", "padmesh", "ajaykumar"])
         if not is_staff_order:
             raise HTTPException(
                 status_code=403,
@@ -785,6 +935,7 @@ def get_orders(
     target_dept: Optional[str] = None,
     status: Optional[str] = None,
     table_id: Optional[int] = None,
+    current_user: models.User = Depends(require_staff),
     db: Session = Depends(get_db)
 ):
     query = db.query(models.Order)
@@ -815,7 +966,7 @@ def get_orders(
     return dtos
 
 @app.patch("/api/orders/{order_id}/status")
-async def update_order_status(order_id: int, status_update: schemas.OrderStatusUpdate, db: Session = Depends(get_db)):
+async def update_order_status(order_id: int, status_update: schemas.OrderStatusUpdate, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -837,13 +988,15 @@ async def waiter_claim_order(
     order_id: int, 
     waiter_name: Optional[str] = "Waiter", 
     req: Optional[schemas.WaiterClaimOrderRequest] = None, 
+    current_user: models.User = Depends(require_staff),
     db: Session = Depends(get_db)
 ):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    claiming_waiter = (req.waiter_name if req and req.waiter_name else waiter_name) or "Waiter"
+    # Strict Waiter Identity: Authenticated staff member name exclusively
+    claiming_waiter = (current_user.name or "Staff").strip()
     order.waiter_name = claiming_waiter
     order.collected_by = claiming_waiter
     order.status = "ATTENDING"
@@ -872,13 +1025,15 @@ async def waiter_confirm_order(
     order_id: int, 
     waiter_name: Optional[str] = "Waiter", 
     req: Optional[schemas.WaiterConfirmOrderRequest] = None,
+    current_user: models.User = Depends(require_staff),
     db: Session = Depends(get_db)
 ):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    effective_waiter = (req.waiter_name if req and req.waiter_name else waiter_name) or "Waiter"
+    # Strict Waiter Identity: Authenticated staff member name exclusively
+    effective_waiter = (current_user.name or "Staff").strip()
     order.status = "CONFIRMED"
     order.waiter_name = effective_waiter
     if not order.collected_by:
@@ -1035,10 +1190,24 @@ async def waiter_confirm_order(
     }
 
 @app.post("/api/orders/{order_id}/add-items")
-async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest, db: Session = Depends(get_db)):
+async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    if not req.items:
+        raise HTTPException(status_code=400, detail="Must provide at least one item to add.")
+
+    for it in req.items:
+        if it.quantity <= 0 or it.quantity > 50:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid quantity {it.quantity}. Quantity must be between 1 and 50."
+            )
+
+    waiter_identity = (current_user.name or "Staff").strip()
+    if not order.waiter_name:
+        order.waiter_name = waiter_identity
 
     added_total = 0.0
     added_kitchen_items = []
@@ -1151,6 +1320,7 @@ async def add_items_to_order(order_id: int, req: schemas.AddItemsToOrderRequest,
 async def switch_order_table(
     order_id: int, 
     req: schemas.SwitchTableRequest, 
+    current_user: models.User = Depends(require_staff),
     db: Session = Depends(get_db)
 ):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
@@ -1170,12 +1340,11 @@ async def switch_order_table(
 
     old_tbl_str = f"{old_table.table_number} ({old_table.zone.display_name})" if old_table and old_table.zone else (old_table.table_number if old_table else "Previous Table")
     new_tbl_str = f"{new_table.table_number} ({new_table.zone.display_name})" if new_table.zone else new_table.table_number
-    waiter_label = req.waiter_name or order.waiter_name or "Staff"
+    waiter_label = (current_user.name or "Staff").strip()
 
     # 1. Update Order's Table ID
     order.table_id = new_table.id
-    if req.waiter_name:
-        order.waiter_name = req.waiter_name
+    order.waiter_name = waiter_label
 
     # 2. Update New Table Status to OCCUPIED
     new_table.current_status = "OCCUPIED"
@@ -1291,7 +1460,7 @@ async def switch_order_table(
     }
 
 @app.delete("/api/order-items/{item_id}")
-async def delete_order_item(item_id: int, db: Session = Depends(get_db)):
+async def delete_order_item(item_id: int, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -1313,7 +1482,7 @@ async def delete_order_item(item_id: int, db: Session = Depends(get_db)):
     return {"message": "Order item deleted successfully"}
 
 @app.patch("/api/order-items/{item_id}/status")
-async def update_item_status(item_id: int, status_update: schemas.ItemStatusUpdate, db: Session = Depends(get_db)):
+async def update_item_status(item_id: int, status_update: schemas.ItemStatusUpdate, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Order item not found")
@@ -1340,7 +1509,7 @@ async def update_item_status(item_id: int, status_update: schemas.ItemStatusUpda
     return {"message": "Item status updated", "status": item.status}
 
 @app.patch("/api/order-items/{item_id}/notes")
-async def update_item_notes(item_id: int, req: schemas.ItemNotesUpdate, db: Session = Depends(get_db)):
+async def update_item_notes(item_id: int, req: schemas.ItemNotesUpdate, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     item = db.query(models.OrderItem).filter(models.OrderItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Order item not found")
@@ -1359,44 +1528,80 @@ async def update_item_notes(item_id: int, req: schemas.ItemNotesUpdate, db: Sess
     return {"message": "Item notes updated", "item_id": item.id, "notes": item.notes}
 
 @app.post("/api/orders/{order_id}/collect-payment")
-async def collect_order_payment(order_id: int, req: schemas.PaymentCollectRequest, db: Session = Depends(get_db)):
+async def collect_order_payment(
+    order_id: int,
+    req: schemas.PaymentCollectRequest,
+    current_user: models.User = Depends(require_staff),
+    db: Session = Depends(get_db)
+):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    # Double payment prevention
+    if order.payment_status == "COLLECTED":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order #{order.order_number} has already been settled and paid. Duplicate settlement is blocked."
+        )
+
+    # Input constraints on financial parameters
+    if req.amount_collected < 0:
+        raise HTTPException(status_code=400, detail="Amount collected cannot be negative.")
+    if req.discount_percentage and (req.discount_percentage < 0 or req.discount_percentage > 100):
+        raise HTTPException(status_code=400, detail="Discount percentage must be between 0 and 100.")
+    if req.discount_amount and req.discount_amount < 0:
+        raise HTTPException(status_code=400, detail="Discount amount cannot be negative.")
+
+    sub = float(order.total_amount or 0.0)
+    is_complimentary = (req.payment_mode == "OTHER" or "Complimentary" in (req.booking_platform or ""))
+    beneficiary = (req.beneficiary_name or req.notes or req.booking_reference_id or "").strip()
+
+    # RBAC Discount Authorization: Waiters capped at 20% discount without Manager/Admin approval
+    if not is_complimentary:
+        req_disc_pct = float(req.discount_percentage or 0.0)
+        req_disc_amt = float(req.discount_amount or 0.0)
+        is_high_discount = req_disc_pct > 20.0 or (sub > 0 and (req_disc_amt / sub) > 0.20)
+        if is_high_discount and current_user.role not in [ROLE_ADMIN, ROLE_MANAGER]:
+            raise HTTPException(
+                status_code=403, 
+                detail="Discounts exceeding 20% require Manager or Admin authorization."
+            )
+
     order.payment_status = "COLLECTED"
     order.payment_mode = req.payment_mode
-    order.collected_by = req.collected_by or "Waiter"
-
-    is_complimentary = (req.payment_mode == "OTHER" or "Complimentary" in (req.booking_platform or ""))
-    beneficiary = req.beneficiary_name or req.notes or req.booking_reference_id
+    order.collected_by = (current_user.name or "Staff").strip()
 
     if is_complimentary:
+        if not beneficiary:
+            raise HTTPException(status_code=400, detail="Beneficiary name and role is required for complimentary billing.")
         order.payment_mode = "OTHER"
         order.booking_platform = req.booking_platform or "Complimentary (Owners/MD/Bouncers)"
-        order.booking_reference_id = (beneficiary or "Management Guest").strip()
+        order.booking_reference_id = beneficiary
         order.discount_percentage = 100.0
-        sub = float(order.total_amount or 0.0)
         order.discount_amount = sub
         order.final_amount = 0.0
         order.amount_collected = 0.0
     else:
         order.booking_platform = req.booking_platform or "Direct / Walk-in"
         order.booking_reference_id = req.booking_reference_id or None
-        order.discount_percentage = float(req.discount_percentage or 0.0)
-        order.discount_amount = float(req.discount_amount or 0.0)
 
-        sub = float(order.total_amount or 0.0)
-        if order.discount_amount <= 0.0 and order.discount_percentage > 0.0:
-            order.discount_amount = round((sub * order.discount_percentage) / 100.0, 2)
+        disc_pct = float(req.discount_percentage or 0.0)
+        disc_amt = float(req.discount_amount or 0.0)
 
-        if order.discount_amount > 0.0:
-            order.final_amount = max(0.0, sub - order.discount_amount)
-        elif req.final_amount is not None:
-            order.final_amount = float(req.final_amount)
-        else:
-            order.final_amount = sub
+        if disc_amt <= 0.0 and disc_pct > 0.0:
+            disc_amt = round((sub * disc_pct) / 100.0, 2)
+        elif disc_amt > 0.0 and disc_pct <= 0.0:
+            disc_pct = round((disc_amt / sub * 100.0), 2) if sub > 0 else 0.0
 
+        disc_amt = min(sub, max(0.0, disc_amt))
+        disc_pct = min(100.0, max(0.0, disc_pct))
+
+        order.discount_percentage = disc_pct
+        order.discount_amount = disc_amt
+
+        # Server-calculated final payable amount (Strictly ignore arbitrary client-supplied final_amount)
+        order.final_amount = max(0.0, round(sub - disc_amt, 2))
         order.amount_collected = order.final_amount
 
     order.status = "BILLED"
@@ -1468,7 +1673,7 @@ async def collect_order_payment(order_id: int, req: schemas.PaymentCollectReques
     return {"message": f"Payment of ₹{order.amount_collected} collected via {order.payment_mode} ({order.booking_platform}{ref_str})", "order_id": order.id}
 
 @app.get("/api/payments/log")
-def get_payment_logs(db: Session = Depends(get_db)):
+def get_payment_logs(current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     collected_orders = db.query(models.Order).filter(
         models.Order.payment_status == "COLLECTED"
     ).order_by(models.Order.updated_at.desc()).all()
@@ -1545,7 +1750,7 @@ def get_payment_logs(db: Session = Depends(get_db)):
     }
 
 @app.delete("/api/payments/log/{order_id}")
-async def delete_single_payment_log(order_id: int, db: Session = Depends(get_db)):
+async def delete_single_payment_log(order_id: int, current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order log not found")
@@ -1559,7 +1764,7 @@ async def delete_single_payment_log(order_id: int, db: Session = Depends(get_db)
     return {"message": f"Payment audit log for order #{order.order_number} deleted successfully"}
 
 @app.delete("/api/payments/log")
-async def clear_all_payment_logs(db: Session = Depends(get_db)):
+async def clear_all_payment_logs(current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     collected_orders = db.query(models.Order).filter(models.Order.payment_status == "COLLECTED").all()
     count = len(collected_orders)
     for ord in collected_orders:
@@ -1572,7 +1777,7 @@ async def clear_all_payment_logs(db: Session = Depends(get_db)):
     return {"message": f"Successfully cleared {count} payment audit log records"}
 
 @app.post("/api/tables/{table_id}/settle")
-async def settle_table_bill(table_id: int, db: Session = Depends(get_db)):
+async def settle_table_bill(table_id: int, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     table = db.query(models.PubTable).filter(models.PubTable.id == table_id).first()
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -1599,7 +1804,7 @@ async def settle_table_bill(table_id: int, db: Session = Depends(get_db)):
 
 # --- Category & Payment Sales Report Endpoint ---
 @app.get("/api/reports/category-summary")
-def get_category_sales_report(db: Session = Depends(get_db)):
+def get_category_sales_report(current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     collected_orders = db.query(models.Order).filter(models.Order.payment_status == "COLLECTED").all()
 
     total_cash = 0.0
@@ -1696,7 +1901,7 @@ def get_category_sales_report(db: Session = Depends(get_db)):
 
 # --- Sync Simulation Endpoints ---
 @app.get("/api/sync/status")
-def get_sync_status(db: Session = Depends(get_db)):
+def get_sync_status(current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     pending_count = db.query(models.SyncLog).filter(models.SyncLog.sync_status == "PENDING").count()
     synced_count = db.query(models.SyncLog).filter(models.SyncLog.sync_status == "SYNCED").count()
     return {
@@ -1707,7 +1912,7 @@ def get_sync_status(db: Session = Depends(get_db)):
     }
 
 @app.post("/api/sync/trigger")
-def trigger_cloud_sync(db: Session = Depends(get_db)):
+def trigger_cloud_sync(current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     pending_logs = db.query(models.SyncLog).filter(models.SyncLog.sync_status == "PENDING").all()
     count = len(pending_logs)
     for log in pending_logs:
@@ -1718,7 +1923,7 @@ def trigger_cloud_sync(db: Session = Depends(get_db)):
 
 # --- Member Card Management Endpoints ---
 @app.get("/api/members", response_model=List[schemas.CustomerMemberSchema])
-def get_members(q: Optional[str] = None, db: Session = Depends(get_db)):
+def get_members(q: Optional[str] = None, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     query = db.query(models.CustomerMember)
     if q:
         search_pattern = f"%{q}%"
@@ -1731,7 +1936,7 @@ def get_members(q: Optional[str] = None, db: Session = Depends(get_db)):
     return query.order_by(models.CustomerMember.created_at.desc()).all()
 
 @app.post("/api/members", response_model=schemas.CustomerMemberSchema)
-def create_member(member_data: schemas.CustomerMemberCreate, db: Session = Depends(get_db)):
+def create_member(member_data: schemas.CustomerMemberCreate, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     if not member_data.member_code:
         import random
         member_code = f"BMC-{random.randint(1000, 9999)}"
@@ -1759,7 +1964,7 @@ def create_member(member_data: schemas.CustomerMemberCreate, db: Session = Depen
     return new_member
 
 @app.get("/api/members/{member_identifier}", response_model=schemas.CustomerMemberSchema)
-def get_member_by_code(member_identifier: str, db: Session = Depends(get_db)):
+def get_member_by_code(member_identifier: str, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     member = None
     if member_identifier.isdigit():
         member = db.query(models.CustomerMember).filter(models.CustomerMember.id == int(member_identifier)).first()
@@ -1774,7 +1979,7 @@ def get_member_by_code(member_identifier: str, db: Session = Depends(get_db)):
     return member
 
 @app.patch("/api/members/{member_id}", response_model=schemas.CustomerMemberSchema)
-def update_member(member_id: int, update_data: schemas.CustomerMemberUpdate, db: Session = Depends(get_db)):
+def update_member(member_id: int, update_data: schemas.CustomerMemberUpdate, current_user: models.User = Depends(require_management), db: Session = Depends(get_db)):
     member = db.query(models.CustomerMember).filter(models.CustomerMember.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -1798,8 +2003,18 @@ def update_member(member_id: int, update_data: schemas.CustomerMemberUpdate, db:
     db.refresh(member)
     return member
 
+@app.get("/api/members/entry-logs", response_model=List[schemas.MemberEntryLogSchema])
+def get_member_entry_logs(current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
+    return db.query(models.MemberEntryLog).order_by(models.MemberEntryLog.entry_time.desc()).all()
+
+@app.delete("/api/members/entry-logs")
+def clear_member_entry_logs(current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    count = db.query(models.MemberEntryLog).delete()
+    db.commit()
+    return {"message": f"Successfully cleared {count} member entry log records"}
+
 @app.delete("/api/members/{member_id}")
-def delete_member(member_id: int, db: Session = Depends(get_db)):
+def delete_member(member_id: int, current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     member = db.query(models.CustomerMember).filter(models.CustomerMember.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -1809,7 +2024,7 @@ def delete_member(member_id: int, db: Session = Depends(get_db)):
     return {"message": "Member card deleted successfully"}
 
 @app.post("/api/members/{member_id}/record-visit")
-def record_member_visit(member_id: int, db: Session = Depends(get_db)):
+def record_member_visit(member_id: int, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     from datetime import datetime
     member = db.query(models.CustomerMember).filter(models.CustomerMember.id == member_id).first()
     if not member:
@@ -1832,18 +2047,8 @@ def record_member_visit(member_id: int, db: Session = Depends(get_db)):
     db.refresh(member)
     return {"message": f"Recorded visit for {member.name}", "visit_count": member.visit_count}
 
-@app.get("/api/members/entry-logs", response_model=List[schemas.MemberEntryLogSchema])
-def get_member_entry_logs(db: Session = Depends(get_db)):
-    return db.query(models.MemberEntryLog).order_by(models.MemberEntryLog.entry_time.desc()).all()
-
-@app.delete("/api/members/entry-logs")
-def clear_member_entry_logs(db: Session = Depends(get_db)):
-    count = db.query(models.MemberEntryLog).delete()
-    db.commit()
-    return {"message": f"Successfully cleared {count} member entry log records"}
-
 @app.post("/api/members/bulk-import")
-def bulk_import_members(members_list: List[schemas.CustomerMemberCreate], db: Session = Depends(get_db)):
+def bulk_import_members(members_list: List[schemas.CustomerMemberCreate], current_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     import random
     added_count = 0
     skipped_count = 0
@@ -1895,7 +2100,7 @@ def get_pub_settings_endpoint():
     return load_pub_settings()
 
 @app.post("/api/settings")
-async def update_pub_settings_endpoint(settings_data: dict = Body(...)):
+async def update_pub_settings_endpoint(settings_data: dict = Body(...), current_user: models.User = Depends(require_admin)):
     """Updates operational settings (e.g. customer punching on/off) and broadcasts to all terminals."""
     updated = save_pub_settings(settings_data)
     await manager.broadcast_all({
@@ -1907,7 +2112,7 @@ async def update_pub_settings_endpoint(settings_data: dict = Body(...)):
 # --- Thermal Printer Management & ESC/POS Endpoints ---
 
 @app.get("/api/printers/config")
-def get_printer_configuration():
+def get_printer_configuration(current_user: models.User = Depends(require_staff)):
     cfg = thermal_printer.load_printer_config()
     cfg["bridge_connected"] = thermal_printer.print_bridge.is_connected()
     cfg["connected_bridges"] = thermal_printer.print_bridge.get_connected_bridges()
@@ -1929,14 +2134,14 @@ async def printer_bridge_websocket(websocket: WebSocket, client_id: str = Query(
         thermal_printer.print_bridge.unregister(client_id)
 
 @app.post("/api/printers/config")
-def update_printer_configuration(config_data: dict):
+def update_printer_configuration(config_data: dict, current_user: models.User = Depends(require_admin)):
     saved = thermal_printer.save_printer_config(config_data)
     saved["bridge_connected"] = thermal_printer.print_bridge.is_connected()
     saved["connected_bridges"] = thermal_printer.print_bridge.get_connected_bridges()
     return {"message": "Printer configuration saved successfully", "config": saved}
 
 @app.post("/api/printers/discover")
-async def discover_lan_printers():
+async def discover_lan_printers(current_user: models.User = Depends(require_admin)):
     import socket
     from concurrent.futures import ThreadPoolExecutor
 
@@ -1977,7 +2182,7 @@ async def discover_lan_printers():
     }
 
 @app.post("/api/printers/test")
-async def test_printer_connection(req: dict = {}):
+async def test_printer_connection(req: dict = {}, current_user: models.User = Depends(require_admin)):
     cfg = thermal_printer.load_printer_config()
     target = (req.get("target") or "KITCHEN").upper()
 
@@ -2026,7 +2231,7 @@ async def test_printer_connection(req: dict = {}):
     }
 
 @app.post("/api/printers/print-kot/{order_id}")
-async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+async def print_order_kot(order_id: int, req: dict = {}, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -2090,7 +2295,7 @@ async def print_order_kot(order_id: int, req: dict = {}, db: Session = Depends(g
     }
 
 @app.post("/api/printers/print-bot/{order_id}")
-async def print_order_bot(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+async def print_order_bot(order_id: int, req: dict = {}, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     """Prints Bar Order Ticket (BOT) for cocktails & drinks to Posiflex (BAR BOT USB002)."""
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
@@ -2152,7 +2357,7 @@ async def print_order_bot(order_id: int, req: dict = {}, db: Session = Depends(g
     }
 
 @app.post("/api/printers/print-bill/{order_id}")
-async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+async def print_order_bill(order_id: int, req: dict = {}, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -2203,7 +2408,7 @@ async def print_order_bill(order_id: int, req: dict = {}, db: Session = Depends(
 
 
 @app.post("/api/printers/auto-route/{order_id}")
-async def auto_route_order_kots(order_id: int, req: dict = {}, db: Session = Depends(get_db)):
+async def auto_route_order_kots(order_id: int, req: dict = {}, current_user: models.User = Depends(require_staff), db: Session = Depends(get_db)):
     """
     Automatically routes an active order's items to their respective KOT printers:
     - Food items -> Kitchen KOT (Ethernet 192.168.0.70:9100 / Windows KITCHEN KOT)

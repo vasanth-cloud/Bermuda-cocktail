@@ -52,10 +52,20 @@ export const getApiUrl = (endpoint) => {
 };
 
 /**
- * Helper to fetch with automatic backend URL resolution
+ * Helper to fetch with automatic backend URL resolution and Bearer Token injection
  */
-export const apiFetch = (endpoint, options) => {
-  return fetch(getApiUrl(endpoint), options);
+export const apiFetch = (endpoint, options = {}) => {
+  const headers = { ...(options.headers || {}) };
+
+  // Automatically attach Authorization Bearer token if session exists
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('bermuda_token');
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  return fetch(getApiUrl(endpoint), { ...options, headers });
 };
 
 /**

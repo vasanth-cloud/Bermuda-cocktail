@@ -65,11 +65,8 @@ export default function StaffAccountsPanel() {
   const [userSuccess, setUserSuccess] = useState('');
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
 
-  // Password Visibility States (Easy recovery for forgotten passwords)
-  const [visiblePasswordIds, setVisiblePasswordIds] = useState({});
-  const [copiedPasswordId, setCopiedPasswordId] = useState(null);
+  // Password Visibility States
   const [showCreatePassword, setShowCreatePassword] = useState(false);
-  const [showCurrentEditPassword, setShowCurrentEditPassword] = useState(false);
   const [showNewEditPassword, setShowNewEditPassword] = useState(false);
 
   const handleCreateStaffUser = async (e) => {
@@ -103,7 +100,6 @@ export default function StaffAccountsPanel() {
 
   const handleOpenEditUser = (user) => {
     setEditingUser(user);
-    setShowCurrentEditPassword(false);
     setShowNewEditPassword(false);
     const terminals = user.allowed_terminals
       ? user.allowed_terminals.split(',').map(s => s.trim()).filter(Boolean)
@@ -230,7 +226,7 @@ export default function StaffAccountsPanel() {
               <tr>
                 <th className="p-3.5 rounded-l-xl">User Staff Name</th>
                 <th className="p-3.5">Email Address</th>
-                <th className="p-3.5">Password</th>
+                <th className="p-3.5">Security Status</th>
                 <th className="p-3.5">Role</th>
                 <th className="p-3.5">Permitted Page Terminals</th>
                 <th className="p-3.5 text-right rounded-r-xl">Actions</th>
@@ -250,9 +246,6 @@ export default function StaffAccountsPanel() {
                     .map(s => s.trim().toLowerCase())
                     .filter(Boolean);
 
-                  const isPwVisible = !!visiblePasswordIds[user.id];
-                  const plainPass = user.plain_password || 'Bermuda@123';
-
                   return (
                     <tr key={user.id} className="hover:bg-slate-800/50 transition">
                       <td className="p-3.5 font-extrabold text-slate-100 flex items-center gap-2.5">
@@ -267,33 +260,9 @@ export default function StaffAccountsPanel() {
                       </td>
 
                       <td className="p-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-amber-300 font-bold tracking-wider select-all inline-block min-w-[75px] text-center">
-                            {isPwVisible ? plainPass : '••••••••'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setVisiblePasswordIds(prev => ({ ...prev, [user.id]: !prev[user.id] }))}
-                            title={isPwVisible ? "Hide Password" : "See Password"}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 transition shrink-0"
-                          >
-                            {isPwVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                          {isPwVisible && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(plainPass);
-                                setCopiedPasswordId(user.id);
-                                setTimeout(() => setCopiedPasswordId(null), 2000);
-                              }}
-                              title="Copy Password"
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 transition shrink-0"
-                            >
-                              {copiedPasswordId === user.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                          )}
-                        </div>
+                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 shadow-sm">
+                          <Lock className="w-3 h-3 text-emerald-400" /> Stored Hashed (Bcrypt)
+                        </span>
                       </td>
 
                       <td className="p-3.5">
@@ -507,51 +476,27 @@ export default function StaffAccountsPanel() {
                 />
               </div>
 
-              {/* Forgotten Password Recovery / Current Password Card */}
-              <div className="bg-slate-950/90 p-3.5 rounded-xl border border-amber-500/30 flex items-center justify-between shadow-inner">
+              {/* Secure Bcrypt Information Notice */}
+              <div className="bg-slate-950/90 p-3.5 rounded-xl border border-slate-800 flex items-center gap-3 shadow-inner">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                </div>
                 <div>
-                  <div className="text-[10px] text-amber-400 font-black uppercase tracking-wider flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5 text-amber-400" /> Current Login Password
-                  </div>
-                  <div className="font-mono text-xs text-amber-200 font-black mt-1 tracking-wider select-all">
-                    {showCurrentEditPassword ? (editingUser.plain_password || 'Bermuda@123') : '••••••••'}
+                  <div className="text-[10px] text-emerald-400 font-black uppercase tracking-wider">
+                    Bcrypt Security Standard
                   </div>
                   <div className="text-[10px] text-slate-400 mt-0.5">
-                    Staff forgot password? View or share current credentials.
+                    Passwords are encrypted with salted one-way hashing. To change or reset credentials, enter a new password below.
                   </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrentEditPassword(!showCurrentEditPassword)}
-                    className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-400 flex items-center gap-1.5 text-xs font-bold transition border border-slate-700"
-                  >
-                    {showCurrentEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    <span>{showCurrentEditPassword ? 'Hide' : 'See Password'}</span>
-                  </button>
-                  {showCurrentEditPassword && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(editingUser.plain_password || 'Bermuda@123');
-                        setCopiedPasswordId('edit_modal');
-                        setTimeout(() => setCopiedPasswordId(null), 2000);
-                      }}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 transition border border-slate-700"
-                      title="Copy Password"
-                    >
-                      {copiedPasswordId === 'edit_modal' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">New Password (Leave blank to keep unchanged)</label>
+                <label className="font-bold text-slate-300 block mb-1">Reset Password (Leave blank to keep unchanged)</label>
                 <div className="relative">
                   <input
                     type={showNewEditPassword ? "text" : "password"}
-                    placeholder="Enter new password to change"
+                    placeholder="Enter new password to reset"
                     value={editingUserData.password}
                     onChange={(e) => setEditingUserData({ ...editingUserData, password: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 pr-10 text-slate-100 focus:outline-none focus:border-amber-500 font-mono text-xs"

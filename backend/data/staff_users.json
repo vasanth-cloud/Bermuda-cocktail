@@ -3,7 +3,6 @@
     "name": "Ajaykumar",
     "email": "ajaykumar@bermuda.pub",
     "password_hash": "545e6bef13dfee72dcbf20c2910054577b06d6a90e7ef34241b4f609678972e2",
-    "plain_password": "Ajay@123",
     "role": "WAITER",
     "allowed_terminals": "customer,staff,members",
     "is_active": true
@@ -12,7 +11,6 @@
     "name": "Vasanth Admin",
     "email": "avasanth081@gmail.com",
     "password_hash": "e5cec166c024552655c40b9ca1835fd0ec880c75c2eabace212b3051fb347e0d",
-    "plain_password": "Vasanth@123",
     "role": "ADMIN",
     "allowed_terminals": "customer,entry_scanner,bar,staff,reports,tables,staff_accounts,members,admin",
     "is_active": true

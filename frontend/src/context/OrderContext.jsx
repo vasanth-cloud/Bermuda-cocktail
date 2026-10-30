@@ -132,14 +132,22 @@ export const OrderProvider = ({ children }) => {
 
   const [staffUsers, setStaffUsers] = useState([]);
 
-  // Validate current user session against backend database
-  const verifyCurrentSession = async (userToCheck = currentUser) => {
-    if (!userToCheck || !userToCheck.email) return false;
+  // Validate current user session against backend database with signed JWT
+  const verifyCurrentSession = async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('bermuda_token') : null;
+    if (!token) {
+      if (currentUser) {
+        setCurrentUser(null);
+        localStorage.removeItem('bermuda_user');
+      }
+      return false;
+    }
+
     try {
       const res = await apiFetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: userToCheck.id, email: userToCheck.email })
+        body: JSON.stringify({ token })
       });
       if (res.ok) {
         const data = await res.json();
@@ -149,10 +157,11 @@ export const OrderProvider = ({ children }) => {
           return true;
         }
       } else {
-        // Staff account no longer exists in database or deactivated
-        console.warn("Staff account has been deleted or deactivated. Clearing session.");
+        // Staff account no longer exists in database or deactivated/token expired
+        console.warn("Staff session is invalid or expired. Clearing credentials.");
         setCurrentUser(null);
         localStorage.removeItem('bermuda_user');
+        localStorage.removeItem('bermuda_token');
         setActiveTab('customer');
         return false;
       }
@@ -163,29 +172,15 @@ export const OrderProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    if (currentUser) {
-      verifyCurrentSession(currentUser);
-    }
+    verifyCurrentSession();
 
     // Periodic check every 20 seconds to revoke deleted staff members
     const interval = setInterval(() => {
-      const saved = localStorage.getItem('bermuda_user');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.email) verifyCurrentSession(parsed);
-        } catch (e) {}
-      }
+      verifyCurrentSession();
     }, 20000);
 
     const onFocus = () => {
-      const saved = localStorage.getItem('bermuda_user');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.email) verifyCurrentSession(parsed);
-        } catch (e) {}
-      }
+      verifyCurrentSession();
     };
     window.addEventListener('focus', onFocus);
 
@@ -234,13 +229,14 @@ export const OrderProvider = ({ children }) => {
         body: JSON.stringify({ email: cleanEmail, password })
       });
       const data = await res.json();
-      if (res.ok && data.user) {
+      if (res.ok && data.user && data.access_token) {
         setCurrentUser(data.user);
         localStorage.setItem('bermuda_user', JSON.stringify(data.user));
-        
+        localStorage.setItem('bermuda_token', data.access_token);
+
         const allowedStr = data.user.allowed_terminals || '';
         const allowedList = allowedStr.split(',').map(s => s.trim()).filter(Boolean);
-        
+
         if (allowedList.includes('admin') || data.user.role === 'ADMIN') setActiveTab('admin');
         else if (allowedList.includes('bar')) setActiveTab('bar');
         else if (allowedList.includes('staff')) setActiveTab('staff');
@@ -260,6 +256,7 @@ export const OrderProvider = ({ children }) => {
   const logoutUser = () => {
     setCurrentUser(null);
     localStorage.removeItem('bermuda_user');
+    localStorage.removeItem('bermuda_token');
     setActiveTab('customer');
   };
 
@@ -536,15 +533,42 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
-  // Setup WebSocket connection safely with auto-reconnect
+  // Setup WebSocket connection safely with auto-reconnect and single-use tickets
   useEffect(() => {
     let ws = null;
     let reconnectTimer = null;
     let isDisposed = false;
 
-    const connectWs = () => {
+    const connectWs = async () => {
       try {
-        const wsUrl = `${getWsBaseUrl()}/ws-api/${activeTab}`;
+        let wsUrl = `${getWsBaseUrl()}/ws-api/${activeTab}`;
+        // Authenticate staff/admin channels using short-lived single-use ticket
+        if (activeTab !== 'customer') {
+          try {
+            const ticketRes = await apiFetch('/api/auth/ws-ticket', { method: 'POST' });
+            if (ticketRes.ok) {
+              const ticketData = await ticketRes.json();
+              if (ticketData && ticketData.ticket) {
+                wsUrl += `?ticket=${encodeURIComponent(ticketData.ticket)}`;
+              }
+            } else {
+              console.warn("WebSocket ticket fetch unauthorized for channel:", activeTab);
+              if (!isDisposed) {
+                reconnectTimer = setTimeout(connectWs, 10000);
+              }
+              return;
+            }
+          } catch (ticketErr) {
+            console.warn("Could not fetch WebSocket ticket:", ticketErr);
+            if (!isDisposed) {
+              reconnectTimer = setTimeout(connectWs, 5000);
+            }
+            return;
+          }
+        }
+
+        if (isDisposed) return;
+
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
@@ -601,10 +625,11 @@ export const OrderProvider = ({ children }) => {
           if (!isDisposed) setWsConnected(false);
         };
 
-        ws.onclose = () => {
+        ws.onclose = (event) => {
           if (!isDisposed) {
             setWsConnected(false);
-            reconnectTimer = setTimeout(connectWs, 3000);
+            const delay = event && event.code === 1008 ? 10000 : 3000;
+            reconnectTimer = setTimeout(connectWs, delay);
           }
         };
       } catch (err) {

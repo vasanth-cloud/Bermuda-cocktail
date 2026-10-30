@@ -174,26 +174,43 @@ def import_excel_menu(db: Session, excel_path: str = None):
                     price_v = 149.0
                 products_list.append({'name': item_n, 'cat': soft_cat, 'price': price_v, 'target_dept': 'BAR', 'desc': None})
 
-    # Delete OrderItem references to existing products to avoid foreign key issues
-    db.query(OrderItem).delete(synchronize_session=False)
-    db.query(Product).delete(synchronize_session=False)
-    db.query(Category).delete(synchronize_session=False)
-    db.commit()
-
-    # Insert new categories
+    # SAFE NON-DESTRUCTIVE MENU IMPORT & UPSERT:
+    # Never delete OrderItem records or active KOT tickets!
+    # 1. Upsert categories
     created_categories = {}
     for cat_name, cat_info in categories_map.items():
-        cat_obj = Category(name=cat_name, target_dept=cat_info['target_dept'], icon=cat_info['icon'])
-        db.add(cat_obj)
-        db.flush()
-        created_categories[cat_name] = cat_obj.id
+        existing_cat = db.query(Category).filter(Category.name.ilike(cat_name)).first()
+        if existing_cat:
+            existing_cat.target_dept = cat_info['target_dept']
+            existing_cat.icon = cat_info['icon']
+            created_categories[cat_name] = existing_cat.id
+        else:
+            new_cat = Category(name=cat_name, target_dept=cat_info['target_dept'], icon=cat_info['icon'])
+            db.add(new_cat)
+            db.flush()
+            created_categories[cat_name] = new_cat.id
 
-    # Insert new products
-    products_to_add = []
+    # 2. Upsert products safely preserving foreign key integrity
+    updated_count = 0
+    added_count = 0
     for prod in products_list:
         cat_id = created_categories.get(prod['cat'])
-        if cat_id:
-            products_to_add.append(Product(
+        if not cat_id:
+            continue
+
+        existing_prod = db.query(Product).filter(
+            Product.name.ilike(prod['name']),
+            Product.category_id == cat_id
+        ).first()
+
+        if existing_prod:
+            existing_prod.price = prod['price']
+            existing_prod.description = prod['desc']
+            existing_prod.target_dept = prod['target_dept']
+            existing_prod.is_available = True
+            updated_count += 1
+        else:
+            db.add(Product(
                 name=prod['name'],
                 category_id=cat_id,
                 price=prod['price'],
@@ -201,8 +218,8 @@ def import_excel_menu(db: Session, excel_path: str = None):
                 target_dept=prod['target_dept'],
                 is_available=True
             ))
+            added_count += 1
 
-    db.add_all(products_to_add)
     db.commit()
-    print(f"[excel_importer] Successfully imported {len(categories_map)} categories and {len(products_to_add)} products from {target_path}!")
+    print(f"[excel_importer] Menu synced safely: {added_count} added, {updated_count} updated. Order history preserved!")
     return True

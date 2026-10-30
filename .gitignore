@@ -21,6 +21,15 @@ venv/
 .venv/
 env/
 
+# Uploaded files
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Testing & Pytest
+.pytest_cache/
+backend/.pytest_cache/
+backups/
+
 # SQLite databases
 *.db
 

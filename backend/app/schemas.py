@@ -78,9 +78,11 @@ class ProductUpdate(BaseModel):
     target_dept: Optional[str] = None
     image_url: Optional[str] = None
 
+from pydantic import BaseModel, Field
+
 class CartItemCreate(BaseModel):
     product_id: int
-    quantity: int
+    quantity: int = Field(gt=0, le=50, description="Quantity must be between 1 and 50")
     notes: Optional[str] = None
 
 class OrderCreate(BaseModel):
@@ -169,12 +171,20 @@ class UserSchema(BaseModel):
     email: str
     role: str
     allowed_terminals: Optional[str] = None
-    plain_password: Optional[str] = None
     is_active: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserSchema
+
+class WSTicketResponse(BaseModel):
+    ticket: str
+    expires_in: int = 30
 
 class UserCreate(BaseModel):
     name: str
